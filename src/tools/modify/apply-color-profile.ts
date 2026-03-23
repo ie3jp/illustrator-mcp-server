@@ -1,0 +1,92 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { executeJsx } from '../../executor/jsx-runner.js';
+
+const jsxCode = `
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
+    var params = readParamsFile(PARAMS_PATH);
+    var doc = app.activeDocument;
+    var profile = params.profile;
+    var intent = params.intent;
+
+    var oldProfile = "";
+    try {
+      oldProfile = doc.colorProfileName;
+    } catch(e) {
+      oldProfile = "(unavailable)";
+    }
+
+    // Map intent string to RenderingIntent enum
+    var renderIntent = null;
+    if (intent === "perceptual") {
+      renderIntent = RenderingIntent.PERCEPTUAL;
+    } else if (intent === "relative") {
+      renderIntent = RenderingIntent.RELATIVECOLORIMETRIC;
+    } else if (intent === "saturation") {
+      renderIntent = RenderingIntent.SATURATION;
+    } else if (intent === "absolute") {
+      renderIntent = RenderingIntent.ABSOLUTECOLORIMETRIC;
+    }
+
+    // ExtendScript does not provide a single-call color conversion API.
+    // We can assign a color profile name to embed/change the profile.
+    // For full ICC-based conversion, manual workflow or actions are needed.
+    var note = "";
+    var hasError = false;
+    try {
+      doc.colorProfileName = profile;
+      note = "Profile assigned. ICC conversion (color value recalculation) is not directly supported due to ExtendScript limitations. For full conversion, use Edit > Convert to Profile in Illustrator.";
+    } catch(e) {
+      hasError = true;
+      writeResultFile(RESULT_PATH, { error: true, message: "Failed to apply profile: " + e.message, line: e.line });
+    }
+
+    if (!hasError) {
+      writeResultFile(RESULT_PATH, {
+        success: true,
+        previousProfile: oldProfile,
+        newProfile: profile,
+        intent: intent,
+        note: note
+      });
+    }
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: "Failed to operate color profile: " + e.message, line: e.line });
+  }
+}
+`;
+
+export function register(server: McpServer): void {
+  server.registerTool(
+    'apply_color_profile',
+    {
+      title: 'Apply Color Profile',
+      description: 'Apply or convert color profile',
+      inputSchema: {
+        profile: z.string().describe('Color profile name or path'),
+        intent: z
+          .enum(['perceptual', 'relative', 'saturation', 'absolute'])
+          .describe('Rendering intent'),
+        coordinate_system: z
+          .enum(['artboard-web', 'document'])
+          .optional()
+          .default('artboard-web')
+          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      const result = await executeJsx(jsxCode, params);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+}

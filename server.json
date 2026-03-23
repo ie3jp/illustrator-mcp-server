@@ -1,0 +1,20 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.ie3jp/illustrator-mcp-server",
+  "description": "Read, manipulate, and export Adobe Illustrator design data. 26 tools. macOS only.",
+  "repository": {
+    "url": "https://github.com/ie3jp/illustrator-mcp-server",
+    "source": "github"
+  },
+  "version": "1.0.1",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "illustrator-mcp-server",
+      "version": "1.0.1",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

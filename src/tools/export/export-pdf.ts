@@ -1,0 +1,159 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { executeJsxHeavy } from '../../executor/jsx-runner.js';
+
+const jsxCode = `
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
+    var params = readParamsFile(PARAMS_PATH);
+    var doc = app.activeDocument;
+    var outputPath = params.output_path;
+    var preset = params.preset || "";
+    var options = params.options || {};
+
+    var pdfOpts = new PDFSaveOptions();
+
+    // Apply preset if specified
+    if (preset !== "") {
+      pdfOpts.pDFPreset = preset;
+    }
+
+    // Default to PDF/X-4 compatible
+    pdfOpts.compatibility = PDFCompatibility.ACROBAT7;
+    pdfOpts.preserveEditability = false;
+
+    // トンボ種類（enum名とリテラル値の両方を試す）
+    if (options.marks_style === "japanese") {
+      pdfOpts.pageMarksType = PageMarksTypes.Japanese;
+    } else if (options.marks_style === "roman") {
+      pdfOpts.pageMarksType = PageMarksTypes.Roman;
+    }
+
+    // トンボ ON/OFF
+    if (options.trim_marks === true) {
+      pdfOpts.trimMarks = true;
+    } else {
+      pdfOpts.trimMarks = false;
+    }
+
+    // 日本式トンボの場合、必須設定を自動適用
+    if (options.marks_style === "japanese" && options.trim_marks === true) {
+      // レジストレーションマーク（センタートンボ）が未指定なら自動ON
+      if (typeof options.registration_marks === "undefined") {
+        pdfOpts.registrationMarks = true;
+      }
+      // 裁ち落としが未指定なら3mm自動設定（外トンボの表示に必要）
+      if (options.bleed !== true && !options._bleed_set) {
+        var bleedPt = 8.504; // 3mm
+        pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
+      }
+    }
+
+    // トンボの太さ（文字列・数値両対応）
+    var tw = String(options.trim_mark_weight);
+    if (tw === "0.125") {
+      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
+    } else if (tw === "0.25") {
+      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT025;
+    } else if (tw === "0.5") {
+      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT05;
+    } else if (options.trim_marks === true) {
+      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
+    }
+
+    // レジストレーションマーク
+    if (typeof options.registration_marks !== "undefined") {
+      pdfOpts.registrationMarks = options.registration_marks;
+    }
+
+    // カラーバー
+    if (typeof options.color_bars !== "undefined") {
+      pdfOpts.colorBars = options.color_bars;
+    }
+
+    // ページ情報
+    if (typeof options.page_information !== "undefined") {
+      pdfOpts.pageInformation = options.page_information;
+    }
+
+    // Bleed
+    if (options.bleed === true) {
+      // Set 3mm bleed on all sides (approx 8.504 pt)
+      var bleedPt = 8.504;
+      pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
+    }
+
+    // Downsample images
+    if (options.downsample === true) {
+      pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.colorDownsampling = 300;
+      pdfOpts.colorDownsamplingImageThreshold = 450;
+      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.grayscaleDownsampling = 300;
+      pdfOpts.grayscaleDownsamplingImageThreshold = 450;
+      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.monochromeDownsampling = 1200;
+      pdfOpts.monochromeDownsamplingImageThreshold = 1800;
+    } else if (options.downsample === false) {
+      pdfOpts.colorDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
+      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
+      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
+    }
+
+    var outFile = new File(outputPath);
+    doc.saveAs(outFile, pdfOpts);
+
+    writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: "PDF export failed: " + e.message, line: e.line });
+  }
+}
+`;
+
+export function register(server: McpServer): void {
+  server.registerTool(
+    'export_pdf',
+    {
+      title: 'Export PDF',
+      description: 'Export print-ready PDF',
+      inputSchema: {
+        output_path: z.string().describe('Output file path'),
+        preset: z
+          .string()
+          .optional()
+          .describe('PDF preset name (e.g. "[PDF/X-4:2008]")'),
+        options: z
+          .object({
+            trim_marks: z.boolean().optional().describe('Add trim marks'),
+            marks_style: z.enum(['japanese', 'roman']).optional().describe('Trim mark style (japanese or roman)'),
+            trim_mark_weight: z.enum(['0.125', '0.25', '0.5']).transform(Number).optional().describe('Trim mark weight (pt)'),
+            registration_marks: z.boolean().optional().describe('Registration marks'),
+            color_bars: z.boolean().optional().describe('Color bars'),
+            page_information: z.boolean().optional().describe('Page information'),
+            bleed: z.boolean().optional().describe('Include bleed (3mm)'),
+            downsample: z.boolean().optional().describe('Downsample images'),
+          })
+          .optional()
+          .describe('PDF export options'),
+        coordinate_system: z
+          .enum(['artboard-web', 'document'])
+          .optional()
+          .default('artboard-web')
+          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (params) => {
+      const result = await executeJsxHeavy(jsxCode, params);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+}
