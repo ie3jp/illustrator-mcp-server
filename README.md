@@ -12,6 +12,8 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for r
 
 Control Illustrator directly from AI assistants like Claude — extract design information for web implementation, verify print-ready data, and export assets.
 
+[![illustrator mcp server MCP server](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server)
+
 ---
 
 ## Usage Examples
