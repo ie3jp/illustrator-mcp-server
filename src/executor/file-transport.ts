@@ -1,16 +1,18 @@
 import { randomUUID } from 'crypto';
 import * as fs from 'fs/promises';
 import { rmSync } from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 
-export const TMP_DIR = '/tmp/illustrator-mcp';
+export const TMP_DIR = path.join(os.tmpdir(), 'illustrator-mcp');
 const BOM = '\uFEFF';
 
 export interface TempFiles {
   id: string;
   paramsPath: string;
   scriptPath: string;
-  scptPath: string;
+  /** macOS: AppleScript (.scpt) / Windows: PowerShell (.ps1) */
+  runnerPath: string;
   resultPath: string;
 }
 
@@ -20,11 +22,12 @@ export async function ensureTmpDir(): Promise<void> {
 
 export function createTempFiles(): TempFiles {
   const id = randomUUID();
+  const ext = process.platform === 'win32' ? 'ps1' : 'scpt';
   return {
     id,
     paramsPath: path.join(TMP_DIR, `params-${id}.json`),
     scriptPath: path.join(TMP_DIR, `script-${id}.jsx`),
-    scptPath: path.join(TMP_DIR, `run-${id}.scpt`),
+    runnerPath: path.join(TMP_DIR, `run-${id}.${ext}`),
     resultPath: path.join(TMP_DIR, `result-${id}.json`),
   };
 }
@@ -37,6 +40,7 @@ export async function writeJsx(scriptPath: string, jsxCode: string): Promise<voi
   await fs.writeFile(scriptPath, BOM + jsxCode, 'utf-8');
 }
 
+/** macOS 用 AppleScript 生成 */
 export async function writeAppleScript(
   scptPath: string,
   scriptPath: string,
@@ -51,6 +55,25 @@ export async function writeAppleScript(
   await fs.writeFile(scptPath, lines.join('\n'), 'utf-8');
 }
 
+/** Windows 用 PowerShell スクリプト生成 */
+export async function writePowerShellScript(
+  ps1Path: string,
+  scriptPath: string,
+): Promise<void> {
+  // ExtendScript の File() はスラッシュ区切りを要求
+  const jsxPathForward = scriptPath.replace(/\\/g, '/');
+  const lines = [
+    'try {',
+    '  $ai = New-Object -ComObject "Illustrator.Application" -ErrorAction Stop',
+    `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathForward}'))")`,
+    '} catch {',
+    '  Write-Error "Illustrator COM automation failed: $_"',
+    '  exit 1',
+    '}',
+  ];
+  await fs.writeFile(ps1Path, lines.join('\n'), 'utf-8');
+}
+
 export async function readResult(resultPath: string): Promise<unknown> {
   const raw = await fs.readFile(resultPath, 'utf-8');
   return JSON.parse(raw.replace(/^\uFEFF/, ''));
@@ -60,15 +83,10 @@ export async function cleanupTempFiles(files: TempFiles): Promise<void> {
   const paths = [
     files.paramsPath,
     files.scriptPath,
-    files.scptPath,
+    files.runnerPath,
     files.resultPath,
   ];
-  const results = await Promise.allSettled([
-    fs.unlink(files.paramsPath),
-    fs.unlink(files.scriptPath),
-    fs.unlink(files.scptPath),
-    fs.unlink(files.resultPath),
-  ]);
+  const results = await Promise.allSettled(paths.map((p) => fs.unlink(p)));
   results.forEach((result, index) => {
     if (result.status === 'rejected' && !isIgnorableCleanupError(result.reason)) {
       console.warn('Failed to clean up temp file:', paths[index], result.reason);

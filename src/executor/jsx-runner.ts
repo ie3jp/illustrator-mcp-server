@@ -9,9 +9,11 @@ import {
   writeParams,
   writeJsx,
   writeAppleScript,
+  writePowerShellScript,
   readResult,
   cleanupTempFiles,
 } from './file-transport.js';
+import { buildJsxForCep, postToCep, CEP_PORT } from './cep-transport.js';
 
 // Illustrator はシングルスレッド — JSX 実行を直列化
 const jsxLimit = pLimit(1);
@@ -19,6 +21,30 @@ const jsxLimit = pLimit(1);
 // 実行中の JSX を追跡（グレースフルシャットダウン用）
 let pendingCount = 0;
 let pendingResolve: (() => void) | null = null;
+
+// ─── トランスポート選択 ───────────────────────────────────────────────────────
+//
+//  ILLUSTRATOR_MCP_TRANSPORT=cep       → CEP Extension HTTP (任意プラットフォーム)
+//  ILLUSTRATOR_MCP_TRANSPORT=osascript → macOS AppleScript (macOS 強制)
+//  未設定:
+//    darwin  → osascript
+//    win32   → PowerShell COM
+//    その他  → CEP (フォールバック)
+//
+export type Transport = 'osascript' | 'powershell' | 'cep';
+
+export function resolveTransport(
+  platform: string = process.platform,
+  envVar: string | undefined = process.env['ILLUSTRATOR_MCP_TRANSPORT'],
+): Transport {
+  if (envVar === 'cep') return 'cep';
+  if (envVar === 'osascript') return 'osascript';
+  if (platform === 'darwin') return 'osascript';
+  if (platform === 'win32') return 'powershell';
+  return 'cep';
+}
+
+const TRANSPORT: Transport = resolveTransport();
 
 /**
  * 実行中の JSX がすべて完了するまで待機する（シャットダウン用）
@@ -47,7 +73,7 @@ export interface JsxResult {
 }
 
 /**
- * JSX コードを組み立てる（共通ヘルパー + ツール固有コード）
+ * osascript / PowerShell COM 用 JSX ビルダー（ファイルベース I/O）
  */
 async function buildJsx(
   toolScript: string,
@@ -63,9 +89,8 @@ ${toolScript}
 })();`;
 }
 
-/**
- * osascript エラーメッセージを解析して分かりやすいエラーに変換する
- */
+// ─── エラーメッセージ変換 ────────────────────────────────────────────────────
+
 function parseOsascriptError(stderr: string): string {
   if (stderr.includes('Connection is invalid')) {
     return 'Illustrator is not running. Please launch Adobe Illustrator.';
@@ -76,10 +101,18 @@ function parseOsascriptError(stderr: string): string {
   return stderr;
 }
 
+function parsePowerShellError(stderr: string): string {
+  if (stderr.includes('Cannot create ActiveX component') || stderr.includes('80080005') || stderr.includes('80040154')) {
+    return 'Illustrator is not running or is not installed. Please launch Adobe Illustrator.';
+  }
+  return stderr;
+}
+
 export function getExecFailureMessage(
   error: ExecFileException,
   stderr: string,
   timeout: number,
+  transport: Transport = 'osascript',
 ): string {
   if (error.code === 'ETIMEDOUT') {
     return `Script execution timed out after ${timeout}ms`;
@@ -87,8 +120,112 @@ export function getExecFailureMessage(
   if (error.killed) {
     return `Script execution was terminated${error.signal ? ` by signal ${error.signal}` : ''}`;
   }
+  if (transport === 'powershell') return parsePowerShellError(stderr || error.message);
   return parseOsascriptError(stderr || error.message);
 }
+
+// ─── 各トランスポートの実行ロジック ─────────────────────────────────────────
+
+async function executeViaOsascript(
+  jsxCode: string,
+  params: unknown,
+  timeout: number,
+  activate: boolean,
+): Promise<JsxResult> {
+  const files = createTempFiles();
+  try {
+    await writeParams(files.paramsPath, params);
+    const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
+    await writeJsx(files.scriptPath, fullJsx);
+    await writeAppleScript(files.runnerPath, files.scriptPath, { activate });
+
+    await new Promise<void>((resolve, reject) => {
+      execFile('osascript', [files.runnerPath], { timeout }, (error, _stdout, stderr) => {
+        if (error) {
+          reject(new Error(getExecFailureMessage(error, stderr, timeout, 'osascript')));
+        } else {
+          resolve();
+        }
+      });
+    });
+
+    return await readAndValidateResult(files.resultPath);
+  } finally {
+    await cleanupTempFiles(files);
+  }
+}
+
+async function executeViaPowerShell(
+  jsxCode: string,
+  params: unknown,
+  timeout: number,
+): Promise<JsxResult> {
+  const files = createTempFiles();
+  try {
+    await writeParams(files.paramsPath, params);
+    const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
+    await writeJsx(files.scriptPath, fullJsx);
+    await writePowerShellScript(files.runnerPath, files.scriptPath);
+
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        'powershell.exe',
+        ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', files.runnerPath],
+        { timeout },
+        (error, _stdout, stderr) => {
+          if (error) {
+            reject(new Error(getExecFailureMessage(error, stderr, timeout, 'powershell')));
+          } else {
+            resolve();
+          }
+        },
+      );
+    });
+
+    return await readAndValidateResult(files.resultPath);
+  } finally {
+    await cleanupTempFiles(files);
+  }
+}
+
+async function executeViaCep(
+  jsxCode: string,
+  params: unknown,
+  timeout: number,
+): Promise<JsxResult> {
+  const fullJsx = await buildJsxForCep(jsxCode, params);
+  const resultJson = await postToCep(fullJsx, timeout);
+
+  let result: JsxResult;
+  try {
+    result = JSON.parse(resultJson) as JsxResult;
+  } catch {
+    throw new Error(`Failed to parse result from CEP extension: ${resultJson.slice(0, 200)}`);
+  }
+
+  if (result.error) {
+    throw new Error(result.message || 'An unknown error occurred during JSX execution');
+  }
+
+  return result;
+}
+
+async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
+  let result: JsxResult;
+  try {
+    result = await readResult(resultPath) as JsxResult;
+  } catch {
+    throw new Error(
+      'JSX terminated without producing a result file. An uncaught exception may have occurred within the JSX script.',
+    );
+  }
+  if (result.error) {
+    throw new Error(result.message || 'An unknown error occurred during JSX execution');
+  }
+  return result;
+}
+
+// ─── 公開 API ────────────────────────────────────────────────────────────────
 
 /**
  * JSX を実行する（排他制御なし — 内部用）
@@ -99,52 +236,19 @@ async function executeJsxRaw(
   timeout: number = TIMEOUT_NORMAL,
   activate: boolean = false,
 ): Promise<JsxResult> {
-  const files = createTempFiles();
   pendingCount++;
-
   try {
-    // 1. パラメータをJSONファイルに書き出し
-    await writeParams(files.paramsPath, params);
-
-    // 2. 共通ヘルパー + ツール固有コードを結合し、BOM付きUTF-8で保存
-    const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
-    await writeJsx(files.scriptPath, fullJsx);
-
-    // 3. AppleScriptをファイルに保存（activate: 書き出し等でIllustratorをフォアグラウンドにする）
-    await writeAppleScript(files.scptPath, files.scriptPath, { activate });
-
-    // 4. osascript を非同期実行
-    await new Promise<void>((resolve, reject) => {
-      execFile('osascript', [files.scptPath], { timeout }, (error, _stdout, stderr) => {
-        if (error) {
-          reject(new Error(getExecFailureMessage(error, stderr, timeout)));
-        } else {
-          resolve();
-        }
-      });
-    });
-
-    // 5. 結果ファイルを読み取り
-    let result: JsxResult;
-    try {
-      result = await readResult(files.resultPath) as JsxResult;
-    } catch (readError) {
-      // osascript は成功したが結果ファイルが生成されなかった場合
-      // JSX の異常終了（try/catch 外でのクラッシュ等）が原因
-      throw new Error(
-        'JSX terminated without producing a result file. An uncaught exception may have occurred within the JSX script.',
-      );
+    switch (TRANSPORT) {
+      case 'osascript':
+        return await executeViaOsascript(jsxCode, params, timeout, activate);
+      case 'powershell':
+        return await executeViaPowerShell(jsxCode, params, timeout);
+      case 'cep':
+        return await executeViaCep(jsxCode, params, timeout);
+      default:
+        throw new Error(`Unknown transport: ${TRANSPORT as string}`);
     }
-
-    // JSX 内でエラーが発生した場合
-    if (result.error) {
-      throw new Error(result.message || 'An unknown error occurred during JSX execution');
-    }
-
-    return result;
   } finally {
-    // 6. クリーンアップ
-    await cleanupTempFiles(files);
     pendingCount--;
     if (pendingCount === 0 && pendingResolve) {
       pendingResolve();
@@ -178,3 +282,6 @@ export async function executeJsxHeavy(
 ): Promise<JsxResult> {
   return executeJsx(jsxCode, params, { timeout: TIMEOUT_HEAVY, activate: true });
 }
+
+// ─── デバッグ用エクスポート ──────────────────────────────────────────────────
+export { TRANSPORT, CEP_PORT };

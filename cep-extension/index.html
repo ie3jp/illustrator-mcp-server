@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Illustrator MCP Bridge</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, "Segoe UI", sans-serif;
+      font-size: 11px;
+      padding: 8px 10px;
+      background: #3c3c3c;
+      color: #ccc;
+      user-select: none;
+    }
+    #status {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    #dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #888;
+      flex-shrink: 0;
+    }
+    #dot.running { background: #5c5; }
+    #dot.error   { background: #c55; }
+    #label { flex: 1; }
+    #port  { color: #888; font-size: 10px; }
+  </style>
+</head>
+<body>
+  <div id="status">
+    <div id="dot"></div>
+    <span id="label">Starting…</span>
+  </div>
+  <div id="port"></div>
+  <script src="main.js"></script>
+</body>
+</html>

@@ -9,7 +9,8 @@
     "illustrator-mcp-server": "dist/index.js"
   },
   "files": [
-    "dist/**/*"
+    "dist/**/*",
+    "cep-extension/**/*"
   ],
   "scripts": {
     "build": "tsc && cp -r src/jsx dist/",
@@ -38,7 +39,6 @@
   "bugs": {
     "url": "https://github.com/ie3jp/illustrator-mcp-server/issues"
   },
-  "os": ["darwin"],
   "engines": {
     "node": ">=20.0.0"
   },
