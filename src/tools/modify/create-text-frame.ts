@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, COLOR_HELPERS_JSX } from './shared.js';
+import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -13,6 +13,7 @@ if (preflight) {
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
+    ${FONT_HELPERS_JSX}
 
     function webToAiCoords(x, y, artboardRect) {
       if (artboardRect) {
@@ -34,6 +35,16 @@ if (preflight) {
     var aiCoords = webToAiCoords(inputX, inputY, abRect);
     var aiX = aiCoords[0];
     var aiY = aiCoords[1];
+
+    var resolvedFont = null;
+    var fontCandidates = null;
+    if (params.font_name) {
+      try {
+        resolvedFont = app.textFonts.getByName(params.font_name);
+      } catch (e) {
+        fontCandidates = findFontCandidates(params.font_name);
+      }
+    }
 
     var targetLayer = doc.activeLayer;
     if (params.layer_name) {
@@ -63,12 +74,8 @@ if (preflight) {
 
     var charAttrs = tf.textRange.characterAttributes;
 
-    if (params.font_name) {
-      try {
-        charAttrs.textFont = app.textFonts.getByName(params.font_name);
-      } catch (e) {
-        // フォントが見つからない場合は無視
-      }
+    if (resolvedFont) {
+      charAttrs.textFont = resolvedFont;
     }
 
     if (typeof params.font_size === "number") {
@@ -80,7 +87,12 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(tf);
-    writeResultFile(RESULT_PATH, { uuid: uuid });
+    var resultData = { uuid: uuid };
+    if (fontCandidates !== null) {
+      resultData.font_warning = "Font '" + params.font_name + "' not found. Text frame created with default font.";
+      resultData.font_candidates = fontCandidates;
+    }
+    writeResultFile(RESULT_PATH, resultData);
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create text frame: " + e.message, line: e.line });
   }
@@ -104,7 +116,7 @@ export function register(server: McpServer): void {
           .describe('Text frame type (point or area)'),
         width: z.number().optional().describe('Area text width'),
         height: z.number().optional().describe('Area text height'),
-        font_name: z.string().optional().describe('Font name (PostScript name)'),
+        font_name: z.string().optional().describe('Font name (partial match, e.g. "Arial", "Helvetica"). Use list_fonts to find exact PostScript names.'),
         font_size: z.number().optional().describe('Font size (pt)'),
         fill: colorSchema.describe('Text color'),
         layer_name: z.string().optional().describe('Target layer name'),
