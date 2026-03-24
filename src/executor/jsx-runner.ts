@@ -87,8 +87,13 @@ async function executeJsxRaw(
     await new Promise<void>((resolve, reject) => {
       execFile('osascript', [files.scptPath], { timeout }, (error, _stdout, stderr) => {
         if (error) {
-          const message = parseOsascriptError(stderr || error.message);
-          reject(new Error(message));
+          // タイムアウト時は明確なメッセージを返す
+          if ('killed' in error && error.killed) {
+            reject(new Error(`Script execution timed out after ${timeout}ms`));
+          } else {
+            const message = parseOsascriptError(stderr || error.message);
+            reject(new Error(message));
+          }
         } else {
           resolve();
         }

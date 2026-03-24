@@ -68,7 +68,7 @@ export async function cleanupTempFiles(files: TempFiles): Promise<void> {
 export function cleanupTmpDirSync(): void {
   try {
     rmSync(TMP_DIR, { recursive: true, force: true });
-  } catch {
-    // 終了時のクリーンアップ失敗は無視
+  } catch (e) {
+    console.warn('Failed to clean up temp directory:', TMP_DIR, e);
   }
 }

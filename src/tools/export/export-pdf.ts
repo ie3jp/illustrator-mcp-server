@@ -46,7 +46,7 @@ if (preflight) {
         pdfOpts.registrationMarks = true;
       }
       // 裁ち落としが未指定なら3mm自動設定（外トンボの表示に必要）
-      if (options.bleed !== true && !options._bleed_set) {
+      if (options.bleed !== true) {
         var bleedPt = 8.504; // 3mm
         pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
       }

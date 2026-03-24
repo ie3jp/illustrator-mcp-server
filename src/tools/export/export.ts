@@ -163,7 +163,7 @@ if (preflight) {
       // } else if (format === "webp") { ... }
       }
 
-      if (targetType !== "error" && targetType !== "done") {
+      if (targetType !== "error") {
         writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
       }
 
