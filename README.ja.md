@@ -71,6 +71,8 @@ Claude:  → create_rectangle を実行
 > **Note:** 初回実行時に macOS のオートメーション権限ダイアログが表示されます。
 > システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
 
+> **Note:** 操作系・書き出し系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。Illustrator はアクティブな状態でないとこれらの処理を実行できないためです。
+
 ---
 
 ## セットアップ
@@ -83,7 +85,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-`claude_desktop_config.json` に追加:
+`claude_desktop_config.json`（macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`）に追加:
 
 ```json
 {
@@ -95,6 +97,8 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
   }
 }
 ```
+
+保存後、Claude Desktop を再起動してください。入力欄にMCPサーバーのインジケーター（ハンマーアイコン）が表示されます。
 
 ### ソースから
 
@@ -202,7 +206,7 @@ flowchart LR
 
 ### 座標系
 
-全ツールに `coordinate_system` パラメータがあります。
+座標を扱う read / modify ツールでは `coordinate_system` パラメータを受け付けます。export やドキュメント全体に対する utility ツールは、座標変換に依存しないため受け付けません。
 
 | 値 | 原点 | Y 軸 | 用途 |
 |---|---|---|---|

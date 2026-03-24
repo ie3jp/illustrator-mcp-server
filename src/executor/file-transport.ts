@@ -57,12 +57,23 @@ export async function readResult(resultPath: string): Promise<unknown> {
 }
 
 export async function cleanupTempFiles(files: TempFiles): Promise<void> {
-  await Promise.allSettled([
+  const paths = [
+    files.paramsPath,
+    files.scriptPath,
+    files.scptPath,
+    files.resultPath,
+  ];
+  const results = await Promise.allSettled([
     fs.unlink(files.paramsPath),
     fs.unlink(files.scriptPath),
     fs.unlink(files.scptPath),
     fs.unlink(files.resultPath),
   ]);
+  results.forEach((result, index) => {
+    if (result.status === 'rejected' && !isIgnorableCleanupError(result.reason)) {
+      console.warn('Failed to clean up temp file:', paths[index], result.reason);
+    }
+  });
 }
 
 export function cleanupTmpDirSync(): void {
@@ -71,4 +82,13 @@ export function cleanupTmpDirSync(): void {
   } catch (e) {
     console.warn('Failed to clean up temp directory:', TMP_DIR, e);
   }
+}
+
+function isIgnorableCleanupError(error: unknown): boolean {
+  return (
+    typeof error === 'object'
+    && error !== null
+    && 'code' in error
+    && error.code === 'ENOENT'
+  );
 }

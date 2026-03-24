@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { colorSchema, COLOR_HELPERS_JSX } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -11,26 +12,7 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
-
-    function createColor(colorObj) {
-      if (!colorObj || colorObj.type === "none") return new NoColor();
-      if (colorObj.type === "cmyk") {
-        var c = new CMYKColor();
-        c.cyan = (typeof colorObj.c === "number") ? colorObj.c : 0;
-        c.magenta = (typeof colorObj.m === "number") ? colorObj.m : 0;
-        c.yellow = (typeof colorObj.y === "number") ? colorObj.y : 0;
-        c.black = (typeof colorObj.k === "number") ? colorObj.k : 0;
-        return c;
-      }
-      if (colorObj.type === "rgb") {
-        var c = new RGBColor();
-        c.red = (typeof colorObj.r === "number") ? colorObj.r : 0;
-        c.green = (typeof colorObj.g === "number") ? colorObj.g : 0;
-        c.blue = (typeof colorObj.b === "number") ? colorObj.b : 0;
-        return c;
-      }
-      return new NoColor();
-    }
+    ${COLOR_HELPERS_JSX}
 
     function webToAiCoords(x, y, artboardRect) {
       if (artboardRect) {
@@ -93,7 +75,7 @@ if (preflight) {
       charAttrs.size = params.font_size;
     }
 
-    if (params.fill) {
+    if (typeof params.fill !== "undefined") {
       charAttrs.fillColor = createColor(params.fill);
     }
 
@@ -105,25 +87,12 @@ if (preflight) {
 }
 `;
 
-const colorSchema = z
-  .object({
-    type: z.enum(['cmyk', 'rgb', 'none']).describe('Color type'),
-    c: z.number().optional(),
-    m: z.number().optional(),
-    y: z.number().optional(),
-    k: z.number().optional(),
-    r: z.number().optional(),
-    g: z.number().optional(),
-    b: z.number().optional(),
-  })
-  .optional();
-
 export function register(server: McpServer): void {
   server.registerTool(
     'create_text_frame',
     {
       title: 'Create Text Frame',
-      description: 'Create a text frame',
+      description: 'Create a text frame. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         x: z.number().describe('X coordinate'),
         y: z.number().describe('Y coordinate'),
@@ -154,7 +123,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const result = await executeJsx(jsxCode, params, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
