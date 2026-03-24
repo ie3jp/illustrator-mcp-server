@@ -51,7 +51,7 @@ Claude:  → create_rectangle を実行
 
 ## 特徴
 
-- **26 ツール** — 読み取り 15 / 操作 8 / 書き出し 2 / ユーティリティ 1
+- **30 ツール** — 読み取り 15 / 操作 11 / 書き出し 2 / ユーティリティ 1 + ドキュメント管理 2
 - **Web 座標系** — デフォルトでアートボード相対・Y 軸下向き正（CSS/SVG と同じ座標系）
 - **UUID トラッキング** — 全オブジェクトを `pageItem.note` の UUID で一意に識別
 - **排他制御** — `p-limit(1)` による JSX 実行の直列化（Illustrator はシングルスレッド）
@@ -147,7 +147,7 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 
 </details>
 
-### 操作系 (8)
+### 操作系 (11)
 
 <details>
 <summary>クリックして展開</summary>
@@ -159,9 +159,12 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 | `create_line` | 直線の作成 |
 | `create_text_frame` | テキストフレームの作成（ポイント/エリア） |
 | `create_path` | 任意パスの作成（ベジェハンドル対応） |
+| `place_image` | 画像ファイルの配置（リンク/埋め込み） |
 | `modify_object` | 既存オブジェクトのプロパティ変更 |
 | `convert_to_outlines` | テキストのアウトライン化 |
 | `apply_color_profile` | カラープロファイルの適用 |
+| `create_document` | 新規ドキュメントの作成（サイズ、カラーモード指定） |
+| `close_document` | アクティブドキュメントを閉じる |
 
 </details>
 
@@ -225,11 +228,11 @@ flowchart LR
 # ユニットテスト
 npm test
 
-# E2E スモークテスト（Illustrator 起動 + ファイルオープン状態で実行）
+# E2E スモークテスト（Illustrator 起動状態で実行）
 npx tsx test/e2e/smoke-test.ts
 ```
 
-E2E テストは全 30 ケース（読み取り 16 + 書き出し 4 + ユーティリティ 2 + 操作 8）を自動実行します。
+E2E テストは新規ドキュメントを作成し、テストオブジェクト（図形、テキスト、リンク/埋め込み画像）を配置して全 45 ケースを 5 フェーズで自動実行し、終了後にクリーンアップします。事前のファイル準備は不要です。
 
 ---
 
@@ -259,7 +262,7 @@ illustrator-mcp-server/
 │   ├── tools/
 │   │   ├── registry.ts       # ツール登録
 │   │   ├── read/             # 読み取り系 15 ツール
-│   │   ├── modify/           # 操作系 8 ツール
+│   │   ├── modify/           # 操作系 11 ツール
 │   │   ├── export/           # 書き出し系 2 ツール
 │   │   └── utility/          # ユーティリティ 1 ツール
 │   └── jsx/

@@ -53,7 +53,7 @@ Claude:  → create_rectangle
 
 ## Features
 
-- **26 tools** — 15 read / 8 modify / 2 export / 1 utility
+- **30 tools** — 15 read / 11 modify / 2 export / 1 utility + 2 document management
 - **Web coordinate system** — Y-axis down, artboard-relative (same as CSS/SVG)
 - **UUID tracking** — Stable object identification across tool calls
 
@@ -142,7 +142,7 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 
 </details>
 
-### Modify Tools (8)
+### Modify Tools (11)
 
 <details>
 <summary>Click to expand</summary>
@@ -154,9 +154,12 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 | `create_line` | Create a line |
 | `create_text_frame` | Create a text frame (point or area type) |
 | `create_path` | Create a custom path (with Bezier handles) |
+| `place_image` | Place an image file as linked or embedded |
 | `modify_object` | Modify properties of an existing object |
 | `convert_to_outlines` | Convert text to outlines |
 | `apply_color_profile` | Apply a color profile |
+| `create_document` | Create a new document (size, color mode) |
+| `close_document` | Close the active document |
 
 </details>
 
@@ -210,11 +213,11 @@ Geometry-aware read and modify tools accept a `coordinate_system` parameter. Exp
 # Unit tests
 npm test
 
-# E2E smoke test (requires Illustrator running with a file open)
+# E2E smoke test (requires Illustrator running)
 npx tsx test/e2e/smoke-test.ts
 ```
 
-The E2E test suite runs all 30 cases automatically (16 read + 4 export + 2 utility + 8 modify).
+The E2E test creates a fresh document, places test objects (shapes, text, linked/embedded images), runs all 45 test cases across 5 phases, and cleans up automatically. No pre-existing files required.
 
 ---
 
@@ -244,7 +247,7 @@ illustrator-mcp-server/
 │   ├── tools/
 │   │   ├── registry.ts       # Tool registration
 │   │   ├── read/             # 15 read tools
-│   │   ├── modify/           # 8 modify tools
+│   │   ├── modify/           # 11 modify tools
 │   │   ├── export/           # 2 export tools
 │   │   └── utility/          # 1 utility tool
 │   └── jsx/
