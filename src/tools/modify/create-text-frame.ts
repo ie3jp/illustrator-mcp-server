@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, COLOR_HELPERS_JSX } from './shared.js';
+import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -13,6 +13,7 @@ if (preflight) {
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
+    ${FONT_HELPERS_JSX}
 
     function webToAiCoords(x, y, artboardRect) {
       if (artboardRect) {
@@ -41,17 +42,7 @@ if (preflight) {
       try {
         resolvedFont = app.textFonts.getByName(params.font_name);
       } catch (e) {
-        var candidates = [];
-        var searchLower = params.font_name.toLowerCase();
-        for (var fi = 0; fi < app.textFonts.length; fi++) {
-          var f = app.textFonts[fi];
-          if (f.name.toLowerCase().indexOf(searchLower) >= 0 ||
-              (f.family && f.family.toLowerCase().indexOf(searchLower) >= 0)) {
-            candidates.push({ name: f.name, family: f.family });
-            if (candidates.length >= 10) break;
-          }
-        }
-        fontCandidates = candidates;
+        fontCandidates = findFontCandidates(params.font_name);
       }
     }
 

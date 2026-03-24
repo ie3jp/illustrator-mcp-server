@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX } from './shared.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -13,6 +13,7 @@ if (preflight) {
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
+    ${FONT_HELPERS_JSX}
 
     function findItemByUUID(uuid) {
       var doc = app.activeDocument;
@@ -108,18 +109,8 @@ if (preflight) {
             item.textRanges[ri].characterAttributes.textFont = resolvedFont;
           }
         } catch(e) {
-          var candidates = [];
-          var searchLower = props.font_name.toLowerCase();
-          for (var fi = 0; fi < app.textFonts.length; fi++) {
-            var f = app.textFonts[fi];
-            if (f.name.toLowerCase().indexOf(searchLower) >= 0 ||
-                (f.family && f.family.toLowerCase().indexOf(searchLower) >= 0)) {
-              candidates.push({ name: f.name, family: f.family });
-              if (candidates.length >= 10) break;
-            }
-          }
           errors.push("font_name: Font '" + props.font_name + "' not found.");
-          fontCandidates = candidates;
+          fontCandidates = findFontCandidates(props.font_name);
         }
       }
 
