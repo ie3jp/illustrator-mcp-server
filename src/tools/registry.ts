@@ -34,6 +34,11 @@ import { register as registerCreatePath } from './modify/create-path.js';
 import { register as registerModifyObject } from './modify/modify-object.js';
 import { register as registerConvertToOutlines } from './modify/convert-to-outlines.js';
 import { register as registerApplyColorProfile } from './modify/apply-color-profile.js';
+import { register as registerPlaceImage } from './modify/place-image.js';
+
+// Phase 5: ドキュメント管理ツール
+import { register as registerCreateDocument } from './modify/create-document.js';
+import { register as registerCloseDocument } from './modify/close-document.js';
 
 export function registerAllTools(server: McpServer): void {
   // Phase 1: 基本読み取りツール
@@ -70,4 +75,9 @@ export function registerAllTools(server: McpServer): void {
   registerModifyObject(server);
   registerConvertToOutlines(server);
   registerApplyColorProfile(server);
+  registerPlaceImage(server);
+
+  // Phase 5: ドキュメント管理
+  registerCreateDocument(server);
+  registerCloseDocument(server);
 }
