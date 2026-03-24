@@ -24,14 +24,14 @@ describe('cleanupTempFiles', () => {
       id: 'missing',
       paramsPath: '/tmp/does-not-exist-a',
       scriptPath: '/tmp/does-not-exist-b',
-      scptPath: '/tmp/does-not-exist-c',
+      runnerPath: '/tmp/does-not-exist-c',
       resultPath: '/tmp/does-not-exist-d',
     });
 
     expect(warn).not.toHaveBeenCalled();
 
     tempRoot = mkdtempSync(path.join(tmpdir(), 'illustrator-mcp-test-'));
-    const failingPaths = ['params', 'script', 'scpt', 'result'].map((name) => {
+    const failingPaths = ['params', 'script', 'runner', 'result'].map((name) => {
       const dirPath = path.join(tempRoot!, name);
       mkdirSync(dirPath);
       return dirPath;
@@ -41,7 +41,7 @@ describe('cleanupTempFiles', () => {
       id: 'dirs',
       paramsPath: failingPaths[0],
       scriptPath: failingPaths[1],
-      scptPath: failingPaths[2],
+      runnerPath: failingPaths[2],
       resultPath: failingPaths[3],
     });
 
