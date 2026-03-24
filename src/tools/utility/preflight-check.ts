@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { readImageDimensions } from '../../utils/image-header.js';
 
 const jsxCode = `
 try {
@@ -10,6 +11,7 @@ try {
   } else {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
+    var minDPI = (params && params.min_dpi) ? params.min_dpi : 300;
     var doc = app.activeDocument;
     var results = [];
     var docColorSpace = doc.documentColorSpace;
@@ -123,7 +125,7 @@ try {
       }
     } catch(e) {}
 
-    // 3. Low resolution images (< 300dpi)
+    // 3. Low resolution images (embedded raster)
     try {
       for (var ri = 0; ri < doc.rasterItems.length; ri++) {
         var raster = doc.rasterItems[ri];
@@ -134,39 +136,57 @@ try {
           if (widthPt < 0) widthPt = -widthPt;
           if (heightPt < 0) heightPt = -heightPt;
 
-          var matrix = raster.matrix;
-          var ppiH = 72;
-          var ppiV = 72;
           try {
-            var srcW = raster.imageColorSpace ? raster.matrix.mValueA : 1;
-            var srcH = raster.imageColorSpace ? raster.matrix.mValueD : 1;
-          } catch(e2) {}
-
-          // Use a simpler approach: compare pixel dimensions to point dimensions
-          // Points to inches: divide by 72
-          // If we can get bounding box in points and original pixel size, we can compute effective DPI
-          // Unfortunately ExtendScript rasterItem doesn't directly expose pixel dimensions reliably
-          // We check if the item has a lower than expected resolution by examining its properties
-          var effectivePPI = 0;
-          try {
-            // Try to compute effective resolution from the object dimensions
-            // raster items have an overprint property but no direct pixel dimension
-            // Heuristic: if the item appears large at screen resolution, flag it
-            var widthInches = widthPt / 72;
-            var heightInches = heightPt / 72;
-            // Cannot reliably determine pixel dimensions in ES3, so skip exact DPI calc
-            // Instead just note as info
-            if (widthInches > 0 || heightInches > 0) {
-              var uuid4 = ensureUUID(raster);
-              results.push({
-                level: "warning",
-                category: "image_resolution",
-                message: "Please verify raster image resolution (exact DPI calculation unavailable due to API limitations)",
-                uuid: uuid4,
-                details: { name: raster.name || "", widthPt: widthPt, heightPt: heightPt }
-              });
+            var m = raster.matrix;
+            if (m && widthPt > 0 && heightPt > 0) {
+              // Use vector magnitude to handle rotation correctly
+              var sX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
+              var sY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
+              if (sX > 0 && sY > 0) {
+                var pxW = Math.round(widthPt / sX);
+                var pxH = Math.round(heightPt / sY);
+                var ppiH = Math.round(pxW / (widthPt / 72));
+                var ppiV = Math.round(pxH / (heightPt / 72));
+                var effectivePPI = Math.min(ppiH, ppiV);
+                if (effectivePPI < minDPI) {
+                  var uuid4 = ensureUUID(raster);
+                  results.push({
+                    level: "error",
+                    category: "low_resolution",
+                    message: "Embedded image resolution " + effectivePPI + " DPI is below minimum " + minDPI + " DPI",
+                    uuid: uuid4,
+                    details: { name: raster.name || "", effectivePPI: effectivePPI, minDPI: minDPI, pixelWidth: pxW, pixelHeight: pxH }
+                  });
+                }
+              }
             }
           } catch(e2) {}
+        } catch(e) {}
+      }
+    } catch(e) {}
+
+    // 3b. Collect linked image data for Node.js-side DPI check
+    var placedImageData = [];
+    try {
+      for (var pli = 0; pli < doc.placedItems.length; pli++) {
+        var pItem = doc.placedItems[pli];
+        try {
+          var pFile = pItem.file;
+          if (pFile && pFile.exists) {
+            var pUuid = ensureUUID(pItem);
+            var pBounds = pItem.geometricBounds;
+            var pWPt = pBounds[2] - pBounds[0];
+            var pHPt = -(pBounds[3] - pBounds[1]);
+            if (pWPt < 0) pWPt = -pWPt;
+            if (pHPt < 0) pHPt = -pHPt;
+            placedImageData.push({
+              uuid: pUuid,
+              name: pItem.name || "",
+              filePath: pFile.fsName,
+              widthPt: pWPt,
+              heightPt: pHPt
+            });
+          }
         } catch(e) {}
       }
     } catch(e) {}
@@ -306,7 +326,9 @@ try {
       coordinateSystem: coordSystem,
       documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
       checkCount: results.length,
-      results: results
+      results: results,
+      placedImageData: placedImageData,
+      minDPI: minDPI
     });
   }
 } catch (e) {
@@ -325,6 +347,13 @@ export function register(server: McpServer): void {
           .enum(['artboard-web', 'document'])
           .optional()
           .default('artboard-web'),
+        min_dpi: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .default(300)
+          .describe('Minimum acceptable DPI for images (default: 300)'),
       },
       annotations: {
         readOnlyHint: true,
@@ -334,7 +363,65 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const result = (await executeJsx(jsxCode, params)) as {
+        checkCount: number;
+        results: Array<{
+          level: string;
+          category: string;
+          message: string;
+          uuid: string | null;
+          details: Record<string, unknown>;
+        }>;
+        placedImageData?: Array<{
+          uuid: string;
+          name: string;
+          filePath: string;
+          widthPt: number;
+          heightPt: number;
+        }>;
+        minDPI?: number;
+        [key: string]: unknown;
+      };
+
+      // Post-process: check PlacedItem DPI using Node.js file reading
+      const minDpi = result?.minDPI ?? params.min_dpi ?? 300;
+      if (result?.placedImageData) {
+        for (const placed of result.placedImageData) {
+          if (!placed.filePath || placed.widthPt <= 0 || placed.heightPt <= 0) continue;
+          try {
+            const dims = readImageDimensions(placed.filePath);
+            if (dims) {
+              const widthInches = placed.widthPt / 72;
+              const heightInches = placed.heightPt / 72;
+              const ppiH = Math.round(dims.width / widthInches);
+              const ppiV = Math.round(dims.height / heightInches);
+              const effectivePPI = Math.min(ppiH, ppiV);
+              if (effectivePPI < minDpi) {
+                result.results.push({
+                  level: 'error',
+                  category: 'low_resolution',
+                  message: `Linked image resolution ${effectivePPI} DPI is below minimum ${minDpi} DPI`,
+                  uuid: placed.uuid,
+                  details: {
+                    name: placed.name,
+                    effectivePPI,
+                    minDPI: minDpi,
+                    pixelWidth: dims.width,
+                    pixelHeight: dims.height,
+                    filePath: placed.filePath,
+                  },
+                });
+              }
+            }
+          } catch {
+            // Skip unreadable files
+          }
+        }
+        delete result.placedImageData;
+        delete result.minDPI;
+        result.checkCount = result.results.length;
+      }
+
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

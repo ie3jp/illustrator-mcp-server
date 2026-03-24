@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { readImageDimensions } from '../../utils/image-header.js';
 
 const jsxCode = `
 try {
@@ -36,7 +37,9 @@ try {
         pixelWidth: null,
         pixelHeight: null,
         artboardIndex: abIndex,
-        bounds: bounds
+        bounds: bounds,
+        widthPt: null,
+        heightPt: null
       };
 
       try {
@@ -46,6 +49,17 @@ try {
       }
 
       try { info.name = item.name || ""; } catch(e) {}
+
+      // Store placed dimensions in points for Node.js-side DPI calculation
+      try {
+        var pBounds = item.geometricBounds;
+        var pWidthPt = pBounds[2] - pBounds[0];
+        var pHeightPt = -(pBounds[3] - pBounds[1]);
+        if (pWidthPt < 0) pWidthPt = -pWidthPt;
+        if (pHeightPt < 0) pHeightPt = -pHeightPt;
+        info.widthPt = pWidthPt;
+        info.heightPt = pHeightPt;
+      } catch(e) {}
 
       images.push(info);
     }
@@ -110,9 +124,10 @@ try {
         try {
           var m = rItem.matrix;
           if (m && placedWidthPt > 0 && placedHeightPt > 0) {
-            // matrix.mValueA and mValueD give scale factors from pixels to points
-            var scaleX = Math.abs(m.mValueA);
-            var scaleY = Math.abs(m.mValueD);
+            // Use vector magnitude to handle rotation correctly
+            // mValueA/mValueB form horizontal basis vector, mValueC/mValueD form vertical
+            var scaleX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
+            var scaleY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
             if (scaleX > 0 && scaleY > 0) {
               rInfo.pixelWidth = Math.round(placedWidthPt / scaleX);
               rInfo.pixelHeight = Math.round(placedHeightPt / scaleY);
@@ -157,7 +172,48 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const result = (await executeJsx(jsxCode, params)) as {
+        imageCount: number;
+        coordinateSystem: string;
+        images: Array<{
+          type: string;
+          filePath: string;
+          linkBroken: boolean;
+          pixelWidth: number | null;
+          pixelHeight: number | null;
+          resolution: number | null;
+          widthPt?: number | null;
+          heightPt?: number | null;
+          [key: string]: unknown;
+        }>;
+        [key: string]: unknown;
+      };
+
+      // Post-process: compute pixel dimensions and DPI for linked images
+      if (result?.images) {
+        for (const img of result.images) {
+          if (img.type === 'linked' && img.filePath && !img.linkBroken) {
+            try {
+              const dims = readImageDimensions(img.filePath);
+              if (dims && img.widthPt && img.heightPt) {
+                img.pixelWidth = dims.width;
+                img.pixelHeight = dims.height;
+                const widthInches = img.widthPt / 72;
+                const heightInches = img.heightPt / 72;
+                const ppiH = Math.round(dims.width / widthInches);
+                const ppiV = Math.round(dims.height / heightInches);
+                img.resolution = Math.min(ppiH, ppiV);
+              }
+            } catch {
+              // Skip unreadable files
+            }
+          }
+          // Clean up internal fields
+          delete img.widthPt;
+          delete img.heightPt;
+        }
+      }
+
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
