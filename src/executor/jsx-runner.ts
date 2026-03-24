@@ -41,7 +41,12 @@ export function resolveTransport(
   throw new Error(`Unsupported platform: ${platform}. Only macOS and Windows are supported.`);
 }
 
-const TRANSPORT: Transport = resolveTransport();
+// 遅延初期化: テスト環境 (Linux CI) ではモジュール読み込み時に throw しないようにする
+let _transport: Transport | null = null;
+function getTransport(): Transport {
+  if (!_transport) _transport = resolveTransport();
+  return _transport;
+}
 
 /**
  * 実行中の JSX がすべて完了するまで待機する（シャットダウン用）
@@ -213,13 +218,14 @@ async function executeJsxRaw(
 ): Promise<JsxResult> {
   pendingCount++;
   try {
-    switch (TRANSPORT) {
+    const transport = getTransport();
+    switch (transport) {
       case 'osascript':
         return await executeViaOsascript(jsxCode, params, timeout, activate);
       case 'powershell':
         return await executeViaPowerShell(jsxCode, params, timeout);
       default: {
-        const _: never = TRANSPORT;
+        const _: never = transport;
         throw new Error(`Unknown transport: ${_ as string}`);
       }
     }
@@ -258,4 +264,4 @@ export async function executeJsxHeavy(
 }
 
 // ─── デバッグ用エクスポート ──────────────────────────────────────────────────
-export { TRANSPORT };
+export { getTransport as TRANSPORT };
