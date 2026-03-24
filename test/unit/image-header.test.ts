@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readImageDimensions } from '../../src/utils/image-header.js';
-import { writeFileSync, unlinkSync, mkdtempSync } from 'fs';
+import { writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -175,6 +175,7 @@ function withTempFile(ext: string, buf: Buffer, fn: (path: string) => void): voi
     fn(filePath);
   } finally {
     try { unlinkSync(filePath); } catch { /* ignore */ }
+    try { rmdirSync(dir); } catch { /* ignore */ }
   }
 }
 
