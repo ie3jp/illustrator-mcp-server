@@ -74,92 +74,170 @@ if (preflight) {
 
     if (targetType !== "error") {
       var outFile = new File(outputPath);
+      var parentFolder = outFile.parent;
+      if (!parentFolder.exists) {
+        writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
+        targetType = "error";
+      }
+    }
 
-      if (format === "svg") {
-        var opts = new ExportOptionsSVG();
-        opts.fontSubsetting = SVGFontSubsetting.None;
+    if (targetType !== "error") {
+      var outFile = new File(outputPath);
 
-        if (svgOpts.text_outline === true) {
-          opts.fontType = SVGFontType.OUTLINEFONT;
-        }
-        if (svgOpts.css_properties === true) {
-          opts.cssProperties = SVGCSSPropertyLocation.STYLEELEMENTS;
-        } else {
-          opts.cssProperties = SVGCSSPropertyLocation.PRESENTATIONATTRIBUTES;
-        }
-        if (typeof svgOpts.embed_images !== "undefined") {
-          opts.embedRasterImages = svgOpts.embed_images;
-        }
-        if (svgOpts.id_naming === "layer") {
-          opts.idType = SVGIdType.SVGIDMINIMAL;
-        } else if (svgOpts.id_naming === "object") {
-          opts.idType = SVGIdType.SVGIDUNIQUE;
-        } else {
-          opts.idType = SVGIdType.SVGIDREGULAR;
-        }
-        if (typeof svgOpts.decimal_places === "number") {
-          opts.coordinatePrecision = svgOpts.decimal_places;
-        }
-        if (targetType === "artboard") {
-          doc.artboards.setActiveArtboardIndex(artboardIndex);
-          opts.artBoardClipping = true;
-          opts.saveMultipleArtboards = true;
-          opts.artboardRange = String(artboardIndex + 1);
-        } else if (targetType === "selection") {
-          opts.artBoardClipping = false;
-        }
+      // UUID指定かつラスタ形式の場合、一時ドキュメントにコピーして書き出す
+      var useIsolatedExport = (targetType === "selection" && typeof targetItem !== "undefined" && targetItem !== null && (format === "png" || format === "jpg"));
 
-        doc.exportFile(outFile, ExportType.SVG, opts);
+      if (useIsolatedExport) {
+        // 選択オブジェクトをコピー
+        app.executeMenuCommand("copy");
 
-      } else if (format === "png") {
-        var pngOpts = new ExportOptionsPNG24();
-        var dpi = (rasterOpts.dpi || 72) * scale;
-        pngOpts.horizontalScale = (dpi / 72) * 100;
-        pngOpts.verticalScale = (dpi / 72) * 100;
-        pngOpts.antiAliasing = (typeof rasterOpts.antialiasing !== "undefined") ? rasterOpts.antialiasing : true;
+        // 対象オブジェクトの bounds を取得（[left, top, right, bottom] in document coords）
+        var vb = targetItem.visibleBounds;
+        var objW = vb[2] - vb[0];
+        var objH = vb[1] - vb[3]; // top - bottom (document coords: Y-up)
 
-        if (rasterOpts.background === "transparent") {
-          pngOpts.transparency = true;
-        } else {
-          pngOpts.transparency = false;
+        // 一時ドキュメントを作成
+        var tempDoc = app.documents.add(doc.documentColorSpace, objW, objH);
+        tempDoc.artboards[0].artboardRect = [0, objH, objW, 0];
+
+        // ペースト
+        app.executeMenuCommand("paste");
+
+        // ペーストされたオブジェクトをアートボード中央に配置
+        if (tempDoc.selection && tempDoc.selection.length > 0) {
+          var pasted = tempDoc.selection[0];
+          var pb = pasted.visibleBounds;
+          var pw = pb[2] - pb[0];
+          var ph = pb[1] - pb[3];
+          pasted.left = (objW - pw) / 2;
+          pasted.top = objH - (objH - ph) / 2;
         }
 
-        if (targetType === "artboard") {
-          doc.artboards.setActiveArtboardIndex(artboardIndex);
+        // アートボードをアートワークにフィット
+        var fitBounds = tempDoc.visibleBounds;
+        if (fitBounds) {
+          tempDoc.artboards[0].artboardRect = [fitBounds[0], fitBounds[1], fitBounds[2], fitBounds[3]];
+        }
+
+        // 一時ドキュメントからエクスポート
+        if (format === "png") {
+          var pngOpts = new ExportOptionsPNG24();
+          var dpi = (rasterOpts.dpi || 72) * scale;
+          pngOpts.horizontalScale = (dpi / 72) * 100;
+          pngOpts.verticalScale = (dpi / 72) * 100;
+          pngOpts.antiAliasing = (typeof rasterOpts.antialiasing !== "undefined") ? rasterOpts.antialiasing : true;
+          if (rasterOpts.background === "transparent") {
+            pngOpts.transparency = true;
+          } else {
+            pngOpts.transparency = false;
+          }
           pngOpts.artBoardClipping = true;
-          pngOpts.saveMultipleArtboards = true;
-          pngOpts.artboardRange = String(artboardIndex + 1);
-        } else if (targetType === "selection") {
-          pngOpts.artBoardClipping = false;
-        }
-
-        doc.exportFile(outFile, ExportType.PNG24, pngOpts);
-
-      } else if (format === "jpg") {
-        var jpgOpts = new ExportOptionsJPEG();
-        var jpgDpi = (rasterOpts.dpi || 72) * scale;
-        jpgOpts.horizontalScale = (jpgDpi / 72) * 100;
-        jpgOpts.verticalScale = (jpgDpi / 72) * 100;
-        jpgOpts.antiAliasing = (typeof rasterOpts.antialiasing !== "undefined") ? rasterOpts.antialiasing : true;
-        jpgOpts.qualitySetting = 80;
-
-        if (targetType === "artboard") {
-          doc.artboards.setActiveArtboardIndex(artboardIndex);
+          tempDoc.exportFile(outFile, ExportType.PNG24, pngOpts);
+        } else {
+          var jpgOpts = new ExportOptionsJPEG();
+          var jpgDpi = (rasterOpts.dpi || 72) * scale;
+          jpgOpts.horizontalScale = (jpgDpi / 72) * 100;
+          jpgOpts.verticalScale = (jpgDpi / 72) * 100;
+          jpgOpts.antiAliasing = (typeof rasterOpts.antialiasing !== "undefined") ? rasterOpts.antialiasing : true;
+          jpgOpts.qualitySetting = 80;
           jpgOpts.artBoardClipping = true;
-          jpgOpts.saveMultipleArtboards = true;
-          jpgOpts.artboardRange = String(artboardIndex + 1);
-        } else if (targetType === "selection") {
-          jpgOpts.artBoardClipping = false;
+          tempDoc.exportFile(outFile, ExportType.JPEG, jpgOpts);
         }
 
-        doc.exportFile(outFile, ExportType.JPEG, jpgOpts);
+        // 一時ドキュメントを閉じる（保存しない）
+        tempDoc.close(SaveOptions.DONOTSAVECHANGES);
 
-      // WebP は ExtendScript API 非対応のため無効化
-      // } else if (format === "webp") { ... }
+      } else {
+        // 従来の書き出しロジック（artboard / selection / SVG）
+        if (format === "svg") {
+          var opts = new ExportOptionsSVG();
+          opts.fontSubsetting = SVGFontSubsetting.None;
+
+          if (svgOpts.text_outline === true) {
+            opts.fontType = SVGFontType.OUTLINEFONT;
+          }
+          if (svgOpts.css_properties === true) {
+            opts.cssProperties = SVGCSSPropertyLocation.STYLEELEMENTS;
+          } else {
+            opts.cssProperties = SVGCSSPropertyLocation.PRESENTATIONATTRIBUTES;
+          }
+          if (typeof svgOpts.embed_images !== "undefined") {
+            opts.embedRasterImages = svgOpts.embed_images;
+          }
+          if (svgOpts.id_naming === "layer") {
+            opts.idType = SVGIdType.SVGIDMINIMAL;
+          } else if (svgOpts.id_naming === "object") {
+            opts.idType = SVGIdType.SVGIDUNIQUE;
+          } else {
+            opts.idType = SVGIdType.SVGIDREGULAR;
+          }
+          if (typeof svgOpts.decimal_places === "number") {
+            opts.coordinatePrecision = svgOpts.decimal_places;
+          }
+          if (targetType === "artboard") {
+            doc.artboards.setActiveArtboardIndex(artboardIndex);
+            opts.artBoardClipping = true;
+            opts.saveMultipleArtboards = true;
+            opts.artboardRange = String(artboardIndex + 1);
+          } else if (targetType === "selection") {
+            opts.artBoardClipping = false;
+          }
+
+          doc.exportFile(outFile, ExportType.SVG, opts);
+
+        } else if (format === "png") {
+          var pngOpts = new ExportOptionsPNG24();
+          var dpi = (rasterOpts.dpi || 72) * scale;
+          pngOpts.horizontalScale = (dpi / 72) * 100;
+          pngOpts.verticalScale = (dpi / 72) * 100;
+          pngOpts.antiAliasing = (typeof rasterOpts.antialiasing !== "undefined") ? rasterOpts.antialiasing : true;
+
+          if (rasterOpts.background === "transparent") {
+            pngOpts.transparency = true;
+          } else {
+            pngOpts.transparency = false;
+          }
+
+          if (targetType === "artboard") {
+            doc.artboards.setActiveArtboardIndex(artboardIndex);
+            pngOpts.artBoardClipping = true;
+            pngOpts.saveMultipleArtboards = true;
+            pngOpts.artboardRange = String(artboardIndex + 1);
+          } else if (targetType === "selection") {
+            pngOpts.artBoardClipping = false;
+          }
+
+          doc.exportFile(outFile, ExportType.PNG24, pngOpts);
+
+        } else if (format === "jpg") {
+          var jpgOpts = new ExportOptionsJPEG();
+          var jpgDpi = (rasterOpts.dpi || 72) * scale;
+          jpgOpts.horizontalScale = (jpgDpi / 72) * 100;
+          jpgOpts.verticalScale = (jpgDpi / 72) * 100;
+          jpgOpts.antiAliasing = (typeof rasterOpts.antialiasing !== "undefined") ? rasterOpts.antialiasing : true;
+          jpgOpts.qualitySetting = 80;
+
+          if (targetType === "artboard") {
+            doc.artboards.setActiveArtboardIndex(artboardIndex);
+            jpgOpts.artBoardClipping = true;
+            jpgOpts.saveMultipleArtboards = true;
+            jpgOpts.artboardRange = String(artboardIndex + 1);
+          } else if (targetType === "selection") {
+            jpgOpts.artBoardClipping = false;
+          }
+
+          doc.exportFile(outFile, ExportType.JPEG, jpgOpts);
+        }
       }
 
       if (targetType !== "error") {
-        writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+        // エクスポート後にファイル存在を検証
+        var verifyFile = new File(outputPath);
+        if (!verifyFile.exists) {
+          writeResultFile(RESULT_PATH, { error: true, message: "Export completed but output file was not created. The path may not be writable: " + outputPath });
+        } else {
+          writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+        }
       }
 
     }

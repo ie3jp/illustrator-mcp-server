@@ -224,6 +224,83 @@ async function main(): Promise<void> {
     assert(result.success === true, 'export should succeed');
   });
 
+  // UUID 指定でのラスタ書き出し（一時ドキュメント経由の isolated export）
+  await test('export PNG by UUID (isolated export)', async () => {
+    // テスト用に作成した矩形を検索
+    const found = await callTool(client, 'find_objects', { name: '__mcp_test_rect_modified' }) as any;
+    if (found.count === 0) {
+      results[results.length - 1] = { name: 'export PNG by UUID (isolated export)', status: 'skip', message: 'test rect not found' };
+      console.log('    → スキップ: テスト矩形なし');
+      return;
+    }
+    const uuid = found.objects[0].uuid;
+    const outPath = `${tmpDir}/test-uuid-export.png`;
+    const result = await callTool(client, 'export', {
+      target: uuid,
+      format: 'png',
+      output_path: outPath,
+      raster_options: { background: 'transparent' },
+    }) as any;
+    assert(result.success === true, 'UUID PNG export should succeed');
+    assert(result.output_path === outPath, 'output_path should match');
+  });
+
+  await test('export JPG by UUID (isolated export)', async () => {
+    const found = await callTool(client, 'find_objects', { name: '__mcp_test_rect_modified' }) as any;
+    if (found.count === 0) {
+      results[results.length - 1] = { name: 'export JPG by UUID (isolated export)', status: 'skip', message: 'test rect not found' };
+      console.log('    → スキップ: テスト矩形なし');
+      return;
+    }
+    const uuid = found.objects[0].uuid;
+    const outPath = `${tmpDir}/test-uuid-export.jpg`;
+    const result = await callTool(client, 'export', {
+      target: uuid,
+      format: 'jpg',
+      output_path: outPath,
+    }) as any;
+    assert(result.success === true, 'UUID JPG export should succeed');
+  });
+
+  // SVG は従来ロジックのまま（isolated export 不要）
+  await test('export SVG by UUID', async () => {
+    const found = await callTool(client, 'find_objects', { name: '__mcp_test_rect_modified' }) as any;
+    if (found.count === 0) {
+      results[results.length - 1] = { name: 'export SVG by UUID', status: 'skip', message: 'test rect not found' };
+      console.log('    → スキップ: テスト矩形なし');
+      return;
+    }
+    const uuid = found.objects[0].uuid;
+    const result = await callTool(client, 'export', {
+      target: uuid,
+      format: 'svg',
+      output_path: `${tmpDir}/test-uuid-export.svg`,
+    }) as any;
+    assert(result.success === true, 'UUID SVG export should succeed');
+  });
+
+  // エラーケース: 存在しないディレクトリへの書き出し
+  await test('export to non-existent directory (should error)', async () => {
+    const result = await callTool(client, 'export', {
+      target: 'artboard:0',
+      format: 'png',
+      output_path: '/nonexistent/dir/test.png',
+    }) as any;
+    assert(result.error === true, 'should return error for non-existent directory');
+    assert(typeof result.message === 'string' && result.message.includes('does not exist'),
+      'error message should mention directory does not exist');
+  });
+
+  // エラーケース: 存在しない UUID
+  await test('export with invalid UUID (should error)', async () => {
+    const result = await callTool(client, 'export', {
+      target: 'nonexistent-uuid-12345',
+      format: 'png',
+      output_path: `${tmpDir}/should-not-exist.png`,
+    }) as any;
+    assert(result.error === true, 'should return error for invalid UUID');
+  });
+
   // ============================================================
   // Phase 4: ユーティリティ
   // ============================================================
@@ -319,24 +396,32 @@ async function main(): Promise<void> {
     assert(result.success === true, 'modify should succeed');
   });
 
-  // convert_to_outlines — テストテキストをアウトライン化
-  await test('convert_to_outlines (selection=all)', async () => {
+  // convert_to_outlines — テスト用レイヤーのテキストをアウトライン化
+  await test('convert_to_outlines (test layer)', async () => {
     // テスト用テキストが存在するか確認
     const tfBefore = await callTool(client, 'find_objects', { name: '__mcp_test_text' }) as any;
     if (tfBefore.count === 0) {
       throw new Error('test text frame not found');
     }
-    // 全テキストのアウトライン化は危険なので、スキップして成功扱い
-    // 実際の convert_to_outlines は MCP Inspector で手動テスト済み
-    results[results.length - 1] = { name: 'convert_to_outlines', status: 'skip', message: 'skipped to preserve document' };
-    console.log(`    → スキップ: ドキュメント保全のため`);
+    // テストオブジェクトは __mcp_test__ レイヤーに作成されるので、そのレイヤーを対象にする
+    const result = await callTool(client, 'convert_to_outlines', {
+      target: '__mcp_test__',
+    }) as any;
+    assert(typeof result === 'object', 'should return a result object');
+    assert(!result.error, 'should not return error: ' + (result.message || ''));
   });
 
-  // apply_color_profile
+  // apply_color_profile — 現在のプロファイルを再適用（実質ノーオプ）
   await test('apply_color_profile', async () => {
-    // プロファイル変更はドキュメントに影響するのでスキップ
-    results[results.length - 1] = { name: 'apply_color_profile', status: 'skip', message: 'skipped to preserve document' };
-    console.log(`    → スキップ: ドキュメント保全のため`);
+    // 現在のカラーモードに応じた標準プロファイルを適用
+    const profile = docInfo.colorMode === 'CMYK'
+      ? 'Japan Color 2001 Coated'
+      : 'sRGB IEC61966-2.1';
+    const result = await callTool(client, 'apply_color_profile', {
+      profile,
+    }) as any;
+    assert(typeof result === 'object', 'should return a result object');
+    assert(!result.error, 'should not return error: ' + (result.message || ''));
   });
 
   // export_pdf
@@ -346,6 +431,16 @@ async function main(): Promise<void> {
       options: { trim_marks: true },
     }) as any;
     assert(result.success === true, 'PDF export should succeed');
+  });
+
+  // PDF エラーケース: 存在しないディレクトリ
+  await test('export_pdf to non-existent directory (should error)', async () => {
+    const result = await callTool(client, 'export_pdf', {
+      output_path: '/nonexistent/dir/test.pdf',
+    }) as any;
+    assert(result.error === true, 'should return error for non-existent directory');
+    assert(typeof result.message === 'string' && result.message.includes('does not exist'),
+      'error message should mention directory does not exist');
   });
 
   // export JPG

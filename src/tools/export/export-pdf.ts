@@ -104,9 +104,20 @@ if (preflight) {
     }
 
     var outFile = new File(outputPath);
-    doc.saveAs(outFile, pdfOpts);
+    var parentFolder = outFile.parent;
+    if (!parentFolder.exists) {
+      writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
+    } else {
+      doc.saveAs(outFile, pdfOpts);
 
-    writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+      // エクスポート後にファイル存在を検証
+      var verifyFile = new File(outputPath);
+      if (!verifyFile.exists) {
+        writeResultFile(RESULT_PATH, { error: true, message: "PDF export completed but output file was not created. The path may not be writable: " + outputPath });
+      } else {
+        writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+      }
+    }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "PDF export failed: " + e.message, line: e.line });
   }
