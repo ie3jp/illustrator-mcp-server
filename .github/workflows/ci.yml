@@ -18,6 +18,6 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm ci
+      - run: npm ci --force  # os: ["darwin"] をCI環境(Linux)でスキップ
       - run: npm run build
       - run: npm test
