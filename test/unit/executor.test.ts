@@ -1,0 +1,70 @@
+import type { ExecFileException } from 'child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
+import * as path from 'path';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cleanupTempFiles } from '../../src/executor/file-transport.js';
+import { getExecFailureMessage } from '../../src/executor/jsx-runner.js';
+
+let tempRoot: string | undefined;
+
+afterEach(() => {
+  if (tempRoot) {
+    rmSync(tempRoot, { recursive: true, force: true });
+    tempRoot = undefined;
+  }
+  vi.restoreAllMocks();
+});
+
+describe('cleanupTempFiles', () => {
+  it('ignores missing files but warns for real cleanup failures', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await cleanupTempFiles({
+      id: 'missing',
+      paramsPath: '/tmp/does-not-exist-a',
+      scriptPath: '/tmp/does-not-exist-b',
+      scptPath: '/tmp/does-not-exist-c',
+      resultPath: '/tmp/does-not-exist-d',
+    });
+
+    expect(warn).not.toHaveBeenCalled();
+
+    tempRoot = mkdtempSync(path.join(tmpdir(), 'illustrator-mcp-test-'));
+    const failingPaths = ['params', 'script', 'scpt', 'result'].map((name) => {
+      const dirPath = path.join(tempRoot!, name);
+      mkdirSync(dirPath);
+      return dirPath;
+    });
+
+    await cleanupTempFiles({
+      id: 'dirs',
+      paramsPath: failingPaths[0],
+      scriptPath: failingPaths[1],
+      scptPath: failingPaths[2],
+      resultPath: failingPaths[3],
+    });
+
+    expect(warn).toHaveBeenCalledTimes(4);
+  });
+});
+
+describe('getExecFailureMessage', () => {
+  it('prefers explicit timeout errors over killed status', () => {
+    const error = Object.assign(new Error('timed out'), {
+      code: 'ETIMEDOUT',
+      killed: true,
+    }) as ExecFileException;
+
+    expect(getExecFailureMessage(error, '', 300)).toBe('Script execution timed out after 300ms');
+  });
+
+  it('reports non-timeout termination signals distinctly', () => {
+    const error = Object.assign(new Error('terminated'), {
+      killed: true,
+      signal: 'SIGTERM',
+    }) as ExecFileException;
+
+    expect(getExecFailureMessage(error, '', 300)).toBe('Script execution was terminated by signal SIGTERM');
+  });
+});
