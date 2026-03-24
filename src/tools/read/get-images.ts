@@ -131,8 +131,10 @@ try {
             if (scaleX > 0 && scaleY > 0) {
               rInfo.pixelWidth = Math.round(placedWidthPt / scaleX);
               rInfo.pixelHeight = Math.round(placedHeightPt / scaleY);
-              // PPI = pixels / (points / 72)
-              rInfo.resolution = Math.round(rInfo.pixelWidth / (placedWidthPt / 72));
+              // PPI = pixels / (points / 72); use minimum of H and V
+              var ppiH = Math.round(rInfo.pixelWidth / (placedWidthPt / 72));
+              var ppiV = Math.round(rInfo.pixelHeight / (placedHeightPt / 72));
+              rInfo.resolution = Math.min(ppiH, ppiV);
             }
           }
         } catch(e3) {}
