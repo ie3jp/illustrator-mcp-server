@@ -35,76 +35,73 @@ if (preflight) {
     var aiX = aiCoords[0];
     var aiY = aiCoords[1];
 
-    // Resolve font first to avoid creating orphaned objects on error
     var resolvedFont = null;
-    var fontError = false;
+    var fontCandidates = null;
     if (params.font_name) {
       try {
         resolvedFont = app.textFonts.getByName(params.font_name);
       } catch (e) {
-        var fontCandidates = [];
+        var candidates = [];
         var searchLower = params.font_name.toLowerCase();
         for (var fi = 0; fi < app.textFonts.length; fi++) {
           var f = app.textFonts[fi];
           if (f.name.toLowerCase().indexOf(searchLower) >= 0 ||
               (f.family && f.family.toLowerCase().indexOf(searchLower) >= 0)) {
-            fontCandidates.push({ name: f.name, family: f.family });
-            if (fontCandidates.length >= 10) break;
+            candidates.push({ name: f.name, family: f.family });
+            if (candidates.length >= 10) break;
           }
         }
-        writeResultFile(RESULT_PATH, {
-          error: true,
-          message: "Font '" + params.font_name + "' not found.",
-          font_candidates: fontCandidates
-        });
-        fontError = true;
+        fontCandidates = candidates;
       }
     }
 
-    if (!fontError) {
-      var targetLayer = doc.activeLayer;
-      if (params.layer_name) {
-        try {
-          targetLayer = doc.layers.getByName(params.layer_name);
-        } catch (e) {
-          targetLayer = doc.layers.add();
-          targetLayer.name = params.layer_name;
-        }
+    var targetLayer = doc.activeLayer;
+    if (params.layer_name) {
+      try {
+        targetLayer = doc.layers.getByName(params.layer_name);
+      } catch (e) {
+        targetLayer = doc.layers.add();
+        targetLayer.name = params.layer_name;
       }
-
-      var tf;
-      if (kind === "area") {
-        var w = params.width || 100;
-        var h = params.height || 100;
-        var rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
-        tf = targetLayer.textFrames.areaText(rectPath);
-      } else {
-        tf = targetLayer.textFrames.pointText([aiX, aiY]);
-      }
-
-      tf.contents = params.contents || "";
-
-      if (params.name) {
-        tf.name = params.name;
-      }
-
-      var charAttrs = tf.textRange.characterAttributes;
-
-      if (resolvedFont) {
-        charAttrs.textFont = resolvedFont;
-      }
-
-      if (typeof params.font_size === "number") {
-        charAttrs.size = params.font_size;
-      }
-
-      if (typeof params.fill !== "undefined") {
-        charAttrs.fillColor = createColor(params.fill);
-      }
-
-      var uuid = ensureUUID(tf);
-      writeResultFile(RESULT_PATH, { uuid: uuid });
     }
+
+    var tf;
+    if (kind === "area") {
+      var w = params.width || 100;
+      var h = params.height || 100;
+      var rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
+      tf = targetLayer.textFrames.areaText(rectPath);
+    } else {
+      tf = targetLayer.textFrames.pointText([aiX, aiY]);
+    }
+
+    tf.contents = params.contents || "";
+
+    if (params.name) {
+      tf.name = params.name;
+    }
+
+    var charAttrs = tf.textRange.characterAttributes;
+
+    if (resolvedFont) {
+      charAttrs.textFont = resolvedFont;
+    }
+
+    if (typeof params.font_size === "number") {
+      charAttrs.size = params.font_size;
+    }
+
+    if (typeof params.fill !== "undefined") {
+      charAttrs.fillColor = createColor(params.fill);
+    }
+
+    var uuid = ensureUUID(tf);
+    var resultData = { uuid: uuid };
+    if (fontCandidates !== null) {
+      resultData.font_warning = "Font '" + params.font_name + "' not found. Text frame created with default font.";
+      resultData.font_candidates = fontCandidates;
+    }
+    writeResultFile(RESULT_PATH, resultData);
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create text frame: " + e.message, line: e.line });
   }
