@@ -39,14 +39,15 @@ return __cepResult;
 
 /**
  * CEP Extension の HTTP サーバーに JSX を送信し、evalScript の戻り値 (JSON 文字列) を返す
+ * @param port テスト時にモックサーバーのポートを渡せるよう省略可能
  */
-export function postToCep(jsxCode: string, timeout: number): Promise<string> {
+export function postToCep(jsxCode: string, timeout: number, port: number = CEP_PORT): Promise<string> {
   const body = JSON.stringify({ jsxCode });
 
   return new Promise<string>((resolve, reject) => {
     const options: http.RequestOptions = {
       hostname: '127.0.0.1',
-      port: CEP_PORT,
+      port,
       path: '/eval',
       method: 'POST',
       headers: {

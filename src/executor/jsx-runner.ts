@@ -31,14 +31,16 @@ let pendingResolve: (() => void) | null = null;
 //    win32   → PowerShell COM
 //    その他  → CEP (フォールバック)
 //
-type Transport = 'osascript' | 'powershell' | 'cep';
+export type Transport = 'osascript' | 'powershell' | 'cep';
 
-function resolveTransport(): Transport {
-  const env = process.env['ILLUSTRATOR_MCP_TRANSPORT'];
-  if (env === 'cep') return 'cep';
-  if (env === 'osascript') return 'osascript';
-  if (process.platform === 'darwin') return 'osascript';
-  if (process.platform === 'win32') return 'powershell';
+export function resolveTransport(
+  platform: string = process.platform,
+  envVar: string | undefined = process.env['ILLUSTRATOR_MCP_TRANSPORT'],
+): Transport {
+  if (envVar === 'cep') return 'cep';
+  if (envVar === 'osascript') return 'osascript';
+  if (platform === 'darwin') return 'osascript';
+  if (platform === 'win32') return 'powershell';
   return 'cep';
 }
 
