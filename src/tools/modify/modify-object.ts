@@ -100,13 +100,27 @@ if (preflight) {
         catch(e) { errors.push("contents: " + e.message); }
       }
 
+      var fontCandidates = null;
       if (props.font_name) {
         try {
-          var tf = app.textFonts.getByName(props.font_name);
+          var resolvedFont = app.textFonts.getByName(props.font_name);
           for (var ri = 0; ri < item.textRanges.length; ri++) {
-            item.textRanges[ri].characterAttributes.textFont = tf;
+            item.textRanges[ri].characterAttributes.textFont = resolvedFont;
           }
-        } catch(e) { errors.push("font_name: " + e.message); }
+        } catch(e) {
+          var candidates = [];
+          var searchLower = props.font_name.toLowerCase();
+          for (var fi = 0; fi < app.textFonts.length; fi++) {
+            var f = app.textFonts[fi];
+            if (f.name.toLowerCase().indexOf(searchLower) >= 0 ||
+                (f.family && f.family.toLowerCase().indexOf(searchLower) >= 0)) {
+              candidates.push({ name: f.name, family: f.family });
+              if (candidates.length >= 10) break;
+            }
+          }
+          errors.push("font_name: Font '" + props.font_name + "' not found.");
+          fontCandidates = candidates;
+        }
       }
 
       if (typeof props.font_size === "number") {
@@ -118,7 +132,9 @@ if (preflight) {
       }
 
       if (errors.length > 0) {
-        writeResultFile(RESULT_PATH, { success: false, uuid: params.uuid, errors: errors });
+        var result = { success: false, uuid: params.uuid, errors: errors };
+        if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
+        writeResultFile(RESULT_PATH, result);
       } else {
         writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid });
       }
@@ -159,7 +175,7 @@ export function register(server: McpServer): void {
             rotation: z.number().optional().describe('Rotation angle (degrees), relative to current angle'),
             name: z.string().optional().describe('Object name'),
             contents: z.string().optional().describe('Text contents (for text frames)'),
-            font_name: z.string().optional().describe('Font name (for text frames)'),
+            font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),
             font_size: z.number().optional().describe('Font size (for text frames)'),
           })
           .describe('Properties to modify'),

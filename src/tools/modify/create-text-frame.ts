@@ -35,52 +35,76 @@ if (preflight) {
     var aiX = aiCoords[0];
     var aiY = aiCoords[1];
 
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
-
-    var tf;
-    if (kind === "area") {
-      var w = params.width || 100;
-      var h = params.height || 100;
-      var rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
-      tf = targetLayer.textFrames.areaText(rectPath);
-    } else {
-      tf = targetLayer.textFrames.pointText([aiX, aiY]);
-    }
-
-    tf.contents = params.contents || "";
-
-    if (params.name) {
-      tf.name = params.name;
-    }
-
-    var charAttrs = tf.textRange.characterAttributes;
-
+    // Resolve font first to avoid creating orphaned objects on error
+    var resolvedFont = null;
+    var fontError = false;
     if (params.font_name) {
       try {
-        charAttrs.textFont = app.textFonts.getByName(params.font_name);
+        resolvedFont = app.textFonts.getByName(params.font_name);
       } catch (e) {
-        // フォントが見つからない場合は無視
+        var fontCandidates = [];
+        var searchLower = params.font_name.toLowerCase();
+        for (var fi = 0; fi < app.textFonts.length; fi++) {
+          var f = app.textFonts[fi];
+          if (f.name.toLowerCase().indexOf(searchLower) >= 0 ||
+              (f.family && f.family.toLowerCase().indexOf(searchLower) >= 0)) {
+            fontCandidates.push({ name: f.name, family: f.family });
+            if (fontCandidates.length >= 10) break;
+          }
+        }
+        writeResultFile(RESULT_PATH, {
+          error: true,
+          message: "Font '" + params.font_name + "' not found.",
+          font_candidates: fontCandidates
+        });
+        fontError = true;
       }
     }
 
-    if (typeof params.font_size === "number") {
-      charAttrs.size = params.font_size;
-    }
+    if (!fontError) {
+      var targetLayer = doc.activeLayer;
+      if (params.layer_name) {
+        try {
+          targetLayer = doc.layers.getByName(params.layer_name);
+        } catch (e) {
+          targetLayer = doc.layers.add();
+          targetLayer.name = params.layer_name;
+        }
+      }
 
-    if (typeof params.fill !== "undefined") {
-      charAttrs.fillColor = createColor(params.fill);
-    }
+      var tf;
+      if (kind === "area") {
+        var w = params.width || 100;
+        var h = params.height || 100;
+        var rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
+        tf = targetLayer.textFrames.areaText(rectPath);
+      } else {
+        tf = targetLayer.textFrames.pointText([aiX, aiY]);
+      }
 
-    var uuid = ensureUUID(tf);
-    writeResultFile(RESULT_PATH, { uuid: uuid });
+      tf.contents = params.contents || "";
+
+      if (params.name) {
+        tf.name = params.name;
+      }
+
+      var charAttrs = tf.textRange.characterAttributes;
+
+      if (resolvedFont) {
+        charAttrs.textFont = resolvedFont;
+      }
+
+      if (typeof params.font_size === "number") {
+        charAttrs.size = params.font_size;
+      }
+
+      if (typeof params.fill !== "undefined") {
+        charAttrs.fillColor = createColor(params.fill);
+      }
+
+      var uuid = ensureUUID(tf);
+      writeResultFile(RESULT_PATH, { uuid: uuid });
+    }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create text frame: " + e.message, line: e.line });
   }
@@ -104,7 +128,7 @@ export function register(server: McpServer): void {
           .describe('Text frame type (point or area)'),
         width: z.number().optional().describe('Area text width'),
         height: z.number().optional().describe('Area text height'),
-        font_name: z.string().optional().describe('Font name (PostScript name)'),
+        font_name: z.string().optional().describe('Font name (partial match, e.g. "Arial", "Helvetica"). Use list_fonts to find exact PostScript names.'),
         font_size: z.number().optional().describe('Font size (pt)'),
         fill: colorSchema.describe('Text color'),
         layer_name: z.string().optional().describe('Target layer name'),
