@@ -112,17 +112,18 @@ if (err) {
       try { info.opacity = item.opacity; } catch (e) {}
 
       // fill
+      // Note: ExtendScript does not expose per-fill opacity on pathItems.
+      // item.opacity is the object-level opacity, exposed separately in info.opacity.
       try {
         if (item.filled) {
           info.fill = {
-            color: colorToObject(item.fillColor),
-            opacity: item.opacity
+            color: colorToObject(item.fillColor)
           };
         } else {
-          info.fill = { color: { type: "none" }, opacity: 100 };
+          info.fill = { color: { type: "none" } };
         }
       } catch (e) {
-        info.fill = { color: { type: "none" }, opacity: 100 };
+        info.fill = { color: { type: "none" } };
       }
 
       // stroke

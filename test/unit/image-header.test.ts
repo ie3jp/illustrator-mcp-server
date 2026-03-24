@@ -310,6 +310,14 @@ describe('readImageDimensions', () => {
         expect(readImageDimensions(p)).toEqual({ width: 800, height: 600 });
       });
     });
+    it('accepts .avif extension', () => {
+      // Build a HEIC-like buffer with major brand 'avif'
+      const buf = makeHeic(3840, 2160);
+      buf.write('avif', 8, 'ascii'); // overwrite major brand
+      withTempFile('.avif', buf, (p) => {
+        expect(readImageDimensions(p)).toEqual({ width: 3840, height: 2160 });
+      });
+    });
   });
 
   describe('error handling', () => {

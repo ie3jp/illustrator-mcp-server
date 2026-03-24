@@ -1,10 +1,8 @@
-import type { ExecFileException } from 'child_process';
 import { mkdirSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import * as path from 'path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanupTempFiles } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage } from '../../src/executor/jsx-runner.js';
 
 let tempRoot: string | undefined;
 
@@ -49,22 +47,3 @@ describe('cleanupTempFiles', () => {
   });
 });
 
-describe('getExecFailureMessage', () => {
-  it('prefers explicit timeout errors over killed status', () => {
-    const error = Object.assign(new Error('timed out'), {
-      code: 'ETIMEDOUT',
-      killed: true,
-    }) as ExecFileException;
-
-    expect(getExecFailureMessage(error, '', 300)).toBe('Script execution timed out after 300ms');
-  });
-
-  it('reports non-timeout termination signals distinctly', () => {
-    const error = Object.assign(new Error('terminated'), {
-      killed: true,
-      signal: 'SIGTERM',
-    }) as ExecFileException;
-
-    expect(getExecFailureMessage(error, '', 300)).toBe('Script execution was terminated by signal SIGTERM');
-  });
-});

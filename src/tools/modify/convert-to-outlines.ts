@@ -14,26 +14,6 @@ if (preflight) {
     var count = 0;
     var hasError = false;
 
-    function createColor(colorObj) {
-      if (!colorObj || colorObj.type === "none") return new NoColor();
-      if (colorObj.type === "cmyk") {
-        var c = new CMYKColor();
-        c.cyan = (typeof colorObj.c === "number") ? colorObj.c : 0;
-        c.magenta = (typeof colorObj.m === "number") ? colorObj.m : 0;
-        c.yellow = (typeof colorObj.y === "number") ? colorObj.y : 0;
-        c.black = (typeof colorObj.k === "number") ? colorObj.k : 0;
-        return c;
-      }
-      if (colorObj.type === "rgb") {
-        var c = new RGBColor();
-        c.red = (typeof colorObj.r === "number") ? colorObj.r : 0;
-        c.green = (typeof colorObj.g === "number") ? colorObj.g : 0;
-        c.blue = (typeof colorObj.b === "number") ? colorObj.b : 0;
-        return c;
-      }
-      return new NoColor();
-    }
-
     function findItemByUUID(uuid) {
       var doc = app.activeDocument;
       function search(items) {

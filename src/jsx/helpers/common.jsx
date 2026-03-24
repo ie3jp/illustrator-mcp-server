@@ -73,7 +73,9 @@ function jsonParse(str) {
 function readParamsFile(filePath) {
   var f = new File(filePath);
   f.encoding = "UTF-8";
-  f.open("r");
+  if (!f.open("r")) {
+    throw new Error("Cannot open params file: " + filePath);
+  }
   var content = f.read();
   f.close();
   return jsonParse(content);

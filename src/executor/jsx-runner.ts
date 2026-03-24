@@ -13,35 +13,32 @@ import {
   readResult,
   cleanupTempFiles,
 } from './file-transport.js';
-import { buildJsxForCep, postToCep, CEP_PORT } from './cep-transport.js';
 
 // Illustrator はシングルスレッド — JSX 実行を直列化
 const jsxLimit = pLimit(1);
 
 // 実行中の JSX を追跡（グレースフルシャットダウン用）
 let pendingCount = 0;
-let pendingResolve: (() => void) | null = null;
+let pendingResolvers: Array<() => void> = [];
 
 // ─── トランスポート選択 ───────────────────────────────────────────────────────
 //
-//  ILLUSTRATOR_MCP_TRANSPORT=cep       → CEP Extension HTTP (任意プラットフォーム)
 //  ILLUSTRATOR_MCP_TRANSPORT=osascript → macOS AppleScript (macOS 強制)
 //  未設定:
 //    darwin  → osascript
 //    win32   → PowerShell COM
-//    その他  → CEP (フォールバック)
 //
-export type Transport = 'osascript' | 'powershell' | 'cep';
+export type Transport = 'osascript' | 'powershell';
 
 export function resolveTransport(
   platform: string = process.platform,
   envVar: string | undefined = process.env['ILLUSTRATOR_MCP_TRANSPORT'],
 ): Transport {
-  if (envVar === 'cep') return 'cep';
   if (envVar === 'osascript') return 'osascript';
+  if (envVar === 'powershell') return 'powershell';
   if (platform === 'darwin') return 'osascript';
   if (platform === 'win32') return 'powershell';
-  return 'cep';
+  throw new Error(`Unsupported platform: ${platform}. Only macOS and Windows are supported.`);
 }
 
 const TRANSPORT: Transport = resolveTransport();
@@ -52,7 +49,7 @@ const TRANSPORT: Transport = resolveTransport();
 export function waitForPendingExecutions(): Promise<void> {
   if (pendingCount === 0) return Promise.resolve();
   return new Promise<void>((resolve) => {
-    pendingResolve = resolve;
+    pendingResolvers.push(resolve);
   });
 }
 
@@ -188,28 +185,6 @@ async function executeViaPowerShell(
   }
 }
 
-async function executeViaCep(
-  jsxCode: string,
-  params: unknown,
-  timeout: number,
-): Promise<JsxResult> {
-  const fullJsx = await buildJsxForCep(jsxCode, params);
-  const resultJson = await postToCep(fullJsx, timeout);
-
-  let result: JsxResult;
-  try {
-    result = JSON.parse(resultJson) as JsxResult;
-  } catch {
-    throw new Error(`Failed to parse result from CEP extension: ${resultJson.slice(0, 200)}`);
-  }
-
-  if (result.error) {
-    throw new Error(result.message || 'An unknown error occurred during JSX execution');
-  }
-
-  return result;
-}
-
 async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
   let result: JsxResult;
   try {
@@ -243,16 +218,15 @@ async function executeJsxRaw(
         return await executeViaOsascript(jsxCode, params, timeout, activate);
       case 'powershell':
         return await executeViaPowerShell(jsxCode, params, timeout);
-      case 'cep':
-        return await executeViaCep(jsxCode, params, timeout);
-      default:
-        throw new Error(`Unknown transport: ${TRANSPORT as string}`);
+      default: {
+        const _: never = TRANSPORT;
+        throw new Error(`Unknown transport: ${_ as string}`);
+      }
     }
   } finally {
     pendingCount--;
-    if (pendingCount === 0 && pendingResolve) {
-      pendingResolve();
-      pendingResolve = null;
+    if (pendingCount === 0 && pendingResolvers.length > 0) {
+      pendingResolvers.splice(0).forEach((r) => r());
     }
   }
 }
@@ -284,4 +258,4 @@ export async function executeJsxHeavy(
 }
 
 // ─── デバッグ用エクスポート ──────────────────────────────────────────────────
-export { TRANSPORT, CEP_PORT };
+export { TRANSPORT };

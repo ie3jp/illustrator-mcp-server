@@ -4,7 +4,7 @@
 
 [![npm](https://img.shields.io/npm/v/illustrator-mcp-server.svg)](https://www.npmjs.com/package/illustrator-mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-macOS-lightgrey.svg)]()
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 [![Illustrator](https://img.shields.io/badge/Illustrator-CC%202024%2B-orange.svg)](https://www.adobe.com/products/illustrator.html)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 
@@ -61,10 +61,10 @@ Claude:  → create_rectangle
 
 ## Prerequisites
 
-- **macOS** (osascript)
+- **macOS** (osascript) or **Windows** (PowerShell COM automation — not yet tested on real hardware)
 - **Adobe Illustrator CC 2024+**
 
-> On first run, allow automation access in System Settings > Privacy & Security > Automation.
+> **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
 > **Note:** Modify and export tools will bring Illustrator to the foreground during execution. Illustrator requires being the active application to process these operations.
 
@@ -80,7 +80,9 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json` (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Add to `claude_desktop_config.json`:
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -178,15 +180,17 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 ```mermaid
 flowchart LR
     Claude <-->|MCP Protocol| Server["MCP Server\n(TypeScript/Node.js)"]
-    Server <-->|execFile| osascript
+    Server <-->|"execFile (macOS)"| osascript
+    Server <-->|"execFile (Windows)"| PS["powershell.exe\n(COM Automation)"]
     osascript <-->|do javascript| AI["Adobe Illustrator\n(ExtendScript/JSX)"]
+    PS <-->|DoJavaScript| AI
 
     Server -.->|write| PF["params-{uuid}.json"]
     PF -.->|read| AI
     AI -.->|write| RF["result-{uuid}.json"]
     RF -.->|read| Server
     Server -.->|generate| JSX["script-{uuid}.jsx\n(BOM UTF-8)"]
-    Server -.->|generate| AS["run-{uuid}.scpt"]
+    Server -.->|generate| Runner["run-{uuid}.scpt / .ps1"]
 ```
 
 ### Coordinate System
@@ -218,7 +222,7 @@ The E2E test suite runs all 30 cases automatically (16 read + 4 export + 2 utili
 
 | Limitation | Details |
 |---|---|
-| macOS only | Depends on osascript. Windows support may be considered in the future |
+| macOS / Windows | macOS uses osascript, Windows uses PowerShell COM automation (not yet tested on real hardware) |
 | Live effects | ExtendScript DOM limitations prevent reading parameters for drop shadows, etc. |
 | Color profile conversion | Only profile assignment is supported; full ICC conversion is not available |
 | Bleed settings | Not accessible via the ExtendScript API (undocumented) |
@@ -235,8 +239,8 @@ illustrator-mcp-server/
 │   ├── index.ts              # Entry point
 │   ├── server.ts             # MCP server
 │   ├── executor/
-│   │   ├── jsx-runner.ts     # osascript execution + concurrency control
-│   │   └── file-transport.ts # Temp file management
+│   │   ├── jsx-runner.ts     # Transport selection + concurrency control
+│   │   └── file-transport.ts # Temp file management (macOS/Windows)
 │   ├── tools/
 │   │   ├── registry.ts       # Tool registration
 │   │   ├── read/             # 15 read tools
@@ -247,6 +251,7 @@ illustrator-mcp-server/
 │       └── helpers/
 │           └── common.jsx    # ExtendScript common helpers
 ├── test/
+│   ├── unit/                 # Unit tests
 │   └── e2e/
 │       └── smoke-test.ts     # E2E smoke test
 └── docs/                     # Design documents

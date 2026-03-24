@@ -95,40 +95,37 @@ if (preflight) {
       var meshItems = [];
       var spotUsageCount = {};
 
-      for (var ii = 0; ii < doc.pageItems.length; ii++) {
-        var item = doc.pageItems[ii];
+      // doc.pathItems is document-wide (all layers), unlike doc.pageItems which only returns active layer
+      for (var ii = 0; ii < doc.pathItems.length; ii++) {
+        var item = doc.pathItems[ii];
 
-        // メッシュアイテム検出
-        if (item.typename === "MeshItem") {
-          meshItems.push(ensureUUID(item));
-          continue;
-        }
+        try {
+          if (item.filled) {
+            var fc = colorToObject(item.fillColor);
+            usedFills.push(fc);
+            if (fc.type === "spot") {
+              var spName = fc.name;
+              if (spotUsageCount[spName] === undefined) spotUsageCount[spName] = 0;
+              spotUsageCount[spName] = spotUsageCount[spName] + 1;
+            }
+          }
+        } catch (e) {}
+        try {
+          if (item.stroked) {
+            var sc = colorToObject(item.strokeColor);
+            usedStrokes.push(sc);
+            if (sc.type === "spot") {
+              var spName2 = sc.name;
+              if (spotUsageCount[spName2] === undefined) spotUsageCount[spName2] = 0;
+              spotUsageCount[spName2] = spotUsageCount[spName2] + 1;
+            }
+          }
+        } catch (e) {}
+      }
 
-        // PathItem の fillColor / strokeColor を収集
-        if (item.typename === "PathItem") {
-          try {
-            if (item.filled) {
-              var fc = colorToObject(item.fillColor);
-              usedFills.push(fc);
-              if (fc.type === "spot") {
-                var spName = fc.name;
-                if (spotUsageCount[spName] === undefined) spotUsageCount[spName] = 0;
-                spotUsageCount[spName] = spotUsageCount[spName] + 1;
-              }
-            }
-          } catch (e) {}
-          try {
-            if (item.stroked) {
-              var sc = colorToObject(item.strokeColor);
-              usedStrokes.push(sc);
-              if (sc.type === "spot") {
-                var spName2 = sc.name;
-                if (spotUsageCount[spName2] === undefined) spotUsageCount[spName2] = 0;
-                spotUsageCount[spName2] = spotUsageCount[spName2] + 1;
-              }
-            }
-          } catch (e) {}
-        }
+      // メッシュアイテム検出 (document-wide)
+      for (var mi = 0; mi < doc.meshItems.length; mi++) {
+        meshItems.push(ensureUUID(doc.meshItems[mi]));
       }
 
       // 特色使用箇所数を spots に追加

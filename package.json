@@ -1,6 +1,6 @@
 {
   "name": "illustrator-mcp-server",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "mcpName": "io.github.ie3jp/illustrator-mcp-server",
   "description": "MCP server for reading, manipulating, and exporting Adobe Illustrator design data",
   "type": "module",
@@ -9,8 +9,7 @@
     "illustrator-mcp-server": "dist/index.js"
   },
   "files": [
-    "dist/**/*",
-    "cep-extension/**/*"
+    "dist/**/*"
   ],
   "scripts": {
     "build": "tsc && cp -r src/jsx dist/",

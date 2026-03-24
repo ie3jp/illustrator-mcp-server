@@ -163,7 +163,7 @@ export function register(server: McpServer): void {
             fill: colorSchema.describe('Fill color'),
             stroke: strokeSchema.describe('Stroke settings'),
             opacity: z.number().optional().describe('Opacity (0-100)'),
-            rotation: z.number().optional().describe('Rotation angle (degrees), relative to current angle'),
+            rotation: z.number().optional().describe('Rotation delta in degrees (additive — each call adds to current rotation)'),
             name: z.string().optional().describe('Object name'),
             contents: z.string().optional().describe('Text contents (for text frames)'),
             font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),

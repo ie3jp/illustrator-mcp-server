@@ -11,25 +11,12 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var profile = params.profile;
-    var intent = params.intent;
 
     var oldProfile = "";
     try {
       oldProfile = doc.colorProfileName;
     } catch(e) {
       oldProfile = "(unavailable)";
-    }
-
-    // Map intent string to RenderingIntent enum
-    var renderIntent = null;
-    if (intent === "perceptual") {
-      renderIntent = RenderingIntent.PERCEPTUAL;
-    } else if (intent === "relative") {
-      renderIntent = RenderingIntent.RELATIVECOLORIMETRIC;
-    } else if (intent === "saturation") {
-      renderIntent = RenderingIntent.SATURATION;
-    } else if (intent === "absolute") {
-      renderIntent = RenderingIntent.ABSOLUTECOLORIMETRIC;
     }
 
     // ExtendScript does not provide a single-call color conversion API.
@@ -50,7 +37,6 @@ if (preflight) {
         success: true,
         previousProfile: oldProfile,
         newProfile: profile,
-        intent: intent,
         note: note
       });
     }
@@ -68,9 +54,6 @@ export function register(server: McpServer): void {
       description: 'Apply or convert color profile. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         profile: z.string().describe('Color profile name or path'),
-        intent: z
-          .enum(['perceptual', 'relative', 'saturation', 'absolute'])
-          .describe('Rendering intent'),
       },
       annotations: {
         readOnlyHint: false,

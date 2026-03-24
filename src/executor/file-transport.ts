@@ -50,7 +50,8 @@ export async function writeAppleScript(
   if (options?.activate) {
     lines.push('  activate');
   }
-  lines.push(`  do javascript of file "${scriptPath}"`);
+  const escaped = scriptPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  lines.push(`  do javascript of file "${escaped}"`);
   lines.push('end tell');
   await fs.writeFile(scptPath, lines.join('\n'), 'utf-8');
 }
@@ -62,10 +63,11 @@ export async function writePowerShellScript(
 ): Promise<void> {
   // ExtendScript の File() はスラッシュ区切りを要求
   const jsxPathForward = scriptPath.replace(/\\/g, '/');
+  const jsxPathEscaped = jsxPathForward.replace(/'/g, "\\'");
   const lines = [
     'try {',
     '  $ai = New-Object -ComObject "Illustrator.Application" -ErrorAction Stop',
-    `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathForward}'))")`,
+    `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathEscaped}'))")`,
     '} catch {',
     '  Write-Error "Illustrator COM automation failed: $_"',
     '  exit 1',

@@ -21,8 +21,8 @@ async function main(): Promise<void> {
     await waitForPendingExecutions();
     process.exit(0);
   };
-  process.on('SIGINT', () => { gracefulShutdown(); });
-  process.on('SIGTERM', () => { gracefulShutdown(); });
+  process.on('SIGINT', () => { void gracefulShutdown().catch(() => process.exit(1)); });
+  process.on('SIGTERM', () => { void gracefulShutdown().catch(() => process.exit(1)); });
 
   const server = createServer();
   const transport = new StdioServerTransport();
