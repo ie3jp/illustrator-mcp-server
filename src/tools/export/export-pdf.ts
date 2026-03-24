@@ -46,7 +46,7 @@ if (preflight) {
         pdfOpts.registrationMarks = true;
       }
       // 裁ち落としが未指定なら3mm自動設定（外トンボの表示に必要）
-      if (options.bleed !== true && !options._bleed_set) {
+      if (options.bleed !== true) {
         var bleedPt = 8.504; // 3mm
         pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
       }
@@ -118,7 +118,7 @@ export function register(server: McpServer): void {
     'export_pdf',
     {
       title: 'Export PDF',
-      description: 'Export print-ready PDF',
+      description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         output_path: z.string().describe('Output file path'),
         preset: z
@@ -138,11 +138,6 @@ export function register(server: McpServer): void {
           })
           .optional()
           .describe('PDF export options'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
       },
       annotations: {
         readOnlyHint: false,

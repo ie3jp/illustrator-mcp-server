@@ -66,6 +66,8 @@ Claude:  → create_rectangle
 
 > On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
+> **Note:** Modify and export tools will bring Illustrator to the foreground during execution. Illustrator requires being the active application to process these operations.
+
 ---
 
 ## Setup
@@ -78,7 +80,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Add to `claude_desktop_config.json` (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
 
 ```json
 {
@@ -90,6 +92,8 @@ Add to `claude_desktop_config.json`:
   }
 }
 ```
+
+After saving, restart Claude Desktop. The MCP server indicator (hammer icon) should appear in the input area.
 
 ### From source
 
@@ -187,7 +191,7 @@ flowchart LR
 
 ### Coordinate System
 
-All tools accept a `coordinate_system` parameter.
+Geometry-aware read and modify tools accept a `coordinate_system` parameter. Export and document-wide utility tools do not, because their behavior does not depend on coordinate conversion.
 
 | Value | Origin | Y-axis | Use case |
 |---|---|---|---|

@@ -10,7 +10,6 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
-    var coordSystem = params.coordinate_system || "artboard-web";
     var target = params.target;
     var format = params.format;
     var outputPath = params.output_path;
@@ -101,10 +100,6 @@ if (preflight) {
         if (typeof svgOpts.decimal_places === "number") {
           opts.coordinatePrecision = svgOpts.decimal_places;
         }
-        if (typeof svgOpts.clean_metadata !== "undefined" && svgOpts.clean_metadata === false) {
-          // default includes metadata; only skip if explicitly false
-        }
-
         if (targetType === "artboard") {
           doc.artboards.setActiveArtboardIndex(artboardIndex);
           opts.artBoardClipping = true;
@@ -163,7 +158,7 @@ if (preflight) {
       // } else if (format === "webp") { ... }
       }
 
-      if (targetType !== "error" && targetType !== "done") {
+      if (targetType !== "error") {
         writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
       }
 
@@ -179,7 +174,7 @@ export function register(server: McpServer): void {
     'export',
     {
       title: 'Export',
-      description: 'Export objects, groups, artboards, or selection',
+      description: 'Export objects, groups, artboards, or selection. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         target: z
           .string()
@@ -194,16 +189,14 @@ export function register(server: McpServer): void {
             text_outline: z.boolean().optional().describe('Convert text to outlines'),
             css_properties: z.boolean().optional().describe('Export as CSS properties'),
             embed_images: z.boolean().optional().describe('Embed raster images'),
-            id_naming: z
-              .enum(['layer', 'object', 'auto'])
-              .optional()
-              .describe('ID naming scheme'),
-            decimal_places: z.number().optional().describe('Decimal places'),
-            responsive: z.boolean().optional().describe('Responsive SVG (unofficial)'),
-            clean_metadata: z.boolean().optional().describe('Remove metadata'),
-          })
-          .optional()
-          .describe('SVG export options'),
+             id_naming: z
+               .enum(['layer', 'object', 'auto'])
+               .optional()
+               .describe('ID naming scheme'),
+             decimal_places: z.number().optional().describe('Decimal places'),
+           })
+           .optional()
+           .describe('SVG export options'),
         raster_options: z
           .object({
             dpi: z.number().optional().describe('Resolution (DPI)'),
@@ -211,17 +204,12 @@ export function register(server: McpServer): void {
               .string()
               .optional()
               .describe('"transparent", "white", or color code'),
-            antialiasing: z.boolean().optional().describe('Anti-aliasing'),
-          })
-          .optional()
-          .describe('Raster export options'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
-      },
-      annotations: {
+             antialiasing: z.boolean().optional().describe('Anti-aliasing'),
+           })
+           .optional()
+           .describe('Raster export options'),
+       },
+       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
         idempotentHint: true,

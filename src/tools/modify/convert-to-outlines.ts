@@ -107,16 +107,11 @@ export function register(server: McpServer): void {
     'convert_to_outlines',
     {
       title: 'Convert to Outlines',
-      description: 'Convert text to outlines',
+      description: 'Convert text to outlines. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         target: z
           .string()
           .describe('Target: "selection" (selected), "all" (all text), or layer name'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
       },
       annotations: {
         readOnlyHint: false,
@@ -126,7 +121,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const result = await executeJsx(jsxCode, params, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

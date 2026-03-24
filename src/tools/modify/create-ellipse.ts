@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -11,26 +12,7 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
-
-    function createColor(colorObj) {
-      if (!colorObj || colorObj.type === "none") return new NoColor();
-      if (colorObj.type === "cmyk") {
-        var c = new CMYKColor();
-        c.cyan = (typeof colorObj.c === "number") ? colorObj.c : 0;
-        c.magenta = (typeof colorObj.m === "number") ? colorObj.m : 0;
-        c.yellow = (typeof colorObj.y === "number") ? colorObj.y : 0;
-        c.black = (typeof colorObj.k === "number") ? colorObj.k : 0;
-        return c;
-      }
-      if (colorObj.type === "rgb") {
-        var c = new RGBColor();
-        c.red = (typeof colorObj.r === "number") ? colorObj.r : 0;
-        c.green = (typeof colorObj.g === "number") ? colorObj.g : 0;
-        c.blue = (typeof colorObj.b === "number") ? colorObj.b : 0;
-        return c;
-      }
-      return new NoColor();
-    }
+    ${COLOR_HELPERS_JSX}
 
     var inputX = params.x;
     var inputY = params.y;
@@ -60,20 +42,8 @@ if (preflight) {
 
     var ellipse = targetLayer.pathItems.ellipse(top, left, w, h);
 
-    if (params.fill) {
-      ellipse.filled = true;
-      ellipse.fillColor = createColor(params.fill);
-    }
-
-    if (params.stroke) {
-      ellipse.stroked = true;
-      if (params.stroke.color) {
-        ellipse.strokeColor = createColor(params.stroke.color);
-      }
-      if (typeof params.stroke.width === "number") {
-        ellipse.strokeWidth = params.stroke.width;
-      }
-    }
+    applyOptionalFill(ellipse, params.fill);
+    applyStroke(ellipse, params.stroke, ellipse.stroked);
 
     if (params.name) {
       ellipse.name = params.name;
@@ -87,38 +57,19 @@ if (preflight) {
 }
 `;
 
-const colorSchema = z
-  .object({
-    type: z.enum(['cmyk', 'rgb', 'none']).describe('Color type'),
-    c: z.number().optional(),
-    m: z.number().optional(),
-    y: z.number().optional(),
-    k: z.number().optional(),
-    r: z.number().optional(),
-    g: z.number().optional(),
-    b: z.number().optional(),
-  })
-  .optional();
-
 export function register(server: McpServer): void {
   server.registerTool(
     'create_ellipse',
     {
       title: 'Create Ellipse',
-      description: 'Create an ellipse',
+      description: 'Create an ellipse. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         x: z.number().describe('Bounding box top-left X coordinate'),
         y: z.number().describe('Bounding box top-left Y coordinate'),
         width: z.number().describe('Width'),
         height: z.number().describe('Height'),
         fill: colorSchema.describe('Fill color'),
-        stroke: z
-          .object({
-            color: colorSchema.describe('Stroke color'),
-            width: z.number().describe('Stroke width'),
-          })
-          .optional()
-          .describe('Stroke settings'),
+        stroke: strokeSchema.describe('Stroke settings'),
         layer_name: z.string().optional().describe('Target layer name'),
         name: z.string().optional().describe('Object name'),
         coordinate_system: z
@@ -135,7 +86,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const result = await executeJsx(jsxCode, params, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

@@ -1,6 +1,8 @@
+#!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { createServer } from './server.js';
 import { ensureTmpDir, cleanupTmpDirSync } from './executor/file-transport.js';
+import { waitForPendingExecutions } from './executor/jsx-runner.js';
 
 async function main(): Promise<void> {
   // 一時ディレクトリを作成
@@ -10,8 +12,17 @@ async function main(): Promise<void> {
   process.on('exit', () => {
     cleanupTmpDirSync();
   });
-  process.on('SIGINT', () => process.exit(0));
-  process.on('SIGTERM', () => process.exit(0));
+
+  // グレースフルシャットダウン: 実行中の JSX を待ってから終了
+  let shuttingDown = false;
+  const gracefulShutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    await waitForPendingExecutions();
+    process.exit(0);
+  };
+  process.on('SIGINT', () => { gracefulShutdown(); });
+  process.on('SIGTERM', () => { gracefulShutdown(); });
 
   const server = createServer();
   const transport = new StdioServerTransport();

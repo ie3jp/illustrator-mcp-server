@@ -84,8 +84,8 @@ if (preflight) {
           var bounds = getBounds(tf, coordSystem, boundsAbRect);
 
           // フォント情報（先頭 textRange）
-          var fontFamily = "";
-          var fontSize = 0;
+          var fontFamily = null;
+          var fontSize = null;
           try {
             if (tf.textRanges.length > 0) {
               var firstRange = tf.textRanges[0];
@@ -93,7 +93,7 @@ if (preflight) {
               fontSize = firstRange.characterAttributes.size;
             }
           } catch (e) {
-            // フォント情報が取得できない場合は空のまま
+            // フォント情報が取得できない場合は null のまま
           }
 
           // 段落スタイル名

@@ -1,4 +1,5 @@
 import { execFile } from 'child_process';
+import type { ExecFileException } from 'child_process';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,6 +15,20 @@ import {
 
 // Illustrator はシングルスレッド — JSX 実行を直列化
 const jsxLimit = pLimit(1);
+
+// 実行中の JSX を追跡（グレースフルシャットダウン用）
+let pendingCount = 0;
+let pendingResolve: (() => void) | null = null;
+
+/**
+ * 実行中の JSX がすべて完了するまで待機する（シャットダウン用）
+ */
+export function waitForPendingExecutions(): Promise<void> {
+  if (pendingCount === 0) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    pendingResolve = resolve;
+  });
+}
 
 const JSX_HELPERS_PATH = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -61,6 +76,20 @@ function parseOsascriptError(stderr: string): string {
   return stderr;
 }
 
+export function getExecFailureMessage(
+  error: ExecFileException,
+  stderr: string,
+  timeout: number,
+): string {
+  if (error.code === 'ETIMEDOUT') {
+    return `Script execution timed out after ${timeout}ms`;
+  }
+  if (error.killed) {
+    return `Script execution was terminated${error.signal ? ` by signal ${error.signal}` : ''}`;
+  }
+  return parseOsascriptError(stderr || error.message);
+}
+
 /**
  * JSX を実行する（排他制御なし — 内部用）
  */
@@ -71,6 +100,7 @@ async function executeJsxRaw(
   activate: boolean = false,
 ): Promise<JsxResult> {
   const files = createTempFiles();
+  pendingCount++;
 
   try {
     // 1. パラメータをJSONファイルに書き出し
@@ -87,8 +117,7 @@ async function executeJsxRaw(
     await new Promise<void>((resolve, reject) => {
       execFile('osascript', [files.scptPath], { timeout }, (error, _stdout, stderr) => {
         if (error) {
-          const message = parseOsascriptError(stderr || error.message);
-          reject(new Error(message));
+          reject(new Error(getExecFailureMessage(error, stderr, timeout)));
         } else {
           resolve();
         }
@@ -116,6 +145,11 @@ async function executeJsxRaw(
   } finally {
     // 6. クリーンアップ
     await cleanupTempFiles(files);
+    pendingCount--;
+    if (pendingCount === 0 && pendingResolve) {
+      pendingResolve();
+      pendingResolve = null;
+    }
   }
 }
 

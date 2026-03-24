@@ -142,9 +142,7 @@ try {
         }
       }
     } else {
-      var limit = 500;
-      var count = doc.pageItems.length < limit ? doc.pageItems.length : limit;
-      for (var j = 0; j < count; j++) {
+      for (var j = 0; j < doc.pageItems.length; j++) {
         items.push(getEffectInfo(doc.pageItems[j], coordSystem));
       }
     }
