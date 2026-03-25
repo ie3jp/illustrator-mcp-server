@@ -24,6 +24,7 @@ import { register as registerExport } from './export/export.js';
 import { register as registerExportPdf } from './export/export-pdf.js';
 import { register as registerGetOverprintInfo } from './read/get-overprint-info.js';
 import { register as registerPreflightCheck } from './utility/preflight-check.js';
+import { register as registerSetWorkflow } from './utility/set-workflow.js';
 
 // Phase 4: 操作系ツール
 import { register as registerCreateRectangle } from './modify/create-rectangle.js';
@@ -65,6 +66,7 @@ export function registerAllTools(server: McpServer): void {
   registerExportPdf(server);
   registerGetOverprintInfo(server);
   registerPreflightCheck(server);
+  registerSetWorkflow(server);
 
   // Phase 4: 操作系
   registerCreateRectangle(server);

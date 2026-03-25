@@ -1,6 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -70,11 +74,7 @@ export function register(server: McpServer): void {
       description: 'Get all artboard information',
       inputSchema: {
         index: z.number().int().min(0).optional().describe('Get a specific artboard by index (0-based integer)'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
       annotations: {
         readOnlyHint: true,
@@ -84,7 +84,8 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

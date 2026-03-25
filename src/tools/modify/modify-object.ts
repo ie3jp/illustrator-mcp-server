@@ -1,6 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
 import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
 
 const jsxCode = `
@@ -170,11 +174,7 @@ export function register(server: McpServer): void {
             font_size: z.number().optional().describe('Font size (for text frames)'),
           })
           .describe('Properties to modify'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
       annotations: {
         readOnlyHint: false,
@@ -184,7 +184,8 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

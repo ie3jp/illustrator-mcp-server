@@ -1,6 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
 
 const jsxCode = `
@@ -343,10 +347,7 @@ export function register(server: McpServer): void {
       title: 'Preflight Check',
       description: 'Run pre-press quality checks',
       inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        coordinate_system: coordinateSystemSchema,
         min_dpi: z
           .number()
           .int()
@@ -363,7 +364,8 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = (await executeJsx(jsxCode, params)) as {
+      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const result = (await executeJsx(jsxCode, resolvedParams)) as {
         checkCount: number;
         results: Array<{
           level: string;

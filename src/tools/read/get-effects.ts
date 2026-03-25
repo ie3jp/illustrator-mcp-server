@@ -1,6 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
 
 const jsxCode = `
 try {
@@ -169,10 +173,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         target: z.string().optional().describe('Filter by UUID for a specific object'),
         selection_only: z.boolean().optional().default(false).describe('Selected objects only'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        coordinate_system: coordinateSystemSchema,
       },
       annotations: {
         readOnlyHint: true,
@@ -182,7 +183,8 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
