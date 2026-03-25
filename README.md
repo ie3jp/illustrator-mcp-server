@@ -7,6 +7,7 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 [![Illustrator](https://img.shields.io/badge/Illustrator-CC%202024%2B-orange.svg)](https://www.adobe.com/products/illustrator.html)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/cyocun)
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for reading, manipulating, and exporting Adobe Illustrator design data.
 
@@ -259,6 +260,12 @@ illustrator-mcp-server/
 │       └── smoke-test.ts     # E2E smoke test
 └── docs/                     # Design documents
 ```
+
+---
+
+## Support
+
+If this tool helps your workflow, [buy me a beer 🍺](https://buymeacoffee.com/cyocun)
 
 ---
 
