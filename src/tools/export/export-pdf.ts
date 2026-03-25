@@ -87,7 +87,23 @@ if (preflight) {
     }
 
     // Downsample images
-    if (options.downsample === true) {
+    if (typeof options.color_downsample_dpi === "number" || typeof options.grayscale_downsample_dpi === "number" || typeof options.monochrome_downsample_dpi === "number") {
+      // Selective downsampling per image type
+      var colorDpi = (typeof options.color_downsample_dpi === "number") ? options.color_downsample_dpi : 300;
+      pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.colorDownsampling = colorDpi;
+      pdfOpts.colorDownsamplingImageThreshold = Math.round(colorDpi * 1.5);
+
+      var grayDpi = (typeof options.grayscale_downsample_dpi === "number") ? options.grayscale_downsample_dpi : 300;
+      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.grayscaleDownsampling = grayDpi;
+      pdfOpts.grayscaleDownsamplingImageThreshold = Math.round(grayDpi * 1.5);
+
+      var monoDpi = (typeof options.monochrome_downsample_dpi === "number") ? options.monochrome_downsample_dpi : 1200;
+      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.monochromeDownsampling = monoDpi;
+      pdfOpts.monochromeDownsamplingImageThreshold = Math.round(monoDpi * 1.5);
+    } else if (options.downsample === true) {
       pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
       pdfOpts.colorDownsampling = 300;
       pdfOpts.colorDownsamplingImageThreshold = 450;
@@ -101,6 +117,15 @@ if (preflight) {
       pdfOpts.colorDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
       pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
       pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
+    }
+
+    // Output intent ICC profile (version-dependent, may not be available)
+    if (typeof options.output_intent_profile === "string" && options.output_intent_profile !== "") {
+      try {
+        pdfOpts.outputIntentProfile = options.output_intent_profile;
+      } catch(e) {
+        // outputIntentProfile not supported in this Illustrator version
+      }
     }
 
     var outFile = new File(outputPath);
@@ -145,7 +170,11 @@ export function register(server: McpServer): void {
             color_bars: z.boolean().optional().describe('Color bars'),
             page_information: z.boolean().optional().describe('Page information'),
             bleed: z.boolean().optional().describe('Include bleed (3mm)'),
-            downsample: z.boolean().optional().describe('Downsample images'),
+            downsample: z.boolean().optional().describe('Downsample all images (shorthand: color 300dpi, grayscale 300dpi, monochrome 1200dpi)'),
+            color_downsample_dpi: z.number().int().min(72).optional().describe('Color image downsample target DPI (overrides downsample)'),
+            grayscale_downsample_dpi: z.number().int().min(72).optional().describe('Grayscale image downsample target DPI (overrides downsample)'),
+            monochrome_downsample_dpi: z.number().int().min(72).optional().describe('Monochrome image downsample target DPI (overrides downsample)'),
+            output_intent_profile: z.string().optional().describe('Output intent ICC profile name (e.g. "Japan Color 2001 Coated"). Version-dependent feature.'),
           })
           .optional()
           .describe('PDF export options'),

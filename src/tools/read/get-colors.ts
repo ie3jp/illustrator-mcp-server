@@ -12,6 +12,8 @@ if (preflight) {
     var doc = app.activeDocument;
     var includeSwatches = (params && typeof params.include_swatches === "boolean") ? params.include_swatches : true;
     var includeUsedColors = (params && typeof params.include_used_colors === "boolean") ? params.include_used_colors : true;
+    var includeDiagnostics = (params && typeof params.include_diagnostics === "boolean") ? params.include_diagnostics : false;
+    var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
 
     var result = {};
 
@@ -60,6 +62,24 @@ if (preflight) {
     }
     result.gradients = gradients;
 
+    // グラデーション色空間診断
+    if (includeDiagnostics && isCMYKDoc) {
+      var gradientWarnings = [];
+      for (var gwi = 0; gwi < gradients.length; gwi++) {
+        var gw = gradients[gwi];
+        for (var gwsi = 0; gwsi < gw.stops.length; gwsi++) {
+          if (gw.stops[gwsi].color && gw.stops[gwsi].color.type === "rgb") {
+            gradientWarnings.push({
+              gradientName: gw.name,
+              stopIndex: gwsi,
+              message: "RGB color stop in CMYK document gradient"
+            });
+          }
+        }
+      }
+      result.gradientWarnings = gradientWarnings;
+    }
+
     // パターン一覧
     var patterns = [];
     for (var pi = 0; pi < doc.patterns.length; pi++) {
@@ -102,6 +122,9 @@ if (preflight) {
         try {
           if (item.filled) {
             var fc = colorToObject(item.fillColor);
+            if (includeDiagnostics && fc.type === "cmyk") {
+              fc.inkCoverage = fc.c + fc.m + fc.y + fc.k;
+            }
             usedFills.push(fc);
             if (fc.type === "spot") {
               var spName = fc.name;
@@ -113,6 +136,9 @@ if (preflight) {
         try {
           if (item.stroked) {
             var sc = colorToObject(item.strokeColor);
+            if (includeDiagnostics && sc.type === "cmyk") {
+              sc.inkCoverage = sc.c + sc.m + sc.y + sc.k;
+            }
             usedStrokes.push(sc);
             if (sc.type === "spot") {
               var spName2 = sc.name;
@@ -132,6 +158,22 @@ if (preflight) {
       for (var sci = 0; sci < spots.length; sci++) {
         var count = spotUsageCount[spots[sci].name];
         spots[sci].usageCount = (count !== undefined) ? count : 0;
+      }
+
+      // カラーモデルミスマッチ集計
+      if (includeDiagnostics) {
+        var rgbInCmyk = 0;
+        var cmykInRgb = 0;
+        var allUsed = usedFills.concat(usedStrokes);
+        for (var di = 0; di < allUsed.length; di++) {
+          if (isCMYKDoc && allUsed[di].type === "rgb") rgbInCmyk++;
+          if (!isCMYKDoc && allUsed[di].type === "cmyk") cmykInRgb++;
+        }
+        result.colorModelWarnings = {
+          documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
+          rgbColorsInCmykDoc: rgbInCmyk,
+          cmykColorsInRgbDoc: cmykInRgb
+        };
       }
 
       result.usedFillColors = usedFills;
@@ -166,6 +208,11 @@ export function register(server: McpServer): void {
           .optional()
           .default(true)
           .describe('Include used color collection'),
+        include_diagnostics: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Include print diagnostics: gradient color space validation, ink coverage per color, color model mismatch warnings'),
       },
       annotations: {
         readOnlyHint: true,

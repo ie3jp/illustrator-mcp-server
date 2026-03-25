@@ -320,3 +320,28 @@ function getZIndex(item) {
     return 0;
   }
 }
+
+// --- UUID 検索 ---
+
+function findItemByUUID(uuid) {
+  var doc = app.activeDocument;
+  for (var li = 0; li < doc.layers.length; li++) {
+    var found = _findInContainer(doc.layers[li], uuid);
+    if (found) return found;
+  }
+  return null;
+}
+
+function _findInContainer(container, uuid) {
+  for (var i = 0; i < container.pageItems.length; i++) {
+    var item = container.pageItems[i];
+    try {
+      if (item.note === uuid) return item;
+      if (item.typename === "GroupItem") {
+        var inner = _findInContainer(item, uuid);
+        if (inner) return inner;
+      }
+    } catch(e) {}
+  }
+  return null;
+}

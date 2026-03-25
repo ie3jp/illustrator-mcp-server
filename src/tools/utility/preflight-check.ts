@@ -16,6 +16,7 @@ try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var minDPI = (params && params.min_dpi) ? params.min_dpi : 300;
+    var targetPdfProfile = (params && params.target_pdf_profile) ? params.target_pdf_profile : null;
     var doc = app.activeDocument;
     var results = [];
     var docColorSpace = doc.documentColorSpace;
@@ -321,9 +322,52 @@ try {
               uuid: uuid8,
               details: { name: item.name || "", layerName: getParentLayerName(item), reason: reason }
             });
+
+            // 9. Transparency + overprint interaction
+            if (item.typename === "PathItem") {
+              var hasFillOPTrans = false;
+              var hasStrokeOPTrans = false;
+              try { hasFillOPTrans = item.fillOverprint; } catch(e4) {}
+              try { hasStrokeOPTrans = item.strokeOverprint; } catch(e4) {}
+              if (hasFillOPTrans || hasStrokeOPTrans) {
+                results.push({
+                  level: "error",
+                  category: "transparency_overprint_interaction",
+                  message: "Transparency + overprint on same object (unpredictable print result)",
+                  uuid: uuid8,
+                  details: { name: item.name || "", layerName: getParentLayerName(item), reason: reason + " + overprint" }
+                });
+              }
+
+              // 10. Spot color + opacity interaction
+              try {
+                if (item.filled && item.fillColor.typename === "SpotColor" && item.opacity < 100) {
+                  results.push({
+                    level: "warning",
+                    category: "spot_transparency",
+                    message: "Spot color with transparency (may convert to process color unexpectedly)",
+                    uuid: uuid8,
+                    details: { spotName: item.fillColor.spot.name, opacity: item.opacity }
+                  });
+                }
+              } catch(e4) {}
+            }
           }
         } catch(e) {}
       });
+    }
+
+    // Collect summary counts for PDF/X compliance (processed in Node.js)
+    var hasRGBItems = false;
+    var hasTransparencyItems = false;
+    var hasNonOutlinedText = false;
+    var hasSpotColors = (doc.spots.length > 1);
+    var colorProfileName = "";
+    try { colorProfileName = doc.fullName ? doc.colorProfileName : ""; } catch(e9) {}
+    for (var ri2 = 0; ri2 < results.length; ri2++) {
+      if (results[ri2].category === "rgb_in_cmyk") hasRGBItems = true;
+      if (results[ri2].category === "transparency") hasTransparencyItems = true;
+      if (results[ri2].category === "non_outlined_text") hasNonOutlinedText = true;
     }
 
     writeResultFile(RESULT_PATH, {
@@ -332,7 +376,16 @@ try {
       checkCount: results.length,
       results: results,
       placedImageData: placedImageData,
-      minDPI: minDPI
+      minDPI: minDPI,
+      targetPdfProfile: targetPdfProfile,
+      pdfxSummary: {
+        hasRGBItems: hasRGBItems,
+        hasTransparencyItems: hasTransparencyItems,
+        hasNonOutlinedText: hasNonOutlinedText,
+        hasSpotColors: hasSpotColors,
+        colorProfileName: colorProfileName,
+        isCMYKDoc: isCMYKDoc
+      }
     });
   }
 } catch (e) {
@@ -355,6 +408,10 @@ export function register(server: McpServer): void {
           .optional()
           .default(300)
           .describe('Minimum acceptable DPI for images (default: 300)'),
+        target_pdf_profile: z
+          .enum(['x1a', 'x4'])
+          .optional()
+          .describe('Target PDF/X profile for compliance checks. x1a: no transparency/RGB, fonts embedded. x4: allows transparency, recommends ICC profile.'),
       },
       annotations: {
         readOnlyHint: true,
@@ -423,6 +480,73 @@ export function register(server: McpServer): void {
         delete result.minDPI;
         result.checkCount = result.results.length;
       }
+
+      // PDF/X compliance checks (Node.js side)
+      const targetProfile = result?.targetPdfProfile as string | null;
+      const pdfxSummary = result?.pdfxSummary as {
+        hasRGBItems: boolean;
+        hasTransparencyItems: boolean;
+        hasNonOutlinedText: boolean;
+        hasSpotColors: boolean;
+        colorProfileName: string;
+        isCMYKDoc: boolean;
+      } | undefined;
+
+      if (targetProfile && pdfxSummary) {
+        if (targetProfile === 'x1a') {
+          if (pdfxSummary.hasTransparencyItems) {
+            result.results.push({
+              level: 'error',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-1a does not allow transparency. Flatten all transparency before export.',
+              uuid: null,
+              details: { profile: 'x1a' },
+            });
+          }
+          if (pdfxSummary.hasRGBItems || !pdfxSummary.isCMYKDoc) {
+            result.results.push({
+              level: 'error',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-1a requires all colors in CMYK or spot. RGB colors detected.',
+              uuid: null,
+              details: { profile: 'x1a' },
+            });
+          }
+          if (pdfxSummary.hasNonOutlinedText) {
+            result.results.push({
+              level: 'warning',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-1a requires all fonts embedded. Consider converting text to outlines.',
+              uuid: null,
+              details: { profile: 'x1a' },
+            });
+          }
+        } else if (targetProfile === 'x4') {
+          if (pdfxSummary.hasRGBItems && pdfxSummary.isCMYKDoc) {
+            result.results.push({
+              level: 'warning',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-4 allows RGB but mixed color spaces may cause conversion issues.',
+              uuid: null,
+              details: { profile: 'x4' },
+            });
+          }
+          if (!pdfxSummary.colorProfileName) {
+            result.results.push({
+              level: 'warning',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-4 recommends an ICC color profile. No profile detected.',
+              uuid: null,
+              details: { profile: 'x4' },
+            });
+          }
+        }
+        result.checkCount = result.results.length;
+      }
+
+      // Clean up internal fields
+      delete result.targetPdfProfile;
+      delete result.pdfxSummary;
 
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

@@ -15,7 +15,10 @@ try {
   } else {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
+    var includePrintInfo = (params && typeof params.include_print_info === "boolean") ? params.include_print_info : false;
     var doc = app.activeDocument;
+    var docColorSpace = doc.documentColorSpace;
+    var isCMYKDoc = (docColorSpace === DocumentColorSpace.CMYK);
     var images = [];
 
     // Linked images (PlacedItems)
@@ -144,6 +147,18 @@ try {
         } catch(e3) {}
       } catch (e) {}
 
+      // Print diagnostics
+      if (includePrintInfo) {
+        rInfo.colorSpaceMismatch = false;
+        if (rInfo.colorSpace) {
+          if (isCMYKDoc && rInfo.colorSpace === "RGB") rInfo.colorSpaceMismatch = true;
+          if (!isCMYKDoc && rInfo.colorSpace === "CMYK") rInfo.colorSpaceMismatch = true;
+        }
+        if (rInfo.pixelWidth && rInfo.pixelHeight && placedWidthPt > 0) {
+          rInfo.scaleFactor = Math.round((placedWidthPt / rInfo.pixelWidth) * 100);
+        }
+      }
+
       images.push(rInfo);
     }
 
@@ -166,6 +181,11 @@ export function register(server: McpServer): void {
       description: 'Get embedded and linked image information',
       inputSchema: {
         coordinate_system: coordinateSystemSchema,
+        include_print_info: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Include print diagnostics: color space mismatch flag, scale factor (%). Only available for embedded raster images.'),
       },
       annotations: {
         readOnlyHint: true,
@@ -207,6 +227,10 @@ export function register(server: McpServer): void {
                 const ppiH = Math.round(dims.width / widthInches);
                 const ppiV = Math.round(dims.height / heightInches);
                 img.resolution = Math.min(ppiH, ppiV);
+                // Print diagnostics for linked images
+                if (resolvedParams.include_print_info) {
+                  img.scaleFactor = Math.round((img.widthPt / dims.width) * 100);
+                }
               }
             } catch {
               // Skip unreadable files

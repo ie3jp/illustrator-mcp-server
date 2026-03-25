@@ -18,12 +18,16 @@ import { register as registerGetImages } from './read/get-images.js';
 import { register as registerGetSymbols } from './read/get-symbols.js';
 import { register as registerGetDocumentStructure } from './read/get-document-structure.js';
 import { register as registerFindObjects } from './read/find-objects.js';
+import { register as registerCheckContrast } from './read/check-contrast.js';
+import { register as registerExtractDesignTokens } from './read/extract-design-tokens.js';
 
 // Phase 3: 書き出し + 印刷向け読み取り
 import { register as registerExport } from './export/export.js';
 import { register as registerExportPdf } from './export/export-pdf.js';
 import { register as registerGetOverprintInfo } from './read/get-overprint-info.js';
+import { register as registerGetSeparationInfo } from './read/get-separation-info.js';
 import { register as registerPreflightCheck } from './utility/preflight-check.js';
+import { register as registerCheckTextConsistency } from './utility/check-text-consistency.js';
 import { register as registerSetWorkflow } from './utility/set-workflow.js';
 
 // Phase 4: 操作系ツール
@@ -36,6 +40,11 @@ import { register as registerModifyObject } from './modify/modify-object.js';
 import { register as registerConvertToOutlines } from './modify/convert-to-outlines.js';
 import { register as registerApplyColorProfile } from './modify/apply-color-profile.js';
 import { register as registerPlaceImage } from './modify/place-image.js';
+import { register as registerResizeForVariation } from './modify/resize-for-variation.js';
+import { register as registerAlignObjects } from './modify/align-objects.js';
+import { register as registerReplaceColor } from './modify/replace-color.js';
+import { register as registerManageLayers } from './modify/manage-layers.js';
+import { register as registerPlaceColorChips } from './modify/place-color-chips.js';
 
 // Phase 5: ドキュメント管理ツール
 import { register as registerCreateDocument } from './modify/create-document.js';
@@ -60,12 +69,16 @@ export function registerAllTools(server: McpServer): void {
   registerGetSymbols(server);
   registerGetDocumentStructure(server);
   registerFindObjects(server);
+  registerCheckContrast(server);
+  registerExtractDesignTokens(server);
 
   // Phase 3: 書き出し + 印刷向け
   registerExport(server);
   registerExportPdf(server);
   registerGetOverprintInfo(server);
+  registerGetSeparationInfo(server);
   registerPreflightCheck(server);
+  registerCheckTextConsistency(server);
   registerSetWorkflow(server);
 
   // Phase 4: 操作系
@@ -78,6 +91,11 @@ export function registerAllTools(server: McpServer): void {
   registerConvertToOutlines(server);
   registerApplyColorProfile(server);
   registerPlaceImage(server);
+  registerResizeForVariation(server);
+  registerAlignObjects(server);
+  registerReplaceColor(server);
+  registerManageLayers(server);
+  registerPlaceColorChips(server);
 
   // Phase 5: ドキュメント管理
   registerCreateDocument(server);
