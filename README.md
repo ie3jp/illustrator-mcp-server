@@ -54,7 +54,7 @@ Claude:  → create_rectangle
 
 ## Features
 
-- **30 tools** — 15 read / 11 modify / 2 export / 1 utility + 2 document management
+- **30 tools** — 16 read / 11 modify / 2 export / 1 utility
 - **Web coordinate system** — Y-axis down, artboard-relative (same as CSS/SVG)
 - **UUID tracking** — Stable object identification across tool calls
 
@@ -64,6 +64,7 @@ Claude:  → create_rectangle
 
 - **macOS** (osascript) or **Windows** (PowerShell COM automation — not yet tested on real hardware)
 - **Adobe Illustrator CC 2024+**
+- **Node.js 20+** — Download from [nodejs.org](https://nodejs.org/) (LTS recommended). After installing, verify with `node -v` in Terminal / Command Prompt.
 
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
@@ -118,7 +119,7 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 
 ## Tool Reference
 
-### Read Tools (15)
+### Read Tools (16)
 
 <details>
 <summary>Click to expand</summary>
@@ -138,6 +139,7 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 | `get_images` | Embedded/linked image info (resolution, broken link detection) |
 | `get_symbols` | Symbol definitions and instances |
 | `get_guidelines` | Guide information |
+| `get_overprint_info` | Overprint settings for path items |
 | `get_selection` | Details of currently selected objects |
 | `find_objects` | Search by criteria (name, type, color, font, etc.) |
 
@@ -247,10 +249,12 @@ illustrator-mcp-server/
 │   │   └── file-transport.ts # Temp file management (macOS/Windows)
 │   ├── tools/
 │   │   ├── registry.ts       # Tool registration
-│   │   ├── read/             # 15 read tools
+│   │   ├── read/             # 16 read tools
 │   │   ├── modify/           # 11 modify tools
 │   │   ├── export/           # 2 export tools
 │   │   └── utility/          # 1 utility tool
+│   ├── utils/
+│   │   └── image-header.ts  # Image format detection
 │   └── jsx/
 │       └── helpers/
 │           └── common.jsx    # ExtendScript common helpers

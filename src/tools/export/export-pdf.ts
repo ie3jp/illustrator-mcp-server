@@ -140,7 +140,7 @@ export function register(server: McpServer): void {
           .object({
             trim_marks: z.boolean().optional().describe('Add trim marks'),
             marks_style: z.enum(['japanese', 'roman']).optional().describe('Trim mark style (japanese or roman)'),
-            trim_mark_weight: z.enum(['0.125', '0.25', '0.5']).transform(Number).optional().describe('Trim mark weight (pt)'),
+            trim_mark_weight: z.enum(['0.125', '0.25', '0.5']).optional().describe('Trim mark weight (pt)'),
             registration_marks: z.boolean().optional().describe('Registration marks'),
             color_bars: z.boolean().optional().describe('Color bars'),
             page_information: z.boolean().optional().describe('Page information'),

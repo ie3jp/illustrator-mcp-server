@@ -52,12 +52,9 @@ Claude:  → create_rectangle を実行
 
 ## 特徴
 
-- **30 ツール** — 読み取り 15 / 操作 11 / 書き出し 2 / ユーティリティ 1 + ドキュメント管理 2
+- **30 ツール** — 読み取り 16 / 操作 11 / 書き出し 2 / ユーティリティ 1
 - **Web 座標系** — デフォルトでアートボード相対・Y 軸下向き正（CSS/SVG と同じ座標系）
 - **UUID トラッキング** — 全オブジェクトを `pageItem.note` の UUID で一意に識別
-- **排他制御** — `p-limit(1)` による JSX 実行の直列化（Illustrator はシングルスレッド）
-- **安全なファイル経由通信** — 入出力とも JSON ファイル経由で統一（JSX インジェクション防止）
-- **日本語対応** — BOM 付き UTF-8 で JSX を保存（文字化け防止）
 
 ---
 
@@ -67,7 +64,7 @@ Claude:  → create_rectangle を実行
 |---|---|
 | macOS または Windows | macOS: osascript / Windows: PowerShell COM（実機未検証） |
 | Adobe Illustrator | CC 2024 以降 |
-| Node.js | 20 以降 |
+| Node.js | 20 以降 — [nodejs.org](https://nodejs.org/) から LTS 版をインストール。ターミナルで `node -v` と入力して確認できます |
 
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。
 > システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
@@ -123,7 +120,7 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 
 ## ツール一覧
 
-### 読み取り系 (15)
+### 読み取り系 (16)
 
 <details>
 <summary>クリックして展開</summary>
@@ -143,6 +140,7 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 | `get_images` | 埋め込み/リンク画像の情報（解像度、リンク切れ検出） |
 | `get_symbols` | シンボル定義とインスタンス |
 | `get_guidelines` | ガイドライン情報 |
+| `get_overprint_info` | オーバープリント設定の取得 |
 | `get_selection` | 選択中オブジェクトの詳細 |
 | `find_objects` | 条件検索（名前、タイプ、色、フォント等） |
 
@@ -202,16 +200,6 @@ flowchart LR
     Server -.->|generate| Runner["run-{uuid}.scpt / .ps1"]
 ```
 
-### 通信フロー
-
-1. Claude が MCP Server のツールを呼び出す
-2. MCP Server がパラメータを JSON ファイルに書き出す
-3. 共通ヘルパー + ツール固有コードを結合して BOM 付き UTF-8 の JSX ファイルを生成
-4. macOS: AppleScript (.scpt) を生成し `osascript` で実行 / Windows: PowerShell (.ps1) を生成し COM 経由で実行
-5. JSX が結果を JSON ファイルに書き出す
-6. MCP Server が結果を読み取り、Claude に返す
-7. 一時ファイルを `try/finally` でクリーンアップ
-
 ### 座標系
 
 座標を扱う read / modify ツールでは `coordinate_system` パラメータを受け付けます。export やドキュメント全体に対する utility ツールは、座標変換に依存しないため受け付けません。
@@ -262,10 +250,12 @@ illustrator-mcp-server/
 │   │   └── file-transport.ts # 一時ファイル管理 (macOS/Windows)
 │   ├── tools/
 │   │   ├── registry.ts       # ツール登録
-│   │   ├── read/             # 読み取り系 15 ツール
+│   │   ├── read/             # 読み取り系 16 ツール
 │   │   ├── modify/           # 操作系 11 ツール
 │   │   ├── export/           # 書き出し系 2 ツール
 │   │   └── utility/          # ユーティリティ 1 ツール
+│   ├── utils/
+│   │   └── image-header.ts  # 画像フォーマット判定
 │   └── jsx/
 │       └── helpers/
 │           └── common.jsx    # ExtendScript 共通ヘルパー

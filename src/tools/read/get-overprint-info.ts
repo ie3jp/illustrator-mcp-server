@@ -1,5 +1,4 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 
 const jsxCode = `
@@ -8,8 +7,6 @@ try {
   if (err) {
     writeResultFile(RESULT_PATH, err);
   } else {
-    var params = readParamsFile(PARAMS_PATH);
-    var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var doc = app.activeDocument;
 
     function getParentLayerName(item) {
@@ -76,7 +73,6 @@ try {
     }
 
     writeResultFile(RESULT_PATH, {
-      coordinateSystem: coordSystem,
       overprintCount: results.length,
       items: results
     });
@@ -92,12 +88,7 @@ export function register(server: McpServer): void {
     {
       title: 'Get Overprint Info',
       description: 'Get overprint settings',
-      inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
-      },
+      inputSchema: {},
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,

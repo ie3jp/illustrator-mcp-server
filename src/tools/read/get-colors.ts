@@ -166,11 +166,6 @@ export function register(server: McpServer): void {
           .optional()
           .default(true)
           .describe('Include used color collection'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
       },
       annotations: {
         readOnlyHint: true,
