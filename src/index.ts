@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createServer } from './server.js';
-import { ensureTmpDir, cleanupTmpDirSync } from './executor/file-transport.js';
-import { waitForPendingExecutions } from './executor/jsx-runner.js';
+import { createServer } from './server.ts';
+import { ensureTmpDir, cleanupTmpDirSync } from './executor/file-transport.ts';
+import { waitForPendingExecutions } from './executor/jsx-runner.ts';
 
 async function main(): Promise<void> {
   // 一時ディレクトリを作成

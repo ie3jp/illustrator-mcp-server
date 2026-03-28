@@ -64,7 +64,9 @@ Claude:  → create_rectangle
 
 - **macOS** (osascript) or **Windows** (PowerShell COM automation — not yet tested on real hardware)
 - **Adobe Illustrator CC 2024+**
-- **Node.js 20+** — Download from [nodejs.org](https://nodejs.org/) (LTS recommended). After installing, verify with `node -v` in Terminal / Command Prompt.
+- **Node.js 20+** to run the built package
+- **Node.js 24+** for development from source, because this repository uses `vp` and Node's TypeScript execution workflow during local development
+- **Vite+ (`vp`)** — Install globally with `curl -fsSL https://vite.plus | bash`, then open a new shell and verify with `vp help`.
 
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
@@ -104,10 +106,12 @@ After saving, restart Claude Desktop. The MCP server indicator (hammer icon) sho
 ```bash
 git clone https://github.com/ie3jp/illustrator-mcp-server.git
 cd illustrator-mcp-server
-npm install
-npm run build
+vp install
+vp pack
 claude mcp add illustrator-mcp -- node /path/to/illustrator-mcp-server/dist/index.js
 ```
+
+The built output in `dist/` is intended to run on Node.js 20+. The source tree and local developer workflow assume Node.js 24+.
 
 ### Verify
 
@@ -213,11 +217,20 @@ Geometry-aware read and modify tools accept a `coordinate_system` parameter. Exp
 ## Testing
 
 ```bash
+# Lint, format, and type-check
+vp check
+
 # Unit tests
-npm test
+vp test run
+
+# Package the server
+vp pack
+
+# Integration check (requires Illustrator running with an open document)
+vp run test:integration
 
 # E2E smoke test (requires Illustrator running)
-npx tsx test/e2e/smoke-test.ts
+vp run test:smoke
 ```
 
 The E2E test creates a fresh document, places test objects (shapes, text, linked/embedded images), runs all 45 test cases across 5 phases, and cleans up automatically. No pre-existing files required.

@@ -1,8 +1,8 @@
-import { randomUUID } from 'crypto';
-import * as fs from 'fs/promises';
-import { rmSync } from 'fs';
-import * as os from 'os';
-import * as path from 'path';
+import { randomUUID } from 'node:crypto';
+import * as fs from 'node:fs/promises';
+import { rmSync } from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 
 export const TMP_DIR = path.join(os.tmpdir(), 'illustrator-mcp');
 const BOM = '\uFEFF';

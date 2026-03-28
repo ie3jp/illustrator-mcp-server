@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync } from 'fs';
-import { tmpdir } from 'os';
-import * as path from 'path';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import * as path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanupTempFiles } from '../../src/executor/file-transport.js';
+import { cleanupTempFiles } from '../../src/executor/file-transport.ts';
 
 let tempRoot: string | undefined;
 
@@ -46,4 +46,3 @@ describe('cleanupTempFiles', () => {
     expect(warn).toHaveBeenCalledTimes(4);
   });
 });
-

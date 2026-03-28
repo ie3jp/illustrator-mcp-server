@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import * as fs from 'fs';
-import * as path from 'path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 // common.jsx を読み込んでテスト用にロードする
 // ExtendScript (ES3) の関数を Node.js 環境でテストするため、

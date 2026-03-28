@@ -1,5 +1,5 @@
-import { openSync, readSync, closeSync } from 'fs';
-import { extname } from 'path';
+import { openSync, readSync, closeSync } from 'node:fs';
+import { extname } from 'node:path';
 
 export interface ImageDimensions {
   width: number;

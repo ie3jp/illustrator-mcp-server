@@ -4,13 +4,13 @@
  * Windows トランスポートのモックテスト。
  * 実際の Illustrator・PowerShell は不要。
  */
-import * as fs from 'fs/promises';
-import * as os from 'os';
-import * as path from 'path';
-import type { ExecFileException } from 'child_process';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import type { ExecFileException } from 'node:child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { writePowerShellScript } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage, resolveTransport } from '../../src/executor/jsx-runner.js';
+import { writePowerShellScript } from '../../src/executor/file-transport.ts';
+import { getExecFailureMessage, resolveTransport } from '../../src/executor/jsx-runner.ts';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
 

@@ -1,9 +1,7 @@
-import { execFile } from 'child_process';
-import type { ExecFileException } from 'child_process';
-import * as fs from 'fs/promises';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
+import { execFile } from 'node:child_process';
+import type { ExecFileException } from 'node:child_process';
 import pLimit from 'p-limit';
+import { inlineText } from '../macros/inline-text.ts' with { type: 'macro' };
 import {
   createTempFiles,
   writeParams,
@@ -12,7 +10,7 @@ import {
   writePowerShellScript,
   readResult,
   cleanupTempFiles,
-} from './file-transport.js';
+} from './file-transport.ts';
 
 // Illustrator はシングルスレッド — JSX 実行を直列化
 const jsxLimit = pLimit(1);
@@ -58,10 +56,7 @@ export function waitForPendingExecutions(): Promise<void> {
   });
 }
 
-const JSX_HELPERS_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../jsx/helpers/common.jsx',
-);
+const COMMON_HELPERS_JSX = inlineText('src/jsx/helpers/common.jsx');
 
 // タイムアウト設定（ms）
 const TIMEOUT_NORMAL = 30_000;
@@ -82,9 +77,9 @@ async function buildJsx(
   paramsPath: string,
   resultPath: string,
 ): Promise<string> {
-  const helpers = await fs.readFile(JSX_HELPERS_PATH, 'utf-8');
   return `(function() {
-${helpers}
+${COMMON_HELPERS_JSX}
+// ExtendScript is ES3-era JavaScript, so keep var here for compatibility.
 var PARAMS_PATH = ${JSON.stringify(paramsPath)};
 var RESULT_PATH = ${JSON.stringify(resultPath)};
 ${toolScript}

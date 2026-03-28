@@ -1,8 +1,8 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { registerAllTools } from './tools/registry.js';
+import { ToolServer } from './tool-server.ts';
+import { registerAllTools } from './tools/registry.ts';
 
-export function createServer(): McpServer {
-  const server = new McpServer({
+export function createServer(): ToolServer {
+  const server = new ToolServer({
     name: 'illustrator-mcp-server',
     version: '1.2.4',
   });

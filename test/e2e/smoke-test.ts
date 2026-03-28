@@ -3,12 +3,12 @@
  * create_document で新規ドキュメントを作成し、全ツールをテストした後 close_document で閉じる。
  * Illustrator が起動していれば、開いているファイルに依存せず実行可能。
  *
- * 使い方: npx tsx test/e2e/smoke-test.ts
+ * 使い方: node test/e2e/smoke-test.ts
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { writeFileSync, mkdirSync, rmSync } from 'fs';
-import { deflateSync } from 'zlib';
+import { writeFileSync, mkdirSync, rmSync } from 'node:fs';
+import { deflateSync } from 'node:zlib';
 
 const PASS = '✓';
 const FAIL = '✗';

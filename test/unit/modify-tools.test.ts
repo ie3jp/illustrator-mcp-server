@@ -1,21 +1,21 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
+import type { ToolRegistry } from '../../src/tool-server.ts';
+import { schema as v, type SchemaShape } from '../../src/schema.ts';
 import { describe, expect, it, vi } from 'vitest';
-import { register as registerExport } from '../../src/tools/export/export.js';
-import { register as registerExportPdf } from '../../src/tools/export/export-pdf.js';
-import { register as registerApplyColorProfile } from '../../src/tools/modify/apply-color-profile.js';
-import { register as registerConvertToOutlines } from '../../src/tools/modify/convert-to-outlines.js';
-import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
-import { register as registerCreateLine } from '../../src/tools/modify/create-line.js';
-import { colorSchema } from '../../src/tools/modify/shared.js';
+import { register as registerExport } from '../../src/tools/export/export.ts';
+import { register as registerExportPdf } from '../../src/tools/export/export-pdf.ts';
+import { register as registerApplyColorProfile } from '../../src/tools/modify/apply-color-profile.ts';
+import { register as registerConvertToOutlines } from '../../src/tools/modify/convert-to-outlines.ts';
+import { register as registerModifyObject } from '../../src/tools/modify/modify-object.ts';
+import { register as registerCreateLine } from '../../src/tools/modify/create-line.ts';
+import { colorSchema } from '../../src/tools/modify/shared.ts';
 
-function captureInputSchema(register: (server: McpServer) => void) {
-  let inputSchema: Record<string, z.ZodTypeAny> | undefined;
+function captureInputSchema(register: (server: ToolRegistry) => void) {
+  let inputSchema: SchemaShape | undefined;
   const server = {
-    registerTool: vi.fn((_name: string, config: { inputSchema: Record<string, z.ZodTypeAny> }) => {
+    registerTool: vi.fn((_name: string, config: { inputSchema: SchemaShape }) => {
       inputSchema = config.inputSchema;
     }),
-  } as unknown as McpServer;
+  } as unknown as ToolRegistry;
 
   register(server);
 
@@ -23,7 +23,7 @@ function captureInputSchema(register: (server: McpServer) => void) {
     throw new Error('Tool schema was not registered');
   }
 
-  return z.object(inputSchema);
+  return v.object(inputSchema);
 }
 
 describe('modify tool schemas', () => {

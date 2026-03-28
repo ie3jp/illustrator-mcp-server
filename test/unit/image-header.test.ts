@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { readImageDimensions } from '../../src/utils/image-header.js';
-import { writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { readImageDimensions } from '../../src/utils/image-header.ts';
+import { writeFileSync, unlinkSync, mkdtempSync, rmdirSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // ---------------------------------------------------------------------------
 // Helpers: build minimal valid image buffers from scratch

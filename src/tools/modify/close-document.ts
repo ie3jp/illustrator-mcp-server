@@ -1,30 +1,12 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
+import type { ToolRegistry } from '../../tool-server.ts';
+import { schema as v } from '../../schema.ts';
+import { executeJsx } from '../../executor/jsx-runner.ts';
+import { inlineText } from '../../macros/inline-text.ts' with { type: 'macro' };
 
-const jsxCode = `
-try {
-  var verErr = checkIllustratorVersion();
-  if (verErr) {
-    writeResultFile(RESULT_PATH, verErr);
-  } else {
-    var params = readParamsFile(PARAMS_PATH);
-    var save = params.save === true;
 
-    if (app.documents.length === 0) {
-      writeResultFile(RESULT_PATH, { error: true, message: "No document is open" });
-    } else {
-      var saveOpt = save ? SaveOptions.SAVECHANGES : SaveOptions.DONOTSAVECHANGES;
-      app.activeDocument.close(saveOpt);
-      writeResultFile(RESULT_PATH, { success: true });
-    }
-  }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: "Failed to close document: " + e.message, line: e.line });
-}
-`;
+export const jsxCode = inlineText('src/tools/modify/close-document.jsx');
 
-export function register(server: McpServer): void {
+export function register(server: ToolRegistry): void {
   server.registerTool(
     'close_document',
     {
@@ -32,7 +14,7 @@ export function register(server: McpServer): void {
       description:
         'Close the active Illustrator document. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
-        save: z
+        save: v
           .boolean()
           .optional()
           .default(false)

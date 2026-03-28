@@ -11,14 +11,18 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest]
-        node-version: [20, 22]
+        node-version: ['24']
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: voidzero-dev/setup-vp@v1
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-      - run: npm test
+          cache: true
+      - run: vp check
+      - run: vp test run
+      - run: vp pack
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: node --input-type=module -e "await import('./dist/server.js')"

@@ -1,167 +1,20 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
-import { readImageDimensions } from '../../utils/image-header.js';
+import type { ToolRegistry } from '../../tool-server.ts';
+import { schema as v } from '../../schema.ts';
+import { executeJsx } from '../../executor/jsx-runner.ts';
+import { readImageDimensions } from '../../utils/image-header.ts';
+import { inlineText } from '../../macros/inline-text.ts' with { type: 'macro' };
 
-const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
-    var params = readParamsFile(PARAMS_PATH);
-    var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
-    var doc = app.activeDocument;
-    var images = [];
 
-    // Linked images (PlacedItems)
-    for (var i = 0; i < doc.placedItems.length; i++) {
-      var item = doc.placedItems[i];
-      var uuid = ensureUUID(item);
-      var zIdx = getZIndex(item);
-      var abIndex = getArtboardIndexForItem(item);
-      var artboardRect = null;
-      if (abIndex >= 0) {
-        artboardRect = doc.artboards[abIndex].artboardRect;
-      }
-      var bounds = getBounds(item, coordSystem, artboardRect);
+export const jsxCode = inlineText('src/tools/read/get-images.jsx');
 
-      var info = {
-        uuid: uuid,
-        zIndex: zIdx,
-        type: "linked",
-        filePath: "",
-        linkBroken: false,
-        resolution: null,
-        colorSpace: null,
-        pixelWidth: null,
-        pixelHeight: null,
-        artboardIndex: abIndex,
-        bounds: bounds,
-        widthPt: null,
-        heightPt: null
-      };
-
-      try {
-        info.filePath = item.file.fsName;
-      } catch (e) {
-        info.linkBroken = true;
-      }
-
-      try { info.name = item.name || ""; } catch(e) {}
-
-      // Store placed dimensions in points for Node.js-side DPI calculation
-      try {
-        var pBounds = item.geometricBounds;
-        var pWidthPt = pBounds[2] - pBounds[0];
-        var pHeightPt = -(pBounds[3] - pBounds[1]);
-        if (pWidthPt < 0) pWidthPt = -pWidthPt;
-        if (pHeightPt < 0) pHeightPt = -pHeightPt;
-        info.widthPt = pWidthPt;
-        info.heightPt = pHeightPt;
-      } catch(e) {}
-
-      images.push(info);
-    }
-
-    // Embedded / raster images (RasterItems)
-    for (var j = 0; j < doc.rasterItems.length; j++) {
-      var rItem = doc.rasterItems[j];
-      var rUuid = ensureUUID(rItem);
-      var rZIdx = getZIndex(rItem);
-      var rAbIndex = getArtboardIndexForItem(rItem);
-      var rArtboardRect = null;
-      if (rAbIndex >= 0) {
-        rArtboardRect = doc.artboards[rAbIndex].artboardRect;
-      }
-      var rBounds = getBounds(rItem, coordSystem, rArtboardRect);
-
-      var rInfo = {
-        uuid: rUuid,
-        zIndex: rZIdx,
-        type: rItem.embedded ? "embedded" : "linked",
-        filePath: "",
-        linkBroken: false,
-        resolution: null,
-        colorSpace: null,
-        pixelWidth: null,
-        pixelHeight: null,
-        artboardIndex: rAbIndex,
-        bounds: rBounds
-      };
-
-      try { rInfo.name = rItem.name || ""; } catch(e) {}
-
-      // colorSpace detection
-      try {
-        var cs = rItem.imageColorSpace;
-        if (cs === ImageColorSpace.RGB) {
-          rInfo.colorSpace = "RGB";
-        } else if (cs === ImageColorSpace.CMYK) {
-          rInfo.colorSpace = "CMYK";
-        } else if (cs === ImageColorSpace.Grayscale) {
-          rInfo.colorSpace = "grayscale";
-        } else {
-          rInfo.colorSpace = "other";
-        }
-      } catch (e) {}
-
-      // pixel dimensions and resolution
-      try {
-        // geometricBounds: [left, top, right, bottom] in points
-        var gb = rItem.geometricBounds;
-        var placedWidthPt = gb[2] - gb[0];
-        var placedHeightPt = -(gb[3] - gb[1]); // top > bottom in AI coords
-
-        // RasterItem exposes matrix; columns/rows not directly available
-        // but we can try to access them
-        try {
-          // Some versions expose these
-          var pw = rItem.artworkKnockout; // dummy access to keep try block
-        } catch(e2) {}
-
-        // Attempt to get pixel size from the item's internal properties
-        try {
-          var m = rItem.matrix;
-          if (m && placedWidthPt > 0 && placedHeightPt > 0) {
-            // Use vector magnitude to handle rotation correctly
-            // mValueA/mValueB form horizontal basis vector, mValueC/mValueD form vertical
-            var scaleX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
-            var scaleY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
-            if (scaleX > 0 && scaleY > 0) {
-              rInfo.pixelWidth = Math.round(placedWidthPt / scaleX);
-              rInfo.pixelHeight = Math.round(placedHeightPt / scaleY);
-              // PPI = pixels / (points / 72); use minimum of H and V
-              var ppiH = Math.round(rInfo.pixelWidth / (placedWidthPt / 72));
-              var ppiV = Math.round(rInfo.pixelHeight / (placedHeightPt / 72));
-              rInfo.resolution = Math.min(ppiH, ppiV);
-            }
-          }
-        } catch(e3) {}
-      } catch (e) {}
-
-      images.push(rInfo);
-    }
-
-    writeResultFile(RESULT_PATH, {
-      imageCount: images.length,
-      coordinateSystem: coordSystem,
-      images: images
-    });
-  }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
-}
-`;
-
-export function register(server: McpServer): void {
+export function register(server: ToolRegistry): void {
   server.registerTool(
     'get_images',
     {
       title: 'Get Images',
       description: 'Get embedded and linked image information',
       inputSchema: {
-        coordinate_system: z
+        coordinate_system: v
           .enum(['artboard-web', 'document'])
           .optional()
           .default('artboard-web'),

@@ -64,7 +64,9 @@ Claude:  → create_rectangle を実行
 |---|---|
 | macOS または Windows | macOS: osascript / Windows: PowerShell COM（実機未検証） |
 | Adobe Illustrator | CC 2024 以降 |
-| Node.js | 20 以降 — [nodejs.org](https://nodejs.org/) から LTS 版をインストール。ターミナルで `node -v` と入力して確認できます |
+| Node.js | ビルド済みパッケージの実行は 20 以降 |
+| Node.js | ソースからの開発は 24 以降。`vp` と Node の TypeScript 実行フローを前提にしているため |
+| Vite+ (`vp`) | `curl -fsSL https://vite.plus | bash` でグローバルに導入し、新しいシェルで `vp help` を確認 |
 
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。
 > システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
@@ -105,10 +107,12 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 ```bash
 git clone https://github.com/ie3jp/illustrator-mcp-server.git
 cd illustrator-mcp-server
-npm install
-npm run build
+vp install
+vp pack
 claude mcp add illustrator-mcp -- node /path/to/illustrator-mcp-server/dist/index.js
 ```
+
+生成された `dist/` は Node.js 20+ での実行を想定しています。一方、このリポジトリをソースから開発する場合は Node.js 24+ 前提です。
 
 ### 動作確認
 
@@ -214,11 +218,20 @@ flowchart LR
 ## テスト
 
 ```bash
+# Lint / format / 型チェック
+vp check
+
 # ユニットテスト
-npm test
+vp test run
+
+# パッケージング
+vp pack
+
+# Integration check（Illustrator 起動＋ドキュメントを開いた状態）
+vp run test:integration
 
 # E2E スモークテスト（Illustrator 起動状態で実行）
-npx tsx test/e2e/smoke-test.ts
+vp run test:smoke
 ```
 
 E2E テストは新規ドキュメントを作成し、テストオブジェクト（図形、テキスト、リンク/埋め込み画像）を配置して全 45 ケースを 5 フェーズで自動実行し、終了後にクリーンアップします。事前のファイル準備は不要です。
