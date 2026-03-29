@@ -103,7 +103,13 @@ if (preflight) {
       writeResultFile(RESULT_PATH, { error: true, message: "Unknown action: " + action });
     }
   } catch (e) {
-    writeResultFile(RESULT_PATH, { error: true, message: "Layer operation failed: " + e.message, line: e.line });
+    var existingLayers = [];
+    try {
+      for (var li = 0; li < doc.layers.length; li++) {
+        existingLayers.push(doc.layers[li].name);
+      }
+    } catch(_ignore) {}
+    writeResultFile(RESULT_PATH, { error: true, message: "Layer operation failed: " + e.message, line: e.line, existing_layers: existingLayers });
   }
 }
 `;

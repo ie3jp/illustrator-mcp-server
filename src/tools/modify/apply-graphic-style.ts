@@ -43,11 +43,17 @@ if (preflight) {
           appliedCount++;
         }
       }
+      var verifiedItems = [];
+      for (var vi = 0; vi < params.uuids.length; vi++) {
+        var vItem = findItemByUUID(params.uuids[vi]);
+        if (vItem) verifiedItems.push(verifyItem(vItem));
+      }
       writeResultFile(RESULT_PATH, {
         success: true,
         styleName: params.style_name,
         appliedCount: appliedCount,
-        merge: params.merge === true
+        merge: params.merge === true,
+        verified: verifiedItems
       });
     }
   } catch (e) {

@@ -63,6 +63,7 @@ if (preflight) {
 
           // Create new artboard
           var newAb = doc.artboards.add(newRect);
+          invalidateArtboardCache();
           var newAbIdx = doc.artboards.length - 1;
           if (target.name) {
             newAb.name = target.name;
@@ -125,11 +126,18 @@ if (preflight) {
         // Deselect
         doc.selection = null;
 
+        // Verify created artboards
+        var verifiedArtboards = [];
+        for (var vai = 0; vai < createdArtboards.length; vai++) {
+          verifiedArtboards.push(verifyArtboardContents(createdArtboards[vai].artboardIndex));
+        }
+
         writeResultFile(RESULT_PATH, {
           success: true,
           sourceArtboard: srcIdx,
           createdCount: createdArtboards.length,
-          artboards: createdArtboards
+          artboards: createdArtboards,
+          verified: verifiedArtboards
         });
       }
     }

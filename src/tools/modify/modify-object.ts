@@ -116,12 +116,13 @@ if (preflight) {
         } catch(e) { errors.push("font_size: " + e.message); }
       }
 
+      var verifiedState = verifyItem(item, coordSystem, abRect);
       if (errors.length > 0) {
-        var result = { success: false, uuid: params.uuid, errors: errors };
+        var result = { success: false, uuid: params.uuid, errors: errors, verified: verifiedState };
         if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
         writeResultFile(RESULT_PATH, result);
       } else {
-        writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid });
+        writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid, verified: verifiedState });
       }
     }
   } catch (e) {

@@ -97,7 +97,8 @@ if (preflight) {
         success: true,
         replacedCount: replacedCount,
         fromColor: fromColor,
-        toColor: toColor
+        toColor: toColor,
+        verified: { replacedCount: replacedCount }
       });
     }
   } catch (e) {

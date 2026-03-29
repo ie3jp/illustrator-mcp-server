@@ -85,7 +85,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(tf);
-    var resultData = { uuid: uuid };
+    var resultData = { uuid: uuid, verified: verifyItem(tf, coordSystem, abRect) };
     if (fontCandidates !== null) {
       resultData.font_warning = "Font '" + params.font_name + "' not found. Text frame created with default font.";
       resultData.font_candidates = fontCandidates;

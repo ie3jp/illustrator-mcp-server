@@ -83,7 +83,8 @@ if (preflight) {
         type: params.embed ? "embedded" : "linked",
         filePath: filePath,
         widthPt: widthPt,
-        heightPt: heightPt
+        heightPt: heightPt,
+        verified: verifyItem(resultItem)
       });
     }
   } catch (e) {

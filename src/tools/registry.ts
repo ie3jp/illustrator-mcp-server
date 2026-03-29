@@ -45,6 +45,7 @@ import { register as registerAlignObjects } from './modify/align-objects.js';
 import { register as registerReplaceColor } from './modify/replace-color.js';
 import { register as registerManageLayers } from './modify/manage-layers.js';
 import { register as registerPlaceColorChips } from './modify/place-color-chips.js';
+import { register as registerPlaceStyleGuide } from './modify/place-style-guide.js';
 
 // Phase 5: ドキュメント管理ツール
 import { register as registerCreateDocument } from './modify/create-document.js';
@@ -69,6 +70,7 @@ import { register as registerUndo } from './modify/undo.js';
 import { register as registerManageDatasets } from './modify/manage-datasets.js';
 import { register as registerPlaceSymbol } from './modify/place-symbol.js';
 import { register as registerCreatePathText } from './modify/create-path-text.js';
+import { register as registerSelectObjects } from './modify/select-objects.js';
 import { register as registerConvertCoordinate } from './read/convert-coordinate.js';
 
 export function registerAllTools(server: McpServer): void {
@@ -117,6 +119,7 @@ export function registerAllTools(server: McpServer): void {
   registerReplaceColor(server);
   registerManageLayers(server);
   registerPlaceColorChips(server);
+  registerPlaceStyleGuide(server);
 
   // Phase 5: ドキュメント管理
   registerCreateDocument(server);
@@ -141,5 +144,6 @@ export function registerAllTools(server: McpServer): void {
   registerManageDatasets(server);
   registerPlaceSymbol(server);
   registerCreatePathText(server);
+  registerSelectObjects(server);
   registerConvertCoordinate(server);
 }

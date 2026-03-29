@@ -75,7 +75,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(path);
-    writeResultFile(RESULT_PATH, { uuid: uuid });
+    writeResultFile(RESULT_PATH, { uuid: uuid, verified: verifyItem(path, coordSystem, abRect) });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create path: " + e.message, line: e.line });
   }

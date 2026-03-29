@@ -1,0 +1,36 @@
+{
+  "color": {
+    "primary": "#FFFFFF",
+    "secondary": "#324B55",
+    "tertiary": "#000000",
+    "color-4": "#461724",
+    "color-5": "#505023",
+    "color-6": "#6E5028",
+    "color-7": "#464646",
+    "color-8": "#785660",
+    "color-9": "#50646E",
+    "color-10": "#C3A069",
+    "color-11": "#787855",
+    "color-12": "#8C8C8C"
+  },
+  "typography": {
+    "heading": {
+      "family": "AkzidGrtskNext-Med",
+      "size": "20pt",
+      "weight": "Medium"
+    },
+    "body": {
+      "family": "AkzidGrtskNext-Med",
+      "size": "36pt",
+      "weight": "Medium"
+    }
+  },
+  "spacing": [
+    "19pt",
+    "22pt",
+    "23pt",
+    "26pt",
+    "46pt",
+    "53pt"
+  ]
+}

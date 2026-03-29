@@ -34,7 +34,7 @@ if (preflight) {
         var swatch = doc.swatches.add();
         swatch.name = params.name;
         swatch.color = createColor(params.color);
-        writeResultFile(RESULT_PATH, { success: true, action: "add", name: params.name });
+        writeResultFile(RESULT_PATH, { success: true, action: "add", name: params.name, verified: { swatchCount: doc.swatches.length, name: swatch.name } });
       }
     } else if (action === "update") {
       try {
@@ -42,7 +42,7 @@ if (preflight) {
         if (params.color) {
           existing.color = createColor(params.color);
         }
-        writeResultFile(RESULT_PATH, { success: true, action: "update", name: params.name });
+        writeResultFile(RESULT_PATH, { success: true, action: "update", name: params.name, verified: { swatchCount: doc.swatches.length, name: existing.name } });
       } catch(e) {
         writeResultFile(RESULT_PATH, { error: true, message: "Swatch not found: " + params.name });
       }
@@ -50,7 +50,7 @@ if (preflight) {
       try {
         var toDelete = doc.swatches.getByName(params.name);
         toDelete.remove();
-        writeResultFile(RESULT_PATH, { success: true, action: "delete", name: params.name });
+        writeResultFile(RESULT_PATH, { success: true, action: "delete", name: params.name, verified: { swatchCount: doc.swatches.length } });
       } catch(e) {
         writeResultFile(RESULT_PATH, { error: true, message: "Swatch not found: " + params.name });
       }

@@ -38,11 +38,14 @@ if (preflight) {
         // artboardRect = [left, top, right, bottom] (document coordinates, Y-up)
         var abRect = [r.x, r.y + r.height, r.x + r.width, r.y];
         var ab = doc.artboards.add(abRect);
+        invalidateArtboardCache();
         if (params.name) ab.name = params.name;
+        var addedRect = ab.artboardRect;
         writeResultFile(RESULT_PATH, {
           success: true,
           index: doc.artboards.length - 1,
-          name: ab.name
+          name: ab.name,
+          verified: { artboardRect: addedRect }
         });
       }
     } else if (action === "remove") {
@@ -53,6 +56,7 @@ if (preflight) {
       } else {
         // Artboards.remove(index: Number) → void
         doc.artboards.remove(params.index);
+        invalidateArtboardCache();
         writeResultFile(RESULT_PATH, { success: true, removedIndex: params.index });
       }
     } else if (action === "resize") {
@@ -62,14 +66,16 @@ if (preflight) {
         var r2 = params.rect;
         // Artboard.artboardRect = [left, top, right, bottom] (document coordinates, Y-up)
         doc.artboards[params.index].artboardRect = [r2.x, r2.y + r2.height, r2.x + r2.width, r2.y];
-        writeResultFile(RESULT_PATH, { success: true, index: params.index });
+        var resizedRect = doc.artboards[params.index].artboardRect;
+        writeResultFile(RESULT_PATH, { success: true, index: params.index, verified: { artboardRect: resizedRect } });
       }
     } else if (action === "rename") {
       if (typeof params.index !== "number" || !params.name) {
         writeResultFile(RESULT_PATH, { error: true, message: "index and name required for rename" });
       } else {
         doc.artboards[params.index].name = params.name;
-        writeResultFile(RESULT_PATH, { success: true, index: params.index, name: params.name });
+        var renamedName = doc.artboards[params.index].name;
+        writeResultFile(RESULT_PATH, { success: true, index: params.index, name: params.name, verified: { name: renamedName } });
       }
     } else if (action === "fit_to_art") {
       if (!doc.selection || doc.selection.length === 0) {
@@ -77,7 +83,7 @@ if (preflight) {
       } else {
         var fitIdx = (typeof params.index === "number") ? params.index : 0;
         doc.fitArtboardToSelectedArt(fitIdx);
-        writeResultFile(RESULT_PATH, { success: true, index: fitIdx });
+        writeResultFile(RESULT_PATH, { success: true, index: fitIdx, verified: { artboardRect: doc.artboards[fitIdx].artboardRect } });
       }
     } else if (action === "rearrange") {
       var layoutMap = {
@@ -90,7 +96,11 @@ if (preflight) {
       var rowsOrCols = params.rows_or_cols || 1;
       var spacing = (typeof params.spacing === "number") ? params.spacing : 20;
       doc.rearrangeArtboards(layout, rowsOrCols, spacing, true);
-      writeResultFile(RESULT_PATH, { success: true });
+      var rearrangedInfo = [];
+      for (var rai = 0; rai < doc.artboards.length; rai++) {
+        rearrangedInfo.push({ index: rai, name: doc.artboards[rai].name, rect: doc.artboards[rai].artboardRect });
+      }
+      writeResultFile(RESULT_PATH, { success: true, verified: { artboardCount: doc.artboards.length, artboards: rearrangedInfo } });
     } else {
       writeResultFile(RESULT_PATH, { error: true, message: "Unknown action: " + action });
     }

@@ -1,5 +1,23 @@
 # 変更履歴
 
+## [1.2.6] - 2026-03-30
+
+### 追加
+- **place_style_guide** ツール — カラーチップ・フォントサンプル・スペーシングアノテーション（アートボード上に色分けバー配置）・マージン・ガイド間隔をアートボード外にビジュアルスタイルガイドとして配置。同じ値のスペーシングはグループ化・色分けでクリック時に一括ハイライト可能
+- **select_objects** ツール — UUID指定でオブジェクトを選択（複数選択対応）
+- **extract_design_tokens: `output_path` パラメータ** — トークンを直接ファイルに保存（CSS/JSON/Tailwind）
+- **manage_datasets: `import_csv` アートボード複製方式** — CSVインポートでデータセット切り替えではなく物理的にアートボードを複製
+
+### 修正
+- **extract_design_tokens** — "Style Guide"/"Color Chips" レイヤーをスキップし、アノテーションがトークン抽出を汚染しないように改善
+- **extract_design_tokens** — `output_path` のファイル書き込みエラー時に構造化エラーメッセージを返すように修正
+- **全modifyツール** — 操作後の状態検証（`verified` フィールド）を全modifyツールに追加
+- **place_style_guide** — ES3互換のため関数宣言をトップレベルスコープに移動
+- **select_objects** — 正しい `WRITE_IDEMPOTENT_ANNOTATIONS` アノテーションに修正（選択は冪等操作）
+
+### 変更
+- ツール数: 63ツール + 2 Prompts（読み取り21 / 操作37 / 書き出し2 / ユーティリティ3）
+
 ## [1.2.5] - 2026-03-30
 
 ### 追加

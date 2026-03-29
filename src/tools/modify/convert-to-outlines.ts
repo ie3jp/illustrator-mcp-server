@@ -57,7 +57,7 @@ if (preflight) {
     }
 
     if (!hasError) {
-      writeResultFile(RESULT_PATH, { success: true, convertedCount: count });
+      writeResultFile(RESULT_PATH, { success: true, convertedCount: count, verified: { convertedCount: count } });
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to convert to outlines: " + e.message, line: e.line });

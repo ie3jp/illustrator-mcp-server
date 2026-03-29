@@ -1,0 +1,30 @@
+:root {
+  --color-primary: #FFFFFF;
+  --color-secondary: #333333;
+  --color-tertiary: #808080;
+  --color-color-4: #324B55;
+  --color-color-5: #FFF0CD;
+  --color-color-6: #DCE1CD;
+  --color-color-7: #AFB9CD;
+  --color-color-8: #BEAAC3;
+  --color-color-9: #8C8C8C;
+  --color-color-10: #787855;
+  --color-color-11: #C3A069;
+  --color-color-12: #50646E;
+
+  --font-heading-family: "KozGoPr6N-Regular";
+  --font-heading-size: 7pt;
+  --font-body-family: "AkzidGrtskNext-Med";
+  --font-body-size: 20pt;
+  --font-text-3-family: "AkzidGrtskNext-Med";
+  --font-text-3-size: 36pt;
+  --font-text-4-family: "KozGoPr6N-Regular";
+  --font-text-4-size: 11pt;
+
+  --spacing-6: 6pt;
+  --spacing-23: 23pt;
+  --spacing-30: 30pt;
+  --spacing-35: 35pt;
+  --spacing-119: 119pt;
+  --spacing-135: 135pt;
+}
