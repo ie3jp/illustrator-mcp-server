@@ -60,7 +60,7 @@ if (preflight) {
       // target is a layer name
       try {
         var layer = doc.layers.getByName(target);
-        var frames = layer.textFrames;
+        frames = layer.textFrames;
         for (var i = frames.length - 1; i >= 0; i--) {
           try {
             frames[i].createOutline();

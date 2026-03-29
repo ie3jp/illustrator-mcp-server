@@ -84,7 +84,9 @@ function readParamsFile(filePath) {
 function writeResultFile(filePath, result) {
   var f = new File(filePath);
   f.encoding = "UTF-8";
-  f.open("w");
+  if (!f.open("w")) {
+    throw new Error("Cannot open result file for writing: " + filePath);
+  }
   f.write(jsonStringify(result));
   f.close();
 }
@@ -233,22 +235,36 @@ function getActiveArtboardRect() {
 }
 
 function getArtboardRectByIndex(index) {
-  var doc = app.activeDocument;
-  if (index >= 0 && index < doc.artboards.length) {
-    return doc.artboards[index].artboardRect;
+  var rects = _getArtboardRects();
+  if (index >= 0 && index < rects.length) {
+    return rects[index];
   }
   return null;
 }
 
+// アートボード矩形キャッシュ（同一 JSX 実行内で再利用）
+var _artboardRectsCache = null;
+
+function _getArtboardRects() {
+  if (!_artboardRectsCache) {
+    _artboardRectsCache = [];
+    var doc = app.activeDocument;
+    for (var i = 0; i < doc.artboards.length; i++) {
+      _artboardRectsCache.push(doc.artboards[i].artboardRect);
+    }
+  }
+  return _artboardRectsCache;
+}
+
 // アイテムがどのアートボードに属するか判定（中心座標ベース）
 function getArtboardIndexForItem(item) {
-  var doc = app.activeDocument;
+  var rects = _getArtboardRects();
   var b = item.geometricBounds;
   var cx = (b[0] + b[2]) / 2;
   var cy = (b[1] + b[3]) / 2;
 
-  for (var i = 0; i < doc.artboards.length; i++) {
-    var r = doc.artboards[i].artboardRect;
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i];
     if (cx >= r[0] && cx <= r[2] && cy <= r[1] && cy >= r[3]) {
       return i;
     }
@@ -321,27 +337,36 @@ function getZIndex(item) {
   }
 }
 
-// --- UUID 検索 ---
+// --- UUID 検索（インデックス付き） ---
 
-function findItemByUUID(uuid) {
+// 同一 JSX 実行内で UUID→item マップを遅延構築し、2回目以降は O(1) で引く
+var _uuidIndex = null;
+
+function _buildUUIDIndex() {
+  _uuidIndex = {};
   var doc = app.activeDocument;
   for (var li = 0; li < doc.layers.length; li++) {
-    var found = _findInContainer(doc.layers[li], uuid);
-    if (found) return found;
+    _indexContainer(doc.layers[li]);
   }
-  return null;
 }
 
-function _findInContainer(container, uuid) {
+function _indexContainer(container) {
   for (var i = 0; i < container.pageItems.length; i++) {
     var item = container.pageItems[i];
     try {
-      if (item.note === uuid) return item;
+      if (item.note && item.note.length > 0) {
+        _uuidIndex[item.note] = item;
+      }
+    } catch(e) {}
+    try {
       if (item.typename === "GroupItem") {
-        var inner = _findInContainer(item, uuid);
-        if (inner) return inner;
+        _indexContainer(item);
       }
     } catch(e) {}
   }
-  return null;
+}
+
+function findItemByUUID(uuid) {
+  if (!_uuidIndex) _buildUUIDIndex();
+  return _uuidIndex[uuid] || null;
 }

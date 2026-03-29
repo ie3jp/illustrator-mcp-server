@@ -363,7 +363,7 @@ try {
     var hasNonOutlinedText = false;
     var hasSpotColors = (doc.spots.length > 1);
     var colorProfileName = "";
-    try { colorProfileName = doc.fullName ? doc.colorProfileName : ""; } catch(e9) {}
+    try { colorProfileName = doc.colorProfileName || ""; } catch(e9) {}
     for (var ri2 = 0; ri2 < results.length; ri2++) {
       if (results[ri2].category === "rgb_in_cmyk") hasRGBItems = true;
       if (results[ri2].category === "transparency") hasTransparencyItems = true;
@@ -421,7 +421,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = (await executeJsx(jsxCode, resolvedParams)) as {
         checkCount: number;
         results: Array<{

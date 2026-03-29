@@ -72,8 +72,9 @@ if (preflight) {
       }
     }
 
+    var outFile = null;
     if (targetType !== "error") {
-      var outFile = new File(outputPath);
+      outFile = new File(outputPath);
       var parentFolder = outFile.parent;
       if (!parentFolder.exists) {
         writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
@@ -82,10 +83,9 @@ if (preflight) {
     }
 
     if (targetType !== "error") {
-      var outFile = new File(outputPath);
-
       // UUID指定かつラスタ形式の場合、一時ドキュメントにコピーして書き出す
-      var useIsolatedExport = (targetType === "selection" && typeof targetItem !== "undefined" && targetItem !== null && (format === "png" || format === "jpg"));
+      var isUUIDTarget = (targetType === "selection" && target !== "selection");
+      var useIsolatedExport = (isUUIDTarget && (format === "png" || format === "jpg"));
 
       if (useIsolatedExport) {
         // 選択オブジェクトをコピー
@@ -98,6 +98,7 @@ if (preflight) {
 
         // 一時ドキュメントを作成
         var tempDoc = app.documents.add(doc.documentColorSpace, objW, objH);
+        try {
         tempDoc.artboards[0].artboardRect = [0, objH, objW, 0];
 
         // ペースト
@@ -144,8 +145,10 @@ if (preflight) {
           tempDoc.exportFile(outFile, ExportType.JPEG, jpgOpts);
         }
 
-        // 一時ドキュメントを閉じる（保存しない）
+        } finally {
+        // 一時ドキュメントを閉じる（エクスポート失敗時もリーク防止）
         tempDoc.close(SaveOptions.DONOTSAVECHANGES);
+        }
 
       } else {
         // 従来の書き出しロジック（artboard / selection / SVG）

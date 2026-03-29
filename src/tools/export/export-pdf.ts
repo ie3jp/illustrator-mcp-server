@@ -19,11 +19,11 @@ if (preflight) {
     // Apply preset if specified
     if (preset !== "") {
       pdfOpts.pDFPreset = preset;
+    } else {
+      // プリセット未指定時のみデフォルト値を設定（プリセットの設定を上書きしない）
+      pdfOpts.compatibility = PDFCompatibility.ACROBAT7;
+      pdfOpts.preserveEditability = false;
     }
-
-    // Default to PDF/X-4 compatible
-    pdfOpts.compatibility = PDFCompatibility.ACROBAT7;
-    pdfOpts.preserveEditability = false;
 
     // トンボ種類（enum名とリテラル値の両方を試す）
     if (options.marks_style === "japanese") {

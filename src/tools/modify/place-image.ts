@@ -67,10 +67,8 @@ if (preflight) {
             break;
           }
         }
-        // Restore the requested name
-        if (params.name) {
-          resultItem.name = params.name;
-        }
+        // タグ名をクリア（ユーザー指定名があれば復元、なければ空文字に）
+        resultItem.name = params.name || "";
       }
 
       var uuid = ensureUUID(resultItem);
@@ -122,7 +120,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },

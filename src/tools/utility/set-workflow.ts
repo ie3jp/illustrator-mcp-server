@@ -42,7 +42,7 @@ export function register(server: McpServer): void {
         clear: z
           .boolean()
           .optional()
-          .describe('Reset session to default behavior (no workflow, artboard-web fallback).'),
+          .describe('Reset session to default behavior (auto-detect from document).'),
       },
       annotations: {
         readOnlyHint: false,
@@ -61,7 +61,7 @@ export function register(server: McpServer): void {
               text: JSON.stringify({
                 status: 'cleared',
                 message:
-                  'Session reset. coordinate_system will default to artboard-web.',
+                  'Session reset. coordinate_system will auto-detect from document.',
               }),
             },
           ],
@@ -79,7 +79,7 @@ export function register(server: McpServer): void {
                 currentCoordinateSystem: getSessionCoordinateSystem(),
                 message: getSessionWorkflow()
                   ? `Session is set to ${getSessionWorkflow()} workflow (${getSessionCoordinateSystem()}).`
-                  : 'No session workflow set. Defaulting to artboard-web.',
+                  : 'No session workflow set. Auto-detecting from document.',
               }),
             },
           ],

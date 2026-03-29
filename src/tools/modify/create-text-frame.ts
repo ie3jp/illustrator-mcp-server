@@ -70,7 +70,8 @@ if (preflight) {
       tf = targetLayer.textFrames.pointText([aiX, aiY]);
     }
 
-    tf.contents = params.contents || "";
+    var rawContents = params.contents || "";
+    tf.contents = rawContents.replace(/\n/g, "\r");
 
     if (params.name) {
       tf.name = params.name;
@@ -135,7 +136,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },

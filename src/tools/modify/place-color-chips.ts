@@ -147,7 +147,7 @@ if (preflight) {
               textY = chipY - chipSize - 4;
             }
             var textFrame = chipLayer.textFrames.add();
-            textFrame.contents = label;
+            textFrame.contents = label.replace(/\n/g, "\r");
             textFrame.position = [textX, textY];
             try {
               textFrame.textRange.characterAttributes.size = 7;
@@ -225,7 +225,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = await executeJsxHeavy(jsxCode, resolvedParams);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },

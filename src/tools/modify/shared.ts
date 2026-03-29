@@ -91,7 +91,7 @@ function applyStroke(item, strokeObj, defaultStroked) {
   }
   if (strokeObj.color) {
     item.strokeColor = createColor(strokeObj.color);
+    item.stroked = true;
   }
-  item.stroked = true;
 }
 `;

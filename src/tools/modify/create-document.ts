@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { invalidateAutoDetectCache } from '../session.js';
 
 const jsxCode = `
 try {
@@ -66,6 +67,7 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });
+      invalidateAutoDetectCache();
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

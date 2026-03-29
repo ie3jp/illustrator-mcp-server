@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { executeJsx } from '../executor/jsx-runner.js';
 
 export type WorkflowType = 'web' | 'print' | 'video' | 'unknown';
 export type CoordinateSystem = 'artboard-web' | 'document';
@@ -7,6 +8,8 @@ export type CoordinateSystem = 'artboard-web' | 'document';
 
 let sessionCoordinateSystem: CoordinateSystem | null = null;
 let sessionWorkflow: WorkflowType | null = null;
+/** true when user/AI explicitly called set_workflow */
+let sessionExplicit = false;
 
 export function getSessionCoordinateSystem(): CoordinateSystem | null {
   return sessionCoordinateSystem;
@@ -22,22 +25,128 @@ export function setSession(
 ): void {
   sessionWorkflow = workflow;
   sessionCoordinateSystem = coordinateSystem;
+  sessionExplicit = true;
 }
 
 export function clearSession(): void {
   sessionWorkflow = null;
   sessionCoordinateSystem = null;
+  sessionExplicit = false;
+  autoDetectCache = null;
+}
+
+/** ドキュメント切替時（create/close/open）に自動検出キャッシュのみ無効化 */
+export function invalidateAutoDetectCache(): void {
+  autoDetectCache = null;
+}
+
+// --- Auto-detection cache ---
+
+interface AutoDetectCache {
+  documentKey: string; // filePath or fileName to detect document switch
+  coordinateSystem: CoordinateSystem;
+  workflow: WorkflowType;
+}
+
+let autoDetectCache: AutoDetectCache | null = null;
+
+/** Lightweight JSX to fetch only document signals needed for workflow detection */
+const DETECT_SIGNALS_JSX = `
+try {
+  var err = preflightChecks();
+  if (err) {
+    writeResultFile(RESULT_PATH, err);
+  } else {
+    var doc = app.activeDocument;
+    var filePath = "";
+    try { filePath = doc.fullName.fsName; } catch (e) { filePath = ""; }
+
+    var colorMode = "unknown";
+    if (doc.documentColorSpace === DocumentColorSpace.CMYK) colorMode = "CMYK";
+    else if (doc.documentColorSpace === DocumentColorSpace.RGB) colorMode = "RGB";
+
+    var colorProfile = "";
+    try { colorProfile = doc.colorProfileName; } catch (e) {}
+
+    var rulerUnits = "unknown";
+    try {
+      var ru = doc.rulerUnits;
+      if (ru === RulerUnits.Pixels) rulerUnits = "px";
+      else if (ru === RulerUnits.Points) rulerUnits = "pt";
+      else if (ru === RulerUnits.Millimeters) rulerUnits = "mm";
+      else if (ru === RulerUnits.Centimeters) rulerUnits = "cm";
+      else if (ru === RulerUnits.Inches) rulerUnits = "in";
+      else if (ru === RulerUnits.Picas) rulerUnits = "pica";
+    } catch (e) {}
+
+    var rasterRes = 0;
+    try { rasterRes = doc.rasterEffectSettings.resolution; } catch (e) {}
+
+    writeResultFile(RESULT_PATH, {
+      documentKey: filePath || doc.name,
+      colorMode: colorMode,
+      rulerUnits: rulerUnits,
+      rasterEffectResolution: rasterRes,
+      colorProfile: colorProfile
+    });
+  }
+} catch (e) {
+  writeResultFile(RESULT_PATH, { error: true, message: e.message });
+}
+`;
+
+/**
+ * Auto-detect coordinate system from the active document.
+ * Caches result keyed by document; invalidates on document switch.
+ */
+async function autoDetectCoordinateSystem(): Promise<CoordinateSystem> {
+  const result = await executeJsx(DETECT_SIGNALS_JSX);
+  if (!result || result.error) {
+    return 'artboard-web'; // fallback on error
+  }
+
+  const docKey = (result.documentKey as string) ?? '';
+  const hint = detectWorkflow({
+    colorMode: (result.colorMode as string) ?? 'unknown',
+    rulerUnits: (result.rulerUnits as string) ?? 'unknown',
+    rasterEffectResolution: (result.rasterEffectResolution as number) ?? 0,
+    colorProfile: (result.colorProfile as string) ?? '',
+  });
+
+  autoDetectCache = {
+    documentKey: docKey,
+    coordinateSystem: hint.recommendedCoordinateSystem,
+    workflow: hint.detectedWorkflow,
+  };
+
+  return hint.recommendedCoordinateSystem;
 }
 
 /**
- * Resolve coordinate_system: explicit param > session default > 'artboard-web'
- * Zod schema uses .optional() without .default() so undefined means "not specified".
+ * Resolve coordinate_system:
+ *   1. explicit param (per-tool call)
+ *   2. session default (set via set_workflow)
+ *   3. auto-detect from document signals (cached, invalidated on document switch)
+ *   4. fallback: 'artboard-web'
  */
-export function resolveCoordinateSystem(
+export async function resolveCoordinateSystem(
   explicit?: CoordinateSystem,
-): CoordinateSystem {
+): Promise<CoordinateSystem> {
   if (explicit !== undefined) return explicit;
-  return sessionCoordinateSystem ?? 'artboard-web';
+  if (sessionExplicit) return sessionCoordinateSystem!;
+
+  // キャッシュがあればそのまま使用（set_workflow / clearSession で無効化される）
+  // ドキュメント切替時は自動検出が再実行される
+  if (autoDetectCache) {
+    return autoDetectCache.coordinateSystem;
+  }
+
+  // キャッシュなし — 初回自動検出
+  try {
+    return await autoDetectCoordinateSystem();
+  } catch {
+    return 'artboard-web';
+  }
 }
 
 // --- Shared Zod schema (all tools import this instead of defining their own) ---
@@ -46,7 +155,7 @@ export const coordinateSystemSchema = z
   .enum(['artboard-web', 'document'])
   .optional()
   .describe(
-    'Coordinate system. Omit to use session default (set via set_workflow), falls back to artboard-web.',
+    'Coordinate system. Omit to auto-detect from document (CMYK→document, RGB→artboard-web). Override via set_workflow.',
   );
 
 // --- Workflow detection ---

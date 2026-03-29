@@ -150,7 +150,7 @@ export function register(server: McpServer): void {
     async (params) => {
       const resolvedParams = {
         ...params,
-        coordinate_system: resolveCoordinateSystem(params.coordinate_system),
+        coordinate_system: await resolveCoordinateSystem(params.coordinate_system),
       };
       const result = await executeJsx(jsxCode, resolvedParams);
 

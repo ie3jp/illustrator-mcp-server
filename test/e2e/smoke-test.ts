@@ -12,7 +12,6 @@ import { deflateSync } from 'zlib';
 
 const PASS = '✓';
 const FAIL = '✗';
-const SKIP = '○';
 
 interface TestResult {
   name: string;
@@ -36,15 +35,19 @@ async function createClient(): Promise<Client> {
 async function callTool(client: Client, name: string, params: Record<string, unknown> = {}): Promise<unknown> {
   const result = await client.callTool({ name, arguments: params });
   const content = result.content as Array<{ type: string; text: string }>;
-  if (content && content.length > 0 && content[0].type === 'text') {
-    const text = content[0].text;
-    // エラーレスポンスの場合、JSX runner が throw するため plain text になる
-    // JSON パースを試み、失敗したら error オブジェクトとして返す
-    try {
-      return JSON.parse(text);
-    } catch {
-      return { error: true, message: text };
+  if (!content || content.length === 0) throw new Error('No content in response');
+
+  // 複数ブロックの場合、最後の JSON パース可能なブロックを返す（サマリ+JSON パターン対応）
+  for (let i = content.length - 1; i >= 0; i--) {
+    if (content[i].type === 'text') {
+      try {
+        return JSON.parse(content[i].text);
+      } catch { /* not JSON, try next */ }
     }
+  }
+  // JSON ブロックがなければ最初のテキストを error として返す
+  if (content[0].type === 'text') {
+    return { error: true, message: content[0].text };
   }
   throw new Error('No text content in response');
 }
@@ -286,6 +289,36 @@ async function main(): Promise<void> {
     embeddedImageUuid = result.uuid;
   });
 
+  // ダミーテキスト（check_text_consistency 検証用）
+  // 各パターンの検出と、日本語でありがちなダミー表現を網羅的にテスト
+  const dummyTextCases = [
+    { contents: 'Lorem ipsum dolor sit amet', name: '__e2e_dummy_lorem', label: 'Lorem ipsum' },
+    { contents: 'テキストが入ります', name: '__e2e_dummy_hairu', label: 'テキストが入ります' },
+    { contents: 'ここにテキストを入れてね', name: '__e2e_dummy_koko', label: 'ここにテキスト' },
+    { contents: 'ダミーテキストです', name: '__e2e_dummy_dmy', label: 'ダミーテキスト' },
+    { contents: 'ダミー', name: '__e2e_dummy_dmy_exact', label: 'ダミー' },
+    { contents: '仮テキストを配置', name: '__e2e_dummy_kari', label: '仮テキスト' },
+    { contents: 'テキストを入力してください', name: '__e2e_dummy_input', label: 'テキストを入力' },
+    { contents: '○○○', name: '__e2e_dummy_maru', label: '○○○ placeholder' },
+    { contents: '●●●', name: '__e2e_dummy_kuro', label: '●●● placeholder' },
+    { contents: '△△△', name: '__e2e_dummy_sankaku', label: '△△△ placeholder' },
+  ];
+  const dummyTextUuids: Record<string, string> = {};
+
+  for (let di = 0; di < dummyTextCases.length; di++) {
+    const dc = dummyTextCases[di];
+    await test(`create_text_frame → ${dc.name} ("${dc.contents}")`, async () => {
+      const result = await callTool(client, 'create_text_frame', {
+        x: 50, y: 350 + di * 20,
+        contents: dc.contents,
+        font_size: 12,
+        name: dc.name,
+        layer_name: 'TestLayer-Text',
+      }) as any;
+      assert(typeof result.uuid === 'string' && result.uuid.length > 0, 'should return uuid');
+      dummyTextUuids[dc.label] = result.uuid;
+    });
+  }
   // ============================================================
   // Phase 1: 読み取り系
   // ============================================================
@@ -333,10 +366,38 @@ async function main(): Promise<void> {
     assert(Array.isArray(result.textFrames), 'textFrames should be array');
   });
 
-  await test('get_text_frame_detail (by UUID)', async () => {
+  await test('get_text_frame_detail → characterRuns + kerningPairs', async () => {
     const detail = await callTool(client, 'get_text_frame_detail', { uuid: textUuid }) as any;
     assert(typeof detail.contents === 'string', 'should have contents');
     assert(detail.contents.includes('E2E Test'), `contents should include "E2E Test", got "${detail.contents}"`);
+
+    // characterRuns は常に返る
+    assert(Array.isArray(detail.characterRuns), 'should have characterRuns array');
+    assert(detail.characterRuns.length >= 1, `should have >= 1 run, got ${detail.characterRuns.length}`);
+
+    // 全ランのテキストを結合すると元のテキストと一致する
+    const joined = detail.characterRuns.map((r: any) => r.text).join('');
+    assert(joined === detail.contents, `joined runs should equal contents: "${joined}" vs "${detail.contents}"`);
+
+    // 各ランに必要なプロパティが揃っている
+    for (const run of detail.characterRuns) {
+      assert(typeof run.text === 'string' && run.text.length > 0, 'run should have text');
+      assert(typeof run.fontFamily === 'string', 'run should have fontFamily');
+      assert(typeof run.fontSize === 'number', 'run should have fontSize');
+      assert(typeof run.tracking === 'number', 'run should have tracking');
+      assert(typeof run.kerningMethod === 'string', 'run should have kerningMethod');
+      assert(typeof run.proportionalMetrics === 'boolean', 'run should have proportionalMetrics');
+      assert(typeof run.akiLeft === 'number', 'run should have akiLeft');
+      assert(typeof run.akiRight === 'number', 'run should have akiRight');
+      assert(typeof run.tsume === 'number', 'run should have tsume');
+      assert(typeof run.baselineShift === 'number', 'run should have baselineShift');
+      assert(typeof run.horizontalScale === 'number', 'run should have horizontalScale');
+      assert(typeof run.verticalScale === 'number', 'run should have verticalScale');
+      assert(typeof run.rotation === 'number', 'run should have rotation');
+    }
+
+    // kerningPairs は常に返る（手動カーニングがなければ空配列）
+    assert(Array.isArray(detail.kerningPairs), 'should have kerningPairs array');
   });
 
   await test('get_document_structure', async () => {
@@ -417,6 +478,122 @@ async function main(): Promise<void> {
     assert(result.count >= 1, `should find >= 1 text, got ${result.count}`);
   });
 
+  // --- check_contrast ---
+
+  await test('check_contrast (manual: red vs white)', async () => {
+    const result = await callTool(client, 'check_contrast', {
+      color1: { type: 'rgb', r: 255, g: 0, b: 0 },
+      color2: { type: 'rgb', r: 255, g: 255, b: 255 },
+    }) as any;
+    assert(typeof result.contrastRatio === 'number', 'should have contrastRatio');
+    assert(result.contrastRatio > 1, `contrastRatio should be > 1, got ${result.contrastRatio}`);
+    assert(typeof result.wcagAA_normal === 'boolean', 'should have wcagAA_normal');
+    assert(typeof result.wcagAA_large === 'boolean', 'should have wcagAA_large');
+    assert(typeof result.wcagAAA === 'boolean', 'should have wcagAAA');
+    assert(result.color1_rgb.r === 255 && result.color1_rgb.g === 0, 'color1_rgb should match input');
+    assert(result.color2_rgb.r === 255 && result.color2_rgb.g === 255, 'color2_rgb should match input');
+  });
+
+  await test('check_contrast (manual: CMYK)', async () => {
+    const result = await callTool(client, 'check_contrast', {
+      color1: { type: 'cmyk', c: 0, m: 100, y: 100, k: 0 },
+      color2: { type: 'cmyk', c: 0, m: 0, y: 0, k: 0 },
+    }) as any;
+    assert(typeof result.contrastRatio === 'number', 'should have contrastRatio');
+    assert(result.contrastRatio > 1, 'CMYK contrast should be > 1');
+  });
+
+  await test('check_contrast (auto_detect)', async () => {
+    const result = await callTool(client, 'check_contrast', {
+      auto_detect: true,
+    }) as any;
+    assert(typeof result.pairCount === 'number', 'should have pairCount');
+    assert(Array.isArray(result.pairs), 'should have pairs array');
+    // Each pair should have the expected structure
+    if (result.pairs.length > 0) {
+      const p = result.pairs[0];
+      assert(typeof p.contrastRatio === 'number', 'pair should have contrastRatio');
+      assert(typeof p.wcagAA_normal === 'boolean', 'pair should have wcagAA_normal');
+      assert(typeof p.foreground === 'object', 'pair should have foreground');
+      assert(typeof p.background === 'object', 'pair should have background');
+    }
+  });
+
+  // --- extract_design_tokens ---
+
+  await test('extract_design_tokens (css)', async () => {
+    const result = await callTool(client, 'extract_design_tokens', { format: 'css' }) as any;
+    // CSS format returns non-JSON text, callTool wraps it as { error: true, message: text }
+    const text = result.message ?? result;
+    assert(typeof text === 'string', 'should return a string');
+    assert(text.includes(':root'), `CSS output should contain :root, got: ${text.substring(0, 80)}`);
+    assert(text.includes('--color-'), 'CSS output should contain --color- variables');
+  });
+
+  await test('extract_design_tokens (json)', async () => {
+    const result = await callTool(client, 'extract_design_tokens', { format: 'json' }) as any;
+    assert(typeof result === 'object', 'should return an object');
+    assert(typeof result.color === 'object', 'should have color object');
+    assert(typeof result.typography === 'object', 'should have typography object');
+    assert(Array.isArray(result.spacing), 'should have spacing array');
+  });
+
+  await test('extract_design_tokens (tailwind)', async () => {
+    const result = await callTool(client, 'extract_design_tokens', { format: 'tailwind' }) as any;
+    const text = result.message ?? result;
+    assert(typeof text === 'string', 'should return a string');
+    assert(text.includes('module.exports'), `Tailwind output should contain module.exports, got: ${text.substring(0, 80)}`);
+    assert(text.includes('colors'), 'Tailwind output should contain colors section');
+  });
+
+  // --- get_separation_info ---
+
+  await test('get_separation_info', async () => {
+    const result = await callTool(client, 'get_separation_info') as any;
+    assert(typeof result.documentColorSpace === 'string', 'should have documentColorSpace');
+    assert(result.documentColorSpace === 'RGB', `should be RGB document, got ${result.documentColorSpace}`);
+    assert(typeof result.separationCount === 'number', 'should have separationCount');
+    assert(Array.isArray(result.separations), 'should have separations array');
+    if (result.separations.length > 0) {
+      const sep = result.separations[0];
+      assert(typeof sep.name === 'string', 'separation should have name');
+      assert(typeof sep.type === 'string', 'separation should have type');
+      assert(typeof sep.usageCount === 'number', 'separation should have usageCount');
+    }
+  });
+
+  // --- check_text_consistency ---
+
+  await test('check_text_consistency → detect all dummy patterns', async () => {
+    const result = await callTool(client, 'check_text_consistency') as any;
+    assert(typeof result.totalFrames === 'number', 'should have totalFrames');
+    // __e2e_text (Phase 0) + 9 dummy text frames = 10+
+    assert(result.totalFrames >= 10, `should have >= 10 text frames, got ${result.totalFrames}`);
+    assert(Array.isArray(result.dummyTexts), 'should have dummyTexts array');
+    assert(Array.isArray(result.allTexts), 'should have allTexts array');
+    assert(Array.isArray(result.knownVariations), 'should have knownVariations array');
+
+    // 全ダミーパターンが検出されることを検証
+    const expectedPatterns = dummyTextCases.map((dc) => dc.label);
+    for (const label of expectedPatterns) {
+      const hit = result.dummyTexts.find((d: any) => d.pattern === label);
+      assert(hit !== undefined, `should detect pattern: "${label}"`);
+      if (hit && dummyTextUuids[label]) {
+        assert(hit.uuid === dummyTextUuids[label], `UUID should match for "${label}"`);
+      }
+    }
+    assert(result.dummyTexts.length >= expectedPatterns.length,
+      `should detect >= ${expectedPatterns.length} dummy texts, got ${result.dummyTexts.length}`);
+  });
+
+  await test('check_text_consistency (artboard_index: 0)', async () => {
+    const result = await callTool(client, 'check_text_consistency', {
+      artboard_index: 0,
+    }) as any;
+    assert(typeof result.totalFrames === 'number', 'should have totalFrames');
+    assert(result.totalFrames >= 1, 'artboard 0 should have text frames');
+  });
+
   // ============================================================
   // Phase 2: 操作系
   // ============================================================
@@ -436,6 +613,150 @@ async function main(): Promise<void> {
   await test('find_objects → modified name', async () => {
     const result = await callTool(client, 'find_objects', { name: modifiedRectName }) as any;
     assert(result.count === 1, `should find 1 modified rect, got ${result.count}`);
+  });
+
+  // --- manage_layers ---
+
+  await test('manage_layers → add "__e2e_manage_test"', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'add',
+      layer_name: '__e2e_manage_test',
+    }) as any;
+    assert(result.success === true, 'add layer should succeed');
+    assert(result.layer.name === '__e2e_manage_test', `layer name should match, got ${result.layer.name}`);
+  });
+
+  await test('manage_layers → rename "__e2e_manage_test" → "__e2e_manage_renamed"', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'rename',
+      layer_name: '__e2e_manage_test',
+      new_name: '__e2e_manage_renamed',
+    }) as any;
+    assert(result.success === true, 'rename should succeed: ' + JSON.stringify(result));
+    assert(result.to === '__e2e_manage_renamed', `should rename to __e2e_manage_renamed, got ${result.to}`);
+  });
+
+  await test('manage_layers → lock', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'lock',
+      layer_name: '__e2e_manage_renamed',
+    }) as any;
+    assert(result.success === true, 'lock should succeed');
+    assert(result.layer.locked === true, 'layer should be locked');
+  });
+
+  await test('manage_layers → unlock', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'unlock',
+      layer_name: '__e2e_manage_renamed',
+    }) as any;
+    assert(result.success === true, 'unlock should succeed');
+    assert(result.layer.locked === false, 'layer should be unlocked');
+  });
+
+  await test('manage_layers → hide', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'hide',
+      layer_name: '__e2e_manage_renamed',
+    }) as any;
+    assert(result.success === true, 'hide should succeed');
+    assert(result.layer.visible === false, 'layer should be hidden');
+  });
+
+  await test('manage_layers → show', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'show',
+      layer_name: '__e2e_manage_renamed',
+    }) as any;
+    assert(result.success === true, 'show should succeed');
+    assert(result.layer.visible === true, 'layer should be visible');
+  });
+
+  await test('manage_layers → reorder (position: 0)', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'reorder',
+      layer_name: '__e2e_manage_renamed',
+      position: 0,
+    }) as any;
+    assert(result.success === true, 'reorder should succeed');
+  });
+
+  await test('manage_layers → delete "__e2e_manage_renamed"', async () => {
+    const result = await callTool(client, 'manage_layers', {
+      action: 'delete',
+      layer_name: '__e2e_manage_renamed',
+    }) as any;
+    assert(result.success === true, 'delete should succeed');
+    assert(result.deletedLayer.name === '__e2e_manage_renamed', 'deleted layer name should match');
+  });
+
+  // --- align_objects ---
+
+  await test('align_objects → left alignment', async () => {
+    const result = await callTool(client, 'align_objects', {
+      uuids: [rectUuid, ellipseUuid],
+      alignment: 'left',
+    }) as any;
+    assert(result.success === true, 'align should succeed');
+    assert(result.alignedCount === 2, `should align 2 objects, got ${result.alignedCount}`);
+  });
+
+  await test('align_objects → distribute horizontal', async () => {
+    const result = await callTool(client, 'align_objects', {
+      uuids: [rectUuid, ellipseUuid, lineUuid],
+      distribute: 'horizontal',
+    }) as any;
+    assert(result.success === true, 'distribute should succeed');
+    assert(result.alignedCount === 3, `should distribute 3 objects, got ${result.alignedCount}`);
+  });
+
+  await test('align_objects → center_v, reference artboard', async () => {
+    const result = await callTool(client, 'align_objects', {
+      uuids: [rectUuid, ellipseUuid],
+      alignment: 'center_v',
+      reference: 'artboard',
+    }) as any;
+    assert(result.success === true, 'artboard align should succeed');
+    assert(result.alignedCount === 2, `should align 2 objects, got ${result.alignedCount}`);
+  });
+
+  // --- replace_color ---
+
+  await test('replace_color → red fill to blue', async () => {
+    const result = await callTool(client, 'replace_color', {
+      from_color: { type: 'rgb', r: 255, g: 0, b: 0 },
+      to_color: { type: 'rgb', r: 0, g: 0, b: 255 },
+      target: 'fill',
+    }) as any;
+    assert(result.success === true, 'replace_color should succeed');
+    assert(typeof result.replacedCount === 'number', 'should have replacedCount');
+  });
+
+  await test('replace_color → with tolerance', async () => {
+    const result = await callTool(client, 'replace_color', {
+      from_color: { type: 'rgb', r: 0, g: 0, b: 255 },
+      to_color: { type: 'rgb', r: 0, g: 200, b: 0 },
+      tolerance: 10,
+      target: 'both',
+    }) as any;
+    assert(result.success === true, 'replace_color with tolerance should succeed');
+    assert(typeof result.replacedCount === 'number', 'should have replacedCount');
+  });
+
+  // --- place_color_chips ---
+
+  await test('place_color_chips → right', async () => {
+    const result = await callTool(client, 'place_color_chips', {
+      position: 'right',
+      chip_size: 20,
+      include_info: true,
+      layer_name: '__e2e_color_chips',
+    }) as any;
+    assert(result.success === true, 'place_color_chips should succeed');
+    assert(typeof result.chipCount === 'number', 'should have chipCount');
+    assert(result.chipCount >= 1, `should place >= 1 chip, got ${result.chipCount}`);
+    assert(result.layerName === '__e2e_color_chips', `layer name should match, got ${result.layerName}`);
+    assert(result.position === 'right', `position should be right, got ${result.position}`);
   });
 
   await test('convert_to_outlines (TestLayer-Text)', async () => {
@@ -599,6 +920,76 @@ async function main(): Promise<void> {
     }) as any;
     assert(typeof result === 'object', 'should return a result object');
     assert(!result.error, 'should not return error: ' + (result.message || ''));
+  });
+
+  // --- resize_for_variation ---
+
+  await test('resize_for_variation → create 2 size variations', async () => {
+    const result = await callTool(client, 'resize_for_variation', {
+      source_artboard_index: 0,
+      target_sizes: [
+        { width: 400, height: 300, name: 'E2E-Half' },
+        { width: 1600, height: 1200, name: 'E2E-Double' },
+      ],
+      scale_mode: 'proportional',
+    }) as any;
+    assert(result.success === true, 'resize_for_variation should succeed: ' + JSON.stringify(result).substring(0, 200));
+    assert(result.sourceArtboard === 0, `source should be 0, got ${result.sourceArtboard}`);
+    assert(result.createdCount === 2, `should create 2 variations, got ${result.createdCount}`);
+    assert(Array.isArray(result.artboards), 'should have artboards array');
+    assert(result.artboards.length === 2, `should have 2 artboard entries, got ${result.artboards.length}`);
+    for (const ab of result.artboards) {
+      assert(typeof ab.artboardIndex === 'number', 'artboard entry should have artboardIndex');
+      assert(typeof ab.width === 'number', 'artboard entry should have width');
+      assert(typeof ab.height === 'number', 'artboard entry should have height');
+      assert(typeof ab.scaleFactor === 'number', 'artboard entry should have scaleFactor');
+      assert(typeof ab.objectCount === 'number', 'artboard entry should have objectCount');
+    }
+  });
+
+  await test('resize_for_variation → fit_width mode', async () => {
+    const result = await callTool(client, 'resize_for_variation', {
+      source_artboard_index: 0,
+      target_sizes: [
+        { width: 600, height: 600, name: 'E2E-FitWidth' },
+      ],
+      scale_mode: 'fit_width',
+    }) as any;
+    assert(result.success === true, 'fit_width resize should succeed: ' + JSON.stringify(result).substring(0, 200));
+    assert(result.createdCount === 1, `should create 1 variation, got ${result.createdCount}`);
+  });
+
+  // --- set_workflow ---
+
+  await test('set_workflow → set web', async () => {
+    const result = await callTool(client, 'set_workflow', {
+      workflow: 'web',
+    }) as any;
+    assert(result.status === 'set', `status should be "set", got ${result.status}`);
+    assert(result.workflow === 'web', `workflow should be "web", got ${result.workflow}`);
+    assert(result.coordinateSystem === 'artboard-web', `coordinate should be artboard-web, got ${result.coordinateSystem}`);
+  });
+
+  await test('set_workflow → query current', async () => {
+    const result = await callTool(client, 'set_workflow', {}) as any;
+    assert(result.currentWorkflow === 'web', `current workflow should be "web", got ${result.currentWorkflow}`);
+    assert(typeof result.currentCoordinateSystem === 'string', 'should have currentCoordinateSystem');
+  });
+
+  await test('set_workflow → set print', async () => {
+    const result = await callTool(client, 'set_workflow', {
+      workflow: 'print',
+    }) as any;
+    assert(result.status === 'set', `status should be "set", got ${result.status}`);
+    assert(result.workflow === 'print', `workflow should be "print", got ${result.workflow}`);
+    assert(result.coordinateSystem === 'document', `print coordinate should be document, got ${result.coordinateSystem}`);
+  });
+
+  await test('set_workflow → clear', async () => {
+    const result = await callTool(client, 'set_workflow', {
+      clear: true,
+    }) as any;
+    assert(result.status === 'cleared', `status should be "cleared", got ${result.status}`);
   });
 
   // ============================================================

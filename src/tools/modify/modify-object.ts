@@ -101,7 +101,7 @@ if (preflight) {
       }
 
       if (typeof props.contents === "string") {
-        try { item.contents = props.contents; }
+        try { item.contents = props.contents.replace(/\n/g, "\r"); }
         catch(e) { errors.push("contents: " + e.message); }
       }
 
@@ -184,7 +184,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },

@@ -119,16 +119,6 @@ function detectDummyTexts(frames: TextFrame[]): DummyTextHit[] {
 }
 
 /**
- * Normalize text for comparison to detect known variation patterns.
- * Returns a canonical form for grouping.
- */
-function normalizeForVariation(text: string): { normalized: string; type: string } | null {
-  // Skip very short or very long strings
-  if (text.length < 2 || text.length > 200) return null;
-  return { normalized: text, type: 'raw' };
-}
-
-/**
  * Detect katakana long vowel variations: "サーバー" vs "サーバ"
  */
 function detectKatakanaLongVowel(frames: TextFrame[]): VariationGroup | null {
@@ -339,7 +329,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = (await executeJsx(jsxCode, resolvedParams)) as {
         totalFrames: number;
         frames: TextFrame[];

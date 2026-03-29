@@ -55,8 +55,8 @@ if (preflight) {
           var newRect = [offsetX, lastRect[1], offsetX + tgtWidthPt, lastRect[1] - tgtHeightPt];
 
           // Create new artboard
-          var newAbIdx = doc.artboards.add(newRect);
-          var newAb = doc.artboards[newAbIdx];
+          var newAb = doc.artboards.add(newRect);
+          var newAbIdx = doc.artboards.length - 1;
           if (target.name) {
             newAb.name = target.name;
           }
@@ -171,7 +171,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = await executeJsxHeavy(jsxCode, resolvedParams);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },

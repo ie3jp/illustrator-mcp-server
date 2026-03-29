@@ -129,7 +129,7 @@ try {
                   objectName: objName2,
                   fillOverprint: fillOP2,
                   strokeOverprint: strokeOP2,
-                  layerName: getParentLayerName(item),
+                  layerName: getParentLayerName(pathItem),
                   fillColor: fillColorObj2,
                   strokeColor: strokeColorObj2,
                   isK100: isK100_2,

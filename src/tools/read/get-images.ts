@@ -195,7 +195,7 @@ export function register(server: McpServer): void {
       },
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
       const result = (await executeJsx(jsxCode, resolvedParams)) as {
         imageCount: number;
         coordinateSystem: string;
