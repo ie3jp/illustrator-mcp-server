@@ -51,7 +51,10 @@ if (preflight) {
       };
 
       if (coordSystem === "artboard-web") {
-        info.position = { x: rect[0], y: -rect[1] };
+        // artboard-web モードでは各アートボード自体の origin は常に (0,0)
+        // ドキュメント上の絶対位置は rawPosition で返す
+        info.position = { x: 0, y: 0 };
+        info.rawPosition = { x: rect[0], y: -rect[1] };
       } else {
         info.position = { x: rect[0], y: rect[1] };
       }

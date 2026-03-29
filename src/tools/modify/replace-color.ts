@@ -41,10 +41,21 @@ if (preflight) {
     // Determine scope
     var pathSource;
     if (scope) {
-      try {
-        var layer = doc.layers.getByName(scope);
-        pathSource = layer.pathItems;
-      } catch(e) {
+      var foundLayer = null;
+      function findLayerByName(layers, name) {
+        for (var li = 0; li < layers.length; li++) {
+          if (layers[li].name === name) return layers[li];
+          try {
+            var sub = findLayerByName(layers[li].layers, name);
+            if (sub) return sub;
+          } catch(e2) {}
+        }
+        return null;
+      }
+      foundLayer = findLayerByName(doc.layers, scope);
+      if (foundLayer) {
+        pathSource = foundLayer.pathItems;
+      } else {
         writeResultFile(RESULT_PATH, { error: true, message: "Layer not found: " + scope });
         pathSource = null;
       }
@@ -95,8 +106,8 @@ export function register(server: McpServer): void {
       title: 'Replace Color',
       description: 'Find and replace colors across the document or within a specific layer',
       inputSchema: {
-        from_color: colorSchema.describe('Color to find'),
-        to_color: colorSchema.describe('Replacement color'),
+        from_color: colorSchema.unwrap().describe('Color to find (required)'),
+        to_color: colorSchema.unwrap().describe('Replacement color (required)'),
         tolerance: z
           .number()
           .min(0)

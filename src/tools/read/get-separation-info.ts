@@ -32,9 +32,9 @@ if (preflight) {
       try { spotInfo.color = colorToObject(spot.color); } catch(e) {}
       try {
         var sk = spot.spotKind;
-        if (sk === SpotColorKind.SPOTCMYK) spotInfo.spotKind = "CMYK";
-        else if (sk === SpotColorKind.SPOTRGB) spotInfo.spotKind = "RGB";
-        else if (sk === SpotColorKind.SPOTLAB) spotInfo.spotKind = "LAB";
+        if (sk === SpotColorKind.SpotCMYK) spotInfo.spotKind = "CMYK";
+        else if (sk === SpotColorKind.SpotRGB) spotInfo.spotKind = "RGB";
+        else if (sk === SpotColorKind.SpotLAB) spotInfo.spotKind = "LAB";
         else spotInfo.spotKind = sk.toString();
       } catch(e) { spotInfo.spotKind = "unknown"; }
       separations.push(spotInfo);

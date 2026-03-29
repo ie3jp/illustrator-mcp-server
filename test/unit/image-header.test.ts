@@ -321,8 +321,8 @@ describe('readImageDimensions', () => {
   });
 
   describe('error handling', () => {
-    it('returns null for non-existent file', () => {
-      expect(readImageDimensions('/tmp/does-not-exist-image-header-test.png')).toBeNull();
+    it('throws ENOENT for non-existent file', () => {
+      expect(() => readImageDimensions('/tmp/does-not-exist-image-header-test.png')).toThrow('ENOENT');
     });
     it('returns null for unrecognised format', () => {
       withTempFile('.bin', Buffer.from('not an image at all'), (p) => {

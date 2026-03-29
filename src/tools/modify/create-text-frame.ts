@@ -41,11 +41,17 @@ if (preflight) {
     var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var tf;
+    var rectPath = null;
     if (kind === "area") {
       var w = params.width || 100;
       var h = params.height || 100;
-      var rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
-      tf = targetLayer.textFrames.areaText(rectPath);
+      rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
+      try {
+        tf = targetLayer.textFrames.areaText(rectPath);
+      } catch (eArea) {
+        try { rectPath.remove(); } catch (_) {}
+        throw eArea;
+      }
     } else {
       tf = targetLayer.textFrames.pointText([aiX, aiY]);
     }

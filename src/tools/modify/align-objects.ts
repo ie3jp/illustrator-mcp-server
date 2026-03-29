@@ -20,7 +20,9 @@ if (preflight) {
     var distribute = params.distribute || null;
     var reference = params.reference || "selection";
 
-    if (!uuids || uuids.length < 2) {
+    if (!alignment && !distribute) {
+      writeResultFile(RESULT_PATH, { error: true, message: "At least one of alignment or distribute must be specified" });
+    } else if (!uuids || uuids.length < 2) {
       writeResultFile(RESULT_PATH, { error: true, message: "At least 2 UUIDs are required" });
     } else {
       // Collect items by UUID

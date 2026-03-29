@@ -113,6 +113,15 @@ if (preflight) {
       try { info.closed = item.closed; } catch (e) {}
       try { info.opacity = item.opacity; } catch (e) {}
 
+      // Extract rotation from transformation matrix
+      try {
+        var m = item.matrix;
+        if (m) {
+          var rad = Math.atan2(m.mValueB, m.mValueA);
+          info.transform.rotation = Math.round(rad * 180 / Math.PI * 100) / 100;
+        }
+      } catch (e) {}
+
       // fill
       // Note: ExtendScript does not expose per-fill opacity on pathItems.
       // item.opacity is the object-level opacity, exposed separately in info.opacity.

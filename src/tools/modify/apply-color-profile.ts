@@ -35,7 +35,8 @@ if (preflight) {
 
     if (!hasError) {
       writeResultFile(RESULT_PATH, {
-        success: true,
+        assigned: true,
+        converted: false,
         previousProfile: oldProfile,
         newProfile: profile,
         note: note
@@ -49,10 +50,10 @@ if (preflight) {
 
 export function register(server: McpServer): void {
   server.registerTool(
-    'apply_color_profile',
+    'assign_color_profile',
     {
-      title: 'Apply Color Profile',
-      description: 'Apply or convert color profile. Note: Illustrator will be activated (brought to foreground) during execution.',
+      title: 'Assign Color Profile',
+      description: 'Assign (tag) a color profile to the document. WARNING: This only changes the profile tag — it does NOT convert color values (ICC conversion). For full conversion, use Edit > Convert to Profile in Illustrator. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         profile: z.string().describe('Color profile name or path'),
       },

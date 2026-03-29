@@ -63,7 +63,18 @@ if (preflight) {
       }
 
       if (typeof props.rotation === "number") {
-        try { item.rotate(props.rotation); }
+        try {
+          if (props.rotation_mode === "absolute") {
+            // 現在の回転角を Matrix から算出し、差分を rotate() に渡す
+            var m = item.matrix;
+            var currentRad = Math.atan2(m.mValueB, m.mValueA);
+            var currentDeg = currentRad * 180 / Math.PI;
+            var delta = props.rotation - currentDeg;
+            item.rotate(delta);
+          } else {
+            item.rotate(props.rotation);
+          }
+        }
         catch(e) { errors.push("rotation: " + e.message); }
       }
 
@@ -139,7 +150,8 @@ export function register(server: McpServer): void {
             fill: colorSchema.describe('Fill color'),
             stroke: strokeSchema.describe('Stroke settings'),
             opacity: z.number().optional().describe('Opacity (0-100)'),
-            rotation: z.number().optional().describe('Rotation delta in degrees (additive — each call adds to current rotation)'),
+            rotation: z.number().optional().describe('Rotation in degrees. Default mode is "delta" (additive). Use rotation_mode: "absolute" for target angle.'),
+            rotation_mode: z.enum(['delta', 'absolute']).optional().default('delta').describe('delta = add to current rotation, absolute = set to exact angle'),
             name: z.string().optional().describe('Object name'),
             contents: z.string().optional().describe('Text contents (for text frames)'),
             font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),

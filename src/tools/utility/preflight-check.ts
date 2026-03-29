@@ -39,7 +39,7 @@ if (preflight) {
         } else if (color.typename === "RGBColor") {
           if (color.red === 255 && color.green === 255 && color.blue === 255) return true;
         } else if (color.typename === "GrayColor") {
-          if (color.gray === 0) return true;
+          if (color.gray === 100) return true;
         }
       } catch(e) {}
       return false;

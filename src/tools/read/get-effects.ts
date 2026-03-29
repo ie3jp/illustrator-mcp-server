@@ -33,7 +33,7 @@ if (preflight) {
       if (mode === BlendModes.DIFFERENCE) return "difference";
       if (mode === BlendModes.EXCLUSION) return "exclusion";
       if (mode === BlendModes.HUE) return "hue";
-      if (mode === BlendModes.SATURATION) return "saturationBlend";
+      if (mode === BlendModes.SATURATIONBLEND) return "saturationBlend";
       if (mode === BlendModes.COLOR) return "colorBlend";
       if (mode === BlendModes.LUMINOSITY) return "luminosity";
       return "unknown";
@@ -128,8 +128,17 @@ if (preflight) {
         }
       }
     } else {
-      for (var j = 0; j < doc.pageItems.length; j++) {
-        items.push(getEffectInfo(doc.pageItems[j], coordSystem));
+      function collectEffectItems(container) {
+        for (var j = 0; j < container.pageItems.length; j++) {
+          var pi = container.pageItems[j];
+          items.push(getEffectInfo(pi, coordSystem));
+          if (pi.typename === "GroupItem") {
+            try { collectEffectItems(pi); } catch (e) {}
+          }
+        }
+      }
+      for (var li = 0; li < doc.layers.length; li++) {
+        collectEffectItems(doc.layers[li]);
       }
     }
 

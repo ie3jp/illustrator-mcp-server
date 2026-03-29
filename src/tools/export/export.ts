@@ -148,13 +148,15 @@ if (preflight) {
           if (typeof svgOpts.embed_images !== "undefined") {
             opts.embedRasterImages = svgOpts.embed_images;
           }
-          if (svgOpts.id_naming === "layer") {
-            opts.idType = SVGIdType.SVGIDMINIMAL;
-          } else if (svgOpts.id_naming === "object") {
-            opts.idType = SVGIdType.SVGIDUNIQUE;
-          } else {
-            opts.idType = SVGIdType.SVGIDREGULAR;
-          }
+          try {
+            if (svgOpts.id_naming === "layer") {
+              opts.idType = SVGIdType.SVGIDMINIMAL;
+            } else if (svgOpts.id_naming === "object") {
+              opts.idType = SVGIdType.SVGIDUNIQUE;
+            } else {
+              opts.idType = SVGIdType.SVGIDREGULAR;
+            }
+          } catch (_) { /* SVGIdType may not exist in some ExtendScript versions */ }
           if (typeof svgOpts.decimal_places === "number") {
             opts.coordinatePrecision = svgOpts.decimal_places;
           }
@@ -185,8 +187,6 @@ if (preflight) {
           if (targetType === "artboard") {
             doc.artboards.setActiveArtboardIndex(artboardIndex);
             pngOpts.artBoardClipping = true;
-            pngOpts.saveMultipleArtboards = true;
-            pngOpts.artboardRange = String(artboardIndex + 1);
           } else if (targetType === "selection") {
             pngOpts.artBoardClipping = false;
           }
@@ -204,8 +204,6 @@ if (preflight) {
           if (targetType === "artboard") {
             doc.artboards.setActiveArtboardIndex(artboardIndex);
             jpgOpts.artBoardClipping = true;
-            jpgOpts.saveMultipleArtboards = true;
-            jpgOpts.artboardRange = String(artboardIndex + 1);
           } else if (targetType === "selection") {
             jpgOpts.artBoardClipping = false;
           }
@@ -220,7 +218,13 @@ if (preflight) {
         if (!verifyFile.exists) {
           writeResultFile(RESULT_PATH, { error: true, message: "Export completed but output file was not created. The path may not be writable: " + outputPath });
         } else {
-          writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+          var resultInfo = { success: true, output_path: outputPath, format: format };
+          if (format === "png" || format === "jpg") {
+            var effectiveDpi = (rasterOpts.dpi || 72) * scale;
+            resultInfo.dpi = effectiveDpi;
+            resultInfo.scale = scale;
+          }
+          writeResultFile(RESULT_PATH, resultInfo);
         }
       }
 

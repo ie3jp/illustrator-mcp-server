@@ -914,8 +914,8 @@ async function main(): Promise<void> {
     assert(typeof result === 'object', 'should return an object');
   });
 
-  await test('apply_color_profile (sRGB)', async () => {
-    const result = await callTool(client, 'apply_color_profile', {
+  await test('assign_color_profile (sRGB)', async () => {
+    const result = await callTool(client, 'assign_color_profile', {
       profile: 'sRGB IEC61966-2.1',
     }) as any;
     assert(typeof result === 'object', 'should return a result object');

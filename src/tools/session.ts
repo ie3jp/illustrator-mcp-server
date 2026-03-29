@@ -50,6 +50,22 @@ interface AutoDetectCache {
 
 let autoDetectCache: AutoDetectCache | null = null;
 
+/** Minimal JSX to fetch only the current document key (for cache validation) */
+const GET_DOCUMENT_KEY_JSX = `
+try {
+  if (app.documents.length === 0) {
+    writeResultFile(RESULT_PATH, { error: true, message: "No document open" });
+  } else {
+    var doc = app.activeDocument;
+    var fp = "";
+    try { fp = doc.fullName.fsName; } catch (e) {}
+    writeResultFile(RESULT_PATH, { documentKey: fp || doc.name });
+  }
+} catch (e) {
+  writeResultFile(RESULT_PATH, { error: true, message: e.message });
+}
+`;
+
 /** Lightweight JSX to fetch only document signals needed for workflow detection */
 const DETECT_SIGNALS_JSX = `
 try {
@@ -135,10 +151,22 @@ export async function resolveCoordinateSystem(
   if (explicit !== undefined) return explicit;
   if (sessionExplicit) return sessionCoordinateSystem!;
 
-  // キャッシュがあればそのまま使用（set_workflow / clearSession で無効化される）
-  // ドキュメント切替時は自動検出が再実行される
+  // キャッシュがあれば、現在のドキュメントキーと比較して有効性を確認
   if (autoDetectCache) {
-    return autoDetectCache.coordinateSystem;
+    try {
+      const keyResult = await executeJsx(GET_DOCUMENT_KEY_JSX);
+      if (keyResult && !keyResult.error) {
+        const currentKey = (keyResult.documentKey as string) ?? '';
+        if (currentKey === autoDetectCache.documentKey) {
+          return autoDetectCache.coordinateSystem;
+        }
+        // ドキュメントが変わっている — キャッシュ無効化して再検出
+        autoDetectCache = null;
+      }
+    } catch {
+      // キー取得失敗時はキャッシュを信頼せず再検出へフォールスルー
+      autoDetectCache = null;
+    }
   }
 
   // キャッシュなし — 初回自動検出

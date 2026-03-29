@@ -82,12 +82,24 @@ export function register(server: McpServer): void {
         };
       }
 
-      const workflow: WorkflowType = params.workflow ?? 'unknown';
       const coordinateSystem: CoordinateSystem =
         params.coordinate_system ??
         (params.workflow ? workflowToCoord[params.workflow] : 'artboard-web');
+      // workflow が未指定の場合は coordinate_system から推定（不明なら 'unknown'）
+      let workflow: WorkflowType;
+      if (params.workflow) {
+        workflow = params.workflow;
+      } else if (coordinateSystem === 'document') {
+        workflow = 'print';
+      } else {
+        workflow = 'web';
+      }
 
       setSession(workflow, coordinateSystem);
+
+      const note = !params.workflow
+        ? ` (workflow inferred as "${workflow}" from coordinate_system)`
+        : '';
 
       return {
         content: [
@@ -97,7 +109,7 @@ export function register(server: McpServer): void {
               status: 'set',
               workflow,
               coordinateSystem,
-              message: `Session set to ${workflow} workflow. Default coordinate system: ${coordinateSystem}.`,
+              message: `Session set to ${workflow} workflow. Default coordinate system: ${coordinateSystem}.${note}`,
             }),
           },
         ],

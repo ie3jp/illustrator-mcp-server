@@ -65,8 +65,8 @@ describe('session state', () => {
     expect(getSessionCoordinateSystem()).toBeNull();
   });
 
-  it('cache persists until explicitly invalidated', async () => {
-    // First call: CMYK document
+  it('cache persists when same document, re-detects on document switch', async () => {
+    // First call: CMYK document — full detection
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -76,7 +76,26 @@ describe('session state', () => {
     });
     expect(await resolveCoordinateSystem(undefined)).toBe('document');
 
-    // Mock now returns RGB, but cache is still valid
+    // Second call: cache validation returns same documentKey — cache hit
+    mockExecuteJsx.mockResolvedValue({
+      documentKey: '/path/to/print-doc.ai',
+    });
+    expect(await resolveCoordinateSystem(undefined)).toBe('document'); // cached
+
+    // Third call: cache validation returns different documentKey — re-detects
+    mockExecuteJsx.mockResolvedValueOnce({
+      documentKey: '/path/to/web-doc.ai',
+    }).mockResolvedValueOnce({
+      documentKey: '/path/to/web-doc.ai',
+      colorMode: 'RGB',
+      rulerUnits: 'px',
+      rasterEffectResolution: 72,
+      colorProfile: 'sRGB',
+    });
+    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+
+    // After invalidation, also re-detects
+    invalidateAutoDetectCache();
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/web-doc.ai',
       colorMode: 'RGB',
@@ -84,35 +103,37 @@ describe('session state', () => {
       rasterEffectResolution: 72,
       colorProfile: 'sRGB',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document'); // cached
-
-    // After invalidation, re-detects
-    invalidateAutoDetectCache();
     expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
   });
 
-  it('cache is reused without additional JSX calls', async () => {
-    const docResult = {
+  it('cache hit validates documentKey via lightweight JSX', async () => {
+    // First call: full detection (1 JSX call)
+    mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
       rulerUnits: 'mm',
       rasterEffectResolution: 300,
       colorProfile: '',
-    };
-    mockExecuteJsx.mockResolvedValue(docResult);
+    });
 
     const first = await resolveCoordinateSystem(undefined); // populates cache
-    const second = await resolveCoordinateSystem(undefined); // uses cache directly
-
-    // Only the first call invokes JSX; second uses cache
     expect(mockExecuteJsx).toHaveBeenCalledTimes(1);
+
+    // Second call: cache validation (1 JSX call for documentKey check)
+    mockExecuteJsx.mockResolvedValueOnce({
+      documentKey: '/path/to/print-doc.ai',
+    });
+    const second = await resolveCoordinateSystem(undefined);
+
+    // 1 (initial detection) + 1 (cache key validation) = 2 calls
+    expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
     expect(first).toBe('document');
     expect(second).toBe('document');
   });
 
   it('invalidateAutoDetectCache forces re-detection on next call', async () => {
-    // First: CMYK doc
-    mockExecuteJsx.mockResolvedValue({
+    // First: CMYK doc (1 JSX call for full detection)
+    mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
       rulerUnits: 'mm',
@@ -125,8 +146,8 @@ describe('session state', () => {
     // Invalidate cache (simulates create_document / close_document)
     invalidateAutoDetectCache();
 
-    // Now return RGB doc
-    mockExecuteJsx.mockResolvedValue({
+    // Now return RGB doc (1 JSX call for full detection, no cache to validate)
+    mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/web-doc.ai',
       colorMode: 'RGB',
       rulerUnits: 'px',

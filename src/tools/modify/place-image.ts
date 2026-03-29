@@ -47,11 +47,17 @@ if (preflight) {
         placed.name = tag;
         placed.embed();
         // After embed(), 'placed' is no longer valid. Find the RasterItem by name.
+        var foundEmbedded = false;
         for (var ri = 0; ri < doc.rasterItems.length; ri++) {
           if (doc.rasterItems[ri].name === tag) {
             resultItem = doc.rasterItems[ri];
+            foundEmbedded = true;
             break;
           }
+        }
+        if (!foundEmbedded) {
+          writeResultFile(RESULT_PATH, { error: true, message: "embed() succeeded but resulting RasterItem could not be found" });
+          return;
         }
         // タグ名をクリア（ユーザー指定名があれば復元、なければ空文字に）
         resultItem.name = params.name || "";

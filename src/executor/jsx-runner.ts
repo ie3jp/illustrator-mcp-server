@@ -209,7 +209,10 @@ async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
     );
   }
   if (result.error) {
-    throw new Error(result.message || 'An unknown error occurred during JSX execution');
+    const parts: string[] = [];
+    if (result.message) parts.push(result.message as string);
+    if (result.line != null) parts.push(`(JSX line ${result.line})`);
+    throw new Error(parts.length > 0 ? parts.join(' ') : 'An unknown error occurred during JSX execution');
   }
   return result;
 }

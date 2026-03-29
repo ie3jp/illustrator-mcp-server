@@ -100,9 +100,9 @@ if (preflight) {
       try { spotInfo.color = colorToObject(spot.color); } catch (e) { spotInfo.color = { type: "unknown" }; }
       try {
         var st = spot.spotKind;
-        if (st === SpotColorKind.SPOTCMYK) spotInfo.spotKind = "CMYK";
-        else if (st === SpotColorKind.SPOTRGB) spotInfo.spotKind = "RGB";
-        else if (st === SpotColorKind.SPOTLAB) spotInfo.spotKind = "LAB";
+        if (st === SpotColorKind.SpotCMYK) spotInfo.spotKind = "CMYK";
+        else if (st === SpotColorKind.SpotRGB) spotInfo.spotKind = "RGB";
+        else if (st === SpotColorKind.SpotLAB) spotInfo.spotKind = "LAB";
         else spotInfo.spotKind = st.toString();
       } catch (e) { spotInfo.spotKind = "unknown"; }
       spots.push(spotInfo);
@@ -157,6 +157,38 @@ if (preflight) {
             }
           }
         } catch (e) {}
+      }
+
+      // テキストフレームの文字色を収集
+      for (var ti = 0; ti < doc.textFrames.length; ti++) {
+        try {
+          var tfItem = doc.textFrames[ti];
+          for (var ci = 0; ci < tfItem.textRanges.length; ci++) {
+            var ca = tfItem.textRanges[ci].characterAttributes;
+            try {
+              var tfc = colorToObject(ca.fillColor);
+              if (includeDiagnostics && tfc.type === "cmyk") {
+                tfc.inkCoverage = tfc.c + tfc.m + tfc.y + tfc.k;
+              }
+              if (includeDiagnostics) {
+                if (isCMYKDoc && tfc.type === "rgb") rgbInCmyk++;
+                if (!isCMYKDoc && tfc.type === "cmyk") cmykInRgb++;
+              }
+              usedFills.push(tfc);
+              if (tfc.type === "spot") {
+                var tSpName = tfc.name;
+                if (spotUsageCount[tSpName] === undefined) spotUsageCount[tSpName] = 0;
+                spotUsageCount[tSpName] = spotUsageCount[tSpName] + 1;
+              }
+            } catch (e3) {}
+            try {
+              if (ca.strokeWeight > 0) {
+                var tsc = colorToObject(ca.strokeColor);
+                usedStrokes.push(tsc);
+              }
+            } catch (e4) {}
+          }
+        } catch (e5) {}
       }
 
       // メッシュアイテム検出 (document-wide)
