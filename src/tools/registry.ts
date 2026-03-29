@@ -50,6 +50,27 @@ import { register as registerPlaceColorChips } from './modify/place-color-chips.
 import { register as registerCreateDocument } from './modify/create-document.js';
 import { register as registerCloseDocument } from './modify/close-document.js';
 
+// Phase 6: 新規ツール
+import { register as registerSaveDocument } from './modify/save-document.js';
+import { register as registerOpenDocument } from './modify/open-document.js';
+import { register as registerGroupObjects } from './modify/group-objects.js';
+import { register as registerUngroupObjects } from './modify/ungroup-objects.js';
+import { register as registerDuplicateObjects } from './modify/duplicate-objects.js';
+import { register as registerListFonts } from './read/list-fonts.js';
+import { register as registerManageArtboards } from './modify/manage-artboards.js';
+import { register as registerSetZOrder } from './modify/set-z-order.js';
+import { register as registerMoveToLayer } from './modify/move-to-layer.js';
+import { register as registerApplyGraphicStyle } from './modify/apply-graphic-style.js';
+import { register as registerManageSwatches } from './modify/manage-swatches.js';
+import { register as registerApplyTextStyle } from './modify/apply-text-style.js';
+import { register as registerCreateGradient } from './modify/create-gradient.js';
+import { register as registerManageLinkedImages } from './modify/manage-linked-images.js';
+import { register as registerUndo } from './modify/undo.js';
+import { register as registerManageDatasets } from './modify/manage-datasets.js';
+import { register as registerPlaceSymbol } from './modify/place-symbol.js';
+import { register as registerCreatePathText } from './modify/create-path-text.js';
+import { register as registerConvertCoordinate } from './read/convert-coordinate.js';
+
 export function registerAllTools(server: McpServer): void {
   // Phase 1: 基本読み取りツール
   registerGetDocumentInfo(server);
@@ -100,4 +121,25 @@ export function registerAllTools(server: McpServer): void {
   // Phase 5: ドキュメント管理
   registerCreateDocument(server);
   registerCloseDocument(server);
+
+  // Phase 6: 新規ツール
+  registerSaveDocument(server);
+  registerOpenDocument(server);
+  registerGroupObjects(server);
+  registerUngroupObjects(server);
+  registerDuplicateObjects(server);
+  registerListFonts(server);
+  registerManageArtboards(server);
+  registerSetZOrder(server);
+  registerMoveToLayer(server);
+  registerApplyGraphicStyle(server);
+  registerManageSwatches(server);
+  registerApplyTextStyle(server);
+  registerCreateGradient(server);
+  registerManageLinkedImages(server);
+  registerUndo(server);
+  registerManageDatasets(server);
+  registerPlaceSymbol(server);
+  registerCreatePathText(server);
+  registerConvertCoordinate(server);
 }
