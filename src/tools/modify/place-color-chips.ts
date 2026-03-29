@@ -142,7 +142,7 @@ if (preflight) {
               textY = chipY - chipSize - 4;
             }
             var textFrame = chipLayer.textFrames.add();
-            textFrame.contents = label.replace(/\n/g, "\r");
+            textFrame.contents = label.split(String.fromCharCode(10)).join(String.fromCharCode(13));
             textFrame.position = [textX, textY];
             try {
               textFrame.textRange.characterAttributes.size = 7;

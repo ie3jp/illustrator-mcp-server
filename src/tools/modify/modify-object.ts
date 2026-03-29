@@ -73,7 +73,7 @@ if (preflight) {
       }
 
       if (typeof props.contents === "string") {
-        try { item.contents = props.contents.replace(/\n/g, "\r"); }
+        try { item.contents = props.contents.split(String.fromCharCode(10)).join(String.fromCharCode(13)); }
         catch(e) { errors.push("contents: " + e.message); }
       }
 

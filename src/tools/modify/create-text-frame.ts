@@ -51,7 +51,7 @@ if (preflight) {
     }
 
     var rawContents = params.contents || "";
-    tf.contents = rawContents.replace(/\n/g, "\r");
+    tf.contents = rawContents.split(String.fromCharCode(10)).join(String.fromCharCode(13));
 
     if (params.name) {
       tf.name = params.name;
