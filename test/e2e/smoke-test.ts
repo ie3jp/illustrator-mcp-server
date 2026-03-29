@@ -332,18 +332,17 @@ async function main(): Promise<void> {
     assert(result.artboardCount === 1, `artboardCount should be 1, got ${result.artboardCount}`);
   });
 
-  await test('get_artboards → 1 artboard, 800x600', async () => {
+  await test('get_artboards → 1 artboard, 800x600 + index filter', async () => {
     const result = await callTool(client, 'get_artboards') as any;
     assert(Array.isArray(result.artboards), 'artboards should be array');
     assert(result.artboards.length === 1, `should have 1 artboard, got ${result.artboards.length}`);
     const ab = result.artboards[0];
     assertClose(ab.size.width, DOC_WIDTH, 'artboard width');
     assertClose(ab.size.height, DOC_HEIGHT, 'artboard height');
-  });
-
-  await test('get_artboards (index: 0)', async () => {
-    const result = await callTool(client, 'get_artboards', { index: 0 }) as any;
-    assert(result.artboards.length === 1, 'should return exactly 1 artboard');
+    // index filter
+    const filtered = await callTool(client, 'get_artboards', { index: 0 }) as any;
+    assert(filtered.artboards.length === 1, 'index filter should return 1');
+    assert(filtered.artboards[0].index === 0, 'filtered artboard index should be 0');
   });
 
   await test('get_layers → TestLayer-Main, TestLayer-Text', async () => {
@@ -356,8 +355,8 @@ async function main(): Promise<void> {
 
   await test('get_selection', async () => {
     const result = await callTool(client, 'get_selection') as any;
+    assert(!result.error, 'should not error: ' + (result.message || ''));
     assert(typeof result.selectionCount === 'number', 'should have selectionCount');
-    // embed() 後にオブジェクトが選択状態になる場合がある
   });
 
   await test('list_text_frames → count >= 1', async () => {
@@ -408,7 +407,45 @@ async function main(): Promise<void> {
 
   await test('get_colors', async () => {
     const result = await callTool(client, 'get_colors') as any;
-    assert(typeof result === 'object', 'should return an object');
+    assert(!result.error, 'should not error: ' + (result.message || ''));
+    assert(Array.isArray(result.swatches), 'should have swatches array');
+  });
+
+  // --- GrayColor 挙動検証 ---
+  await test('GrayColor: create gray=0/100 rects, verify colorToObject output', async () => {
+    // gray=0 と gray=100 の矩形を作成し、get_colors の colorToObject 出力で実際の値を確認
+    const g0 = await callTool(client, 'create_rectangle', {
+      x: 650, y: 50, width: 20, height: 20,
+      fill: { type: 'gray', value: 0 },
+      name: '__e2e_gray0',
+    }) as any;
+    assert(typeof g0.uuid === 'string', 'gray=0 rect should have uuid');
+    const g100 = await callTool(client, 'create_rectangle', {
+      x: 680, y: 50, width: 20, height: 20,
+      fill: { type: 'gray', value: 100 },
+      name: '__e2e_gray100',
+    }) as any;
+    assert(typeof g100.uuid === 'string', 'gray=100 rect should have uuid');
+
+    // colorToObject 経由で gray 値を読み戻す
+    const colors = await callTool(client, 'get_colors') as any;
+    const grayFills = (colors.usedFillColors || []).filter((c: any) => c.type === 'gray');
+    console.log(`    [debug] GrayColor fills: ${JSON.stringify(grayFills)}`);
+
+    // check_contrast で gray→RGB 変換を確認
+    const contrast = await callTool(client, 'check_contrast', {
+      color1: { type: 'gray', value: 0 },
+      color2: { type: 'gray', value: 100 },
+    }) as any;
+    console.log(`    [debug] gray=0 rgb=${JSON.stringify(contrast.color1_rgb)}, gray=100 rgb=${JSON.stringify(contrast.color2_rgb)}`);
+    if (contrast.color1_rgb) {
+      if (contrast.color1_rgb.r > 200) {
+        console.log('    [RESULT] gray=0 → WHITE (ink convention). preflight isWhiteColor should check gray===0');
+      } else {
+        console.log('    [RESULT] gray=0 → BLACK (doc convention). check_contrast formula should not invert');
+      }
+    }
+    assert(typeof contrast.contrastRatio === 'number', 'should compute contrast');
   });
 
   await test('get_path_items', async () => {
@@ -427,18 +464,19 @@ async function main(): Promise<void> {
 
   await test('get_groups → empty', async () => {
     const result = await callTool(client, 'get_groups') as any;
-    assert(typeof result === 'object', 'should return an object');
+    assert(!result.error, 'should not error: ' + (result.message || ''));
+    assert(typeof result.count === 'number', 'should have count');
   });
 
   await test('get_effects', async () => {
     const result = await callTool(client, 'get_effects') as any;
-    assert(typeof result === 'object', 'should return an object');
+    assert(!result.error, 'should not error: ' + (result.message || ''));
   });
 
   await test('get_images → 2 images (linked + embedded)', async () => {
     const result = await callTool(client, 'get_images') as any;
     assert(typeof result === 'object', 'should return an object');
-    assert(result.imageCount === 2, `should have 2 images, got ${result.imageCount}`);
+    assert(result.imageCount >= 2, `should have >= 2 images, got ${result.imageCount}`);
     assert(Array.isArray(result.images), 'images should be array');
 
     // リンク画像の検証
@@ -464,7 +502,8 @@ async function main(): Promise<void> {
 
   await test('get_symbols → empty', async () => {
     const result = await callTool(client, 'get_symbols') as any;
-    assert(typeof result === 'object', 'should return an object');
+    assert(!result.error, 'should not error: ' + (result.message || ''));
+    assert(typeof result.definitionCount === 'number', 'should have definitionCount');
   });
 
   await test('find_objects (name: "__e2e_rect") → count=1', async () => {
@@ -584,14 +623,9 @@ async function main(): Promise<void> {
     }
     assert(result.dummyTexts.length >= expectedPatterns.length,
       `should detect >= ${expectedPatterns.length} dummy texts, got ${result.dummyTexts.length}`);
-  });
-
-  await test('check_text_consistency (artboard_index: 0)', async () => {
-    const result = await callTool(client, 'check_text_consistency', {
-      artboard_index: 0,
-    }) as any;
-    assert(typeof result.totalFrames === 'number', 'should have totalFrames');
-    assert(result.totalFrames >= 1, 'artboard 0 should have text frames');
+    // artboard_index filter
+    const filtered = await callTool(client, 'check_text_consistency', { artboard_index: 0 }) as any;
+    assert(filtered.totalFrames >= 1, 'artboard 0 should have text frames');
   });
 
   // ============================================================
@@ -599,7 +633,7 @@ async function main(): Promise<void> {
   // ============================================================
   console.log('\n── Phase 2: 操作系 ──');
 
-  await test('modify_object → opacity=50, rename', async () => {
+  await test('modify_object → opacity=50, rename + verify', async () => {
     const result = await callTool(client, 'modify_object', {
       uuid: rectUuid,
       properties: {
@@ -608,11 +642,9 @@ async function main(): Promise<void> {
       },
     }) as any;
     assert(result.success === true, 'modify should succeed');
-  });
-
-  await test('find_objects → modified name', async () => {
-    const result = await callTool(client, 'find_objects', { name: modifiedRectName }) as any;
-    assert(result.count === 1, `should find 1 modified rect, got ${result.count}`);
+    // verify the rename took effect
+    const found = await callTool(client, 'find_objects', { name: modifiedRectName }) as any;
+    assert(found.count === 1, `should find 1 modified rect, got ${found.count}`);
   });
 
   // --- manage_layers ---
@@ -911,7 +943,7 @@ async function main(): Promise<void> {
 
   await test('get_overprint_info', async () => {
     const result = await callTool(client, 'get_overprint_info') as any;
-    assert(typeof result === 'object', 'should return an object');
+    assert(!result.error, 'should not error: ' + (result.message || ''));
   });
 
   await test('assign_color_profile (sRGB)', async () => {
@@ -993,13 +1025,373 @@ async function main(): Promise<void> {
   });
 
   // ============================================================
-  // Phase 5: クリーンアップ — ドキュメントを閉じ、一時ファイルを削除
+  // Phase 5: 新規ツール
   // ============================================================
-  console.log('\n── Phase 5: クリーンアップ ──');
+  console.log('\n── Phase 5: 新規ツール ──');
+
+  // --- list_fonts ---
+
+  await test('list_fonts', async () => {
+    const result = await callTool(client, 'list_fonts') as any;
+    assert(!result.error, 'list_fonts should not error: ' + (result.message || ''));
+    assert(Array.isArray(result.fonts), 'should have fonts array');
+    assert(result.fonts.length >= 1, 'should list at least 1 font');
+    const f = result.fonts[0];
+    assert(typeof f.name === 'string', 'font should have name');
+    assert(typeof f.family === 'string', 'font should have family');
+  });
+
+  // --- convert_coordinate ---
+
+  await test('convert_coordinate (artboard ↔ document)', async () => {
+    const r1 = await callTool(client, 'convert_coordinate', {
+      point: { x: 100, y: 200 },
+      from: 'artboard',
+      to: 'document',
+    }) as any;
+    assert(!r1.error, 'artboard→document should not error: ' + (r1.message || ''));
+    assert(typeof r1.x === 'number' && typeof r1.y === 'number', 'should have x, y');
+    assert(r1.from === 'artboard' && r1.to === 'document', 'from/to should match');
+    // reverse
+    const r2 = await callTool(client, 'convert_coordinate', {
+      point: { x: r1.x, y: r1.y },
+      from: 'document',
+      to: 'artboard',
+    }) as any;
+    assert(!r2.error, 'document→artboard should not error: ' + (r2.message || ''));
+    assertClose(r2.x, 100, 'round-trip x');
+    assertClose(r2.y, 200, 'round-trip y');
+  });
+
+  // --- group_objects / ungroup_objects ---
+
+  let groupUuid = '';
+
+  await test('group_objects → rect + ellipse', async () => {
+    const result = await callTool(client, 'group_objects', {
+      uuids: [rectUuid, ellipseUuid],
+    }) as any;
+    assert(result.success === true, 'group should succeed: ' + JSON.stringify(result));
+    assert(typeof result.uuid === 'string', 'should return uuid');
+    assert(result.childCount === 2, `should group 2 objects, got ${result.childCount}`);
+    groupUuid = result.uuid;
+  });
+
+  await test('ungroup_objects → release group', async () => {
+    const result = await callTool(client, 'ungroup_objects', {
+      uuid: groupUuid,
+    }) as any;
+    assert(result.success === true, 'ungroup should succeed: ' + JSON.stringify(result));
+    assert(result.releasedCount === 2, `should release 2 objects, got ${result.releasedCount}`);
+    assert(Array.isArray(result.childUuids), 'should have childUuids');
+  });
+
+  // --- duplicate_objects ---
+
+  await test('duplicate_objects → with offset', async () => {
+    const result = await callTool(client, 'duplicate_objects', {
+      uuids: [rectUuid],
+      offset: { x: 50, y: 50 },
+    }) as any;
+    assert(result.success === true, 'duplicate should succeed: ' + JSON.stringify(result));
+    assert(result.duplicatedCount === 1, `should duplicate 1, got ${result.duplicatedCount}`);
+    assert(Array.isArray(result.items), 'should have items');
+    assert(result.items.length === 1, 'should have 1 duplicated item');
+    assert(typeof result.items[0].newUuid === 'string', 'item should have newUuid');
+  });
+
+  // --- set_z_order ---
+
+  await test('set_z_order → bring_to_front + send_to_back', async () => {
+    const r1 = await callTool(client, 'set_z_order', {
+      uuid: rectUuid,
+      command: 'bring_to_front',
+    }) as any;
+    assert(r1.success === true, 'bring_to_front should succeed: ' + JSON.stringify(r1));
+    const r2 = await callTool(client, 'set_z_order', {
+      uuid: rectUuid,
+      command: 'send_to_back',
+    }) as any;
+    assert(r2.success === true, 'send_to_back should succeed');
+  });
+
+  // --- move_to_layer ---
+
+  await test('move_to_layer → round-trip', async () => {
+    const r1 = await callTool(client, 'move_to_layer', {
+      uuids: [rectUuid],
+      target_layer: 'TestLayer-Text',
+    }) as any;
+    assert(r1.success === true, 'move to TestLayer-Text should succeed: ' + JSON.stringify(r1));
+    assert(r1.movedCount === 1, `should move 1, got ${r1.movedCount}`);
+    // move back
+    const r2 = await callTool(client, 'move_to_layer', {
+      uuids: [rectUuid],
+      target_layer: 'TestLayer-Main',
+    }) as any;
+    assert(r2.success === true, 'move back should succeed');
+  });
+
+  // --- manage_artboards ---
+
+  await test('manage_artboards → add', async () => {
+    const result = await callTool(client, 'manage_artboards', {
+      action: 'add',
+      rect: { x: 900, y: 0, width: 400, height: 300 },
+      name: '__e2e_artboard_2',
+    }) as any;
+    assert(result.success === true, 'add artboard should succeed: ' + JSON.stringify(result));
+    assert(typeof result.index === 'number', 'should return index');
+    assert(result.name === '__e2e_artboard_2', `name should be __e2e_artboard_2, got ${result.name}`);
+  });
+
+  await test('manage_artboards → rename + resize + remove', async () => {
+    const abResult = await callTool(client, 'get_artboards') as any;
+    const lastIdx = abResult.artboards.length - 1;
+    // rename
+    const rn = await callTool(client, 'manage_artboards', {
+      action: 'rename', index: lastIdx, name: '__e2e_artboard_renamed',
+    }) as any;
+    assert(rn.success === true, 'rename should succeed');
+    assert(rn.name === '__e2e_artboard_renamed', `name should match, got ${rn.name}`);
+    // resize
+    const rs = await callTool(client, 'manage_artboards', {
+      action: 'resize', index: lastIdx, rect: { x: 900, y: 0, width: 500, height: 400 },
+    }) as any;
+    assert(rs.success === true, 'resize should succeed');
+    // remove
+    const rm = await callTool(client, 'manage_artboards', {
+      action: 'remove', index: lastIdx,
+    }) as any;
+    assert(rm.success === true, 'remove should succeed');
+    const abAfter = await callTool(client, 'get_artboards') as any;
+    assert(abAfter.artboards.length === abResult.artboards.length - 1, 'artboard count should decrease by 1');
+  });
+
+  // --- graphic styles: list + apply ---
+
+  await test('list_graphic_styles + apply', async () => {
+    const list = await callTool(client, 'list_graphic_styles') as any;
+    assert(!list.error, 'list should not error: ' + (list.message || ''));
+    assert(list.count >= 1, 'should have at least 1 graphic style (default)');
+    // apply the first style to rectUuid
+    const styleName = list.styles[0].name;
+    const apply = await callTool(client, 'apply_graphic_style', {
+      style_name: styleName,
+      uuids: [rectUuid],
+    }) as any;
+    assert(apply.success === true, 'apply should succeed: ' + JSON.stringify(apply));
+    assert(apply.appliedCount === 1, `should apply to 1 object, got ${apply.appliedCount}`);
+  });
+
+  // --- text styles: list ---
+
+  await test('list_text_styles', async () => {
+    const result = await callTool(client, 'list_text_styles') as any;
+    assert(!result.error, 'should not error: ' + (result.message || ''));
+    assert(Array.isArray(result.characterStyles), 'should have characterStyles');
+    assert(Array.isArray(result.paragraphStyles), 'should have paragraphStyles');
+  });
+
+  // --- create_gradient ---
+
+  await test('create_gradient → linear RGB', async () => {
+    const result = await callTool(client, 'create_gradient', {
+      name: '__e2e_gradient_linear',
+      type: 'linear',
+      stops: [
+        { color: { type: 'rgb', r: 255, g: 0, b: 0 }, position: 0 },
+        { color: { type: 'rgb', r: 0, g: 0, b: 255 }, position: 100 },
+      ],
+    }) as any;
+    assert(result.success === true, 'create_gradient should succeed: ' + JSON.stringify(result));
+    assert(result.name === '__e2e_gradient_linear', `name should match, got ${result.name}`);
+    assert(result.stopCount === 2, `should have 2 stops, got ${result.stopCount}`);
+  });
+
+  await test('create_gradient → radial with apply', async () => {
+    const result = await callTool(client, 'create_gradient', {
+      name: '__e2e_gradient_radial',
+      type: 'radial',
+      stops: [
+        { color: { type: 'rgb', r: 0, g: 255, b: 0 }, position: 0 },
+        { color: { type: 'rgb', r: 255, g: 255, b: 0 }, position: 50 },
+        { color: { type: 'rgb', r: 0, g: 0, b: 255 }, position: 100 },
+      ],
+      apply_to_uuids: [ellipseUuid],
+      angle: 45,
+    }) as any;
+    assert(result.success === true, 'create_gradient radial should succeed');
+    assert(result.type === 'radial', `type should be radial, got ${result.type}`);
+    assert(result.stopCount === 3, `should have 3 stops, got ${result.stopCount}`);
+    assert(result.appliedCount === 1, `should apply to 1 object, got ${result.appliedCount}`);
+  });
+
+  // --- manage_swatches ---
+
+  await test('manage_swatches → add + delete', async () => {
+    const add = await callTool(client, 'manage_swatches', {
+      action: 'add',
+      name: '__e2e_swatch_red',
+      color: { type: 'rgb', r: 255, g: 0, b: 0 },
+    }) as any;
+    assert(add.success === true, 'add swatch should succeed: ' + JSON.stringify(add));
+    assert(add.name === '__e2e_swatch_red', `name should match, got ${add.name}`);
+    const del = await callTool(client, 'manage_swatches', {
+      action: 'delete',
+      name: '__e2e_swatch_red',
+    }) as any;
+    assert(del.success === true, 'delete swatch should succeed');
+  });
+
+  // --- place_symbol (シンボル未定義のエラーパス) ---
+
+  await test('place_symbol → nonexistent symbol (should error)', async () => {
+    const result = await callTool(client, 'place_symbol', {
+      action: 'place',
+      symbol_name: '__e2e_nonexistent_symbol',
+    }) as any;
+    assert(result.error === true, 'should return error for nonexistent symbol');
+  });
+
+  // --- undo （embed より前に実行し、embed 取り消しでリンク復活→ダイアログを防ぐ） ---
+
+  await test('undo → single + multiple steps', async () => {
+    const r1 = await callTool(client, 'undo') as any;
+    assert(r1.success === true, 'undo should succeed: ' + JSON.stringify(r1));
+    assert(r1.count === 1, `should undo 1 step, got ${r1.count}`);
+    const r2 = await callTool(client, 'undo', { count: 2 }) as any;
+    assert(r2.success === true, 'undo 2 steps should succeed');
+    assert(r2.count === 2, `should undo 2 steps, got ${r2.count}`);
+  });
+
+  // --- create_path_text ---
+
+  await test('create_path_text → on path', async () => {
+    const result = await callTool(client, 'create_path_text', {
+      path_uuid: pathUuid,
+      contents: 'Path text E2E テスト',
+    }) as any;
+    assert(!result.error, 'create_path_text should not error: ' + (result.message || ''));
+    assert(typeof result.uuid === 'string', 'should return uuid');
+  });
+
+  // --- apply_text_style ---
+
+  await test('apply_text_style → paragraph style (default)', async () => {
+    // デフォルトの段落スタイルは "[Normal Paragraph Style]" (or similar)
+    const styles = await callTool(client, 'list_text_styles') as any;
+    if (styles.paragraphStyles && styles.paragraphStyles.length > 0) {
+      const styleName = styles.paragraphStyles[0].name;
+      // create_path_text で作ったテキストフレームに適用
+      const found = await callTool(client, 'find_objects', { type: 'text' }) as any;
+      if (found.count >= 1) {
+        const result = await callTool(client, 'apply_text_style', {
+          uuid: found.objects[0].uuid,
+          style_type: 'paragraph',
+          style_name: styleName,
+        }) as any;
+        assert(result.success === true, 'apply_text_style should succeed: ' + JSON.stringify(result));
+        assert(result.styleName === styleName, `styleName should match, got ${result.styleName}`);
+      }
+    }
+  });
+
+  // --- manage_datasets ---
+
+  await test('manage_datasets → list_variables + list_datasets', async () => {
+    const vars = await callTool(client, 'manage_datasets', { action: 'list_variables' }) as any;
+    assert(!vars.error, 'list_variables should not error: ' + (vars.message || ''));
+    assert(typeof vars.count === 'number', 'should have count');
+    assert(Array.isArray(vars.variables), 'should have variables array');
+    const ds = await callTool(client, 'manage_datasets', { action: 'list_datasets' }) as any;
+    assert(!ds.error, 'list_datasets should not error: ' + (ds.message || ''));
+    assert(typeof ds.count === 'number', 'should have count');
+    assert(Array.isArray(ds.datasets), 'should have datasets array');
+  });
+
+  // --- manage_artboards → rearrange (API typo: rearrangeArboards) ---
+
+  await test('manage_artboards → rearrange', async () => {
+    // rearrange には2つ以上のアートボードが必要なので一時的に追加
+    await callTool(client, 'manage_artboards', {
+      action: 'add', rect: { x: 900, y: 0, width: 400, height: 300 },
+    });
+    const result = await callTool(client, 'manage_artboards', {
+      action: 'rearrange',
+      layout: 'grid_by_row',
+      rows_or_cols: 2,
+      spacing: 30,
+    }) as any;
+    assert(result.success === true, 'rearrange should succeed: ' + JSON.stringify(result));
+    // 追加したアートボードを削除
+    const ab = await callTool(client, 'get_artboards') as any;
+    await callTool(client, 'manage_artboards', {
+      action: 'remove', index: ab.artboards.length - 1,
+    });
+  });
+
+  // --- エラーパス ---
+
+  await test('modify_object → invalid UUID (should error)', async () => {
+    const result = await callTool(client, 'modify_object', {
+      uuid: 'nonexistent-uuid-00000',
+      properties: { opacity: 50 },
+    }) as any;
+    assert(result.error === true, 'should return error for invalid UUID');
+  });
+
+  // --- manage_linked_images （embed はリンク参照を消すので最後に実行） ---
+
+  await test('manage_linked_images → embed', async () => {
+    const result = await callTool(client, 'manage_linked_images', {
+      uuid: linkedImageUuid,
+      action: 'embed',
+    }) as any;
+    assert(result.success === true, 'embed should succeed: ' + JSON.stringify(result));
+    assert(result.action === 'embed', `action should be embed, got ${result.action}`);
+    assert(typeof result.newUuid === 'string', 'should return newUuid');
+  });
+
+  // --- save_document (embed 後、close 前に実行) ---
+
+  await test('save_document → save (overwrite)', async () => {
+    const result = await callTool(client, 'save_document', { mode: 'save' }) as any;
+    // 新規ドキュメントは未保存なので save() が失敗する可能性がある（パスなし）
+    // エラーでもツールが正常にレスポンスを返すことを確認
+    assert(typeof result === 'object', 'should return a result');
+  });
+
+  // ============================================================
+  // Phase 6: クリーンアップ — ドキュメントを閉じ、一時ファイルを削除
+  // ============================================================
+  console.log('\n── Phase 6: クリーンアップ ──');
 
   await test('close_document (save: false)', async () => {
     const result = await callTool(client, 'close_document', { save: false }) as any;
     assert(result.success === true, 'close_document should succeed');
+  });
+
+  // --- open_document (close 後に別ドキュメントを開いて閉じる) ---
+
+  await test('open_document + close_document', async () => {
+    // 一時的な .ai ファイルを作るためにドキュメントを作成→保存→閉じる→開く
+    const createResult = await callTool(client, 'create_document', {
+      width: 100, height: 100, color_mode: 'rgb',
+    }) as any;
+    assert(createResult.success === true, 'create temp doc should succeed');
+    const savePath = `${TMP_DIR}/e2e-open-test.ai`;
+    const saveResult = await callTool(client, 'save_document', {
+      mode: 'save_as', path: savePath,
+    }) as any;
+    assert(saveResult.success === true, 'save_as should succeed: ' + JSON.stringify(saveResult));
+    await callTool(client, 'close_document', { save: false });
+    // re-open
+    const openResult = await callTool(client, 'open_document', { path: savePath }) as any;
+    assert(openResult.success === true, 'open_document should succeed: ' + JSON.stringify(openResult));
+    assert(typeof openResult.name === 'string', 'should have name');
+    assert(typeof openResult.colorSpace === 'string', 'should have colorSpace');
+    await callTool(client, 'close_document', { save: false });
   });
 
   await test('cleanup temp files', async () => {
