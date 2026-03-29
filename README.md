@@ -7,7 +7,7 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Windows-lightgrey.svg)]()
 [![Illustrator](https://img.shields.io/badge/Illustrator-CC%202024%2B-orange.svg)](https://www.adobe.com/products/illustrator.html)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-ffdd00?style=flat&logo=buy-me-a-coffee&logoColor=black)](https://buymeacoffee.com/cyocun)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for reading, manipulating, and exporting Adobe Illustrator design data.
 
@@ -21,6 +21,26 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 **Requirements:** macOS or Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
 
+<details>
+<summary><strong>How to install Node.js (first-time setup)</strong></summary>
+
+Node.js is a runtime required to run this tool.
+Skip this section if you already have it installed.
+
+1. Go to [nodejs.org](https://nodejs.org/)
+2. Click the **green "LTS" button** to download
+3. Open the downloaded file and follow the installer instructions
+
+To verify the installation, open Terminal (macOS) or Command Prompt (Windows) and type:
+
+```bash
+node -v
+```
+
+If you see a version number like `v20.x.x`, you're all set.
+
+</details>
+
 ### Claude Code
 
 ```bash
@@ -29,7 +49,23 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`):
+Open the config file and add the connection settings.
+
+<details>
+<summary><strong>Show step-by-step instructions</strong></summary>
+
+#### 1. Open the config file
+
+From the Claude Desktop menu bar:
+
+**Claude** → **Settings...** → **Developer** (in the left sidebar) → Click the **Edit Config** button
+
+The `claude_desktop_config.json` file will appear in Finder (macOS) or Explorer (Windows).
+Open it with a text editor.
+
+#### 2. Add the settings
+
+If the file is empty or contains only `{}`, **replace everything** with the following (copy & paste):
 
 ```json
 {
@@ -42,7 +78,27 @@ Add to `claude_desktop_config.json` (macOS: `~/Library/Application Support/Claud
 }
 ```
 
-Restart Claude Desktop. The hammer icon in the input area confirms it's connected.
+> If you already have other MCP servers configured, add the `"illustrator": { ... }` block inside the existing `"mcpServers": {` section. Don't forget the comma between entries.
+
+```json
+"mcpServers": {
+  "other-server": {
+    ...other server settings...
+  },
+  "illustrator": {
+    "command": "npx",
+    "args": ["illustrator-mcp-server"]
+  }
+}
+```
+
+#### 3. Save and restart
+
+1. Save the file (⌘S / Ctrl+S) and close the text editor
+2. **Fully quit** Claude Desktop (⌘Q / Ctrl+Q) and reopen it
+3. Open **Claude** → **Settings...** → **Developer** — if the illustrator server appears, the connection is working
+
+</details>
 
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
@@ -578,7 +634,7 @@ The E2E test creates a fresh document, places test objects, runs all 45 test cas
 
 ## Support
 
-If this tool helps your workflow, [buy me a beer 🍺](https://buymeacoffee.com/cyocun)
+Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee ☕](https://ko-fi.com/cyocun)
 
 ---
 
