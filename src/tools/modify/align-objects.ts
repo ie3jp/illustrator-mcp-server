@@ -7,6 +7,10 @@ import {
 } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * align_objects — オブジェクトの整列・均等配置
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — geometricBounds, position, translate()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

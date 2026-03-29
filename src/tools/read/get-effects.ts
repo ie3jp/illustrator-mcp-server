@@ -5,8 +5,11 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+import { READ_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * get_effects — オブジェクトに適用されたエフェクト情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, geometricBounds, visibleBounds
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -163,7 +166,7 @@ export function register(server: McpServer): void {
       description: 'Get effect and appearance information',
       inputSchema: {
         target: z.string().optional().describe('Filter by UUID for a specific object'),
-        selection_only: z.boolean().optional().default(false).describe('Selected objects only'),
+        selection_only: coerceBoolean.optional().default(false).describe('Selected objects only'),
         coordinate_system: coordinateSystemSchema,
       },
       annotations: READ_ANNOTATIONS,

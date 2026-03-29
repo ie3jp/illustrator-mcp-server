@@ -6,7 +6,13 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_text_frame_detail — テキストフレームの詳細情報取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/ — contents, textRanges, paragraphs
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont, tracking, Tsume, etc.
+ *
+ * 既知の制限: ParagraphAttributes.leading / .autoLeading は存在しないプロパティ（try/catch で回避中）。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

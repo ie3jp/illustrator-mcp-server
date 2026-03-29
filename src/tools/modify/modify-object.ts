@@ -7,6 +7,13 @@ import {
 } from '../session.js';
 import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
+/**
+ * modify_object — オブジェクトのプロパティ変更
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — position, width, height, opacity, locked, hidden, name
+ *
+ * 注意: rotation の絶対角度指定は atan2(mValueB, mValueA) で現在角度を算出するため、
+ * skew/非等倍スケールされたオブジェクトでは不正確になる場合がある。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

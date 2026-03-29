@@ -6,7 +6,11 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_symbols — シンボル定義・インスタンスの取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Symbols/ — Symbols collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/SymbolItem/ — symbol, position
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

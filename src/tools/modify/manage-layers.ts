@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
+/**
+ * manage_layers — レイヤーの追加・削除・リネーム・表示/ロック操作
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Layers/ — Layers.add(), getByName()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Layer/ — name, visible, locked, remove(), move()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

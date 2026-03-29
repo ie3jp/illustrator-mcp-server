@@ -6,7 +6,12 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_document_structure — レイヤー・グループ・オブジェクトのツリー構造取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — layers
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Layer/ — pageItems, layers (sublayers)
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, name, geometricBounds
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

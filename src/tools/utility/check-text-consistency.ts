@@ -6,7 +6,11 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * check_text_consistency — テキスト一貫性チェック（ダミーテキスト検出・フォント統計）
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/ — contents, textRanges
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

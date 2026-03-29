@@ -7,6 +7,14 @@ import {
 } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * place_image — 画像の配置（リンク/埋め込み）
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItems/ — PlacedItems.add()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, embed()
+ *
+ * 注意: PlacedItem.file はリファレンスで read-only と記載されているが、
+ * PlacedItems.add() 後に設定する方法が PlacedItems のドキュメントで推奨されている。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

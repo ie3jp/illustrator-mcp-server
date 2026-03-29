@@ -1,8 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
-import { WRITE_IDEMPOTENT_ANNOTATIONS } from '../modify/shared.js';
-
+import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * export_pdf — PDF 書き出し
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.saveAs()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/ — PDFSaveOptions
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -164,14 +168,14 @@ export function register(server: McpServer): void {
           .describe('PDF preset name (e.g. "[PDF/X-4:2008]")'),
         options: z
           .object({
-            trim_marks: z.boolean().optional().describe('Add trim marks'),
+            trim_marks: coerceBoolean.optional().describe('Add trim marks'),
             marks_style: z.enum(['japanese', 'roman']).optional().describe('Trim mark style (japanese or roman)'),
             trim_mark_weight: z.enum(['0.125', '0.25', '0.5']).optional().describe('Trim mark weight (pt)'),
-            registration_marks: z.boolean().optional().describe('Registration marks'),
-            color_bars: z.boolean().optional().describe('Color bars'),
-            page_information: z.boolean().optional().describe('Page information'),
-            bleed: z.boolean().optional().describe('Include bleed (3mm)'),
-            downsample: z.boolean().optional().describe('Downsample all images (shorthand: color 300dpi, grayscale 300dpi, monochrome 1200dpi)'),
+            registration_marks: coerceBoolean.optional().describe('Registration marks'),
+            color_bars: coerceBoolean.optional().describe('Color bars'),
+            page_information: coerceBoolean.optional().describe('Page information'),
+            bleed: coerceBoolean.optional().describe('Include bleed (3mm)'),
+            downsample: coerceBoolean.optional().describe('Downsample all images (shorthand: color 300dpi, grayscale 300dpi, monochrome 1200dpi)'),
             color_downsample_dpi: z.number().int().min(72).optional().describe('Color image downsample target DPI (overrides downsample)'),
             grayscale_downsample_dpi: z.number().int().min(72).optional().describe('Grayscale image downsample target DPI (overrides downsample)'),
             monochrome_downsample_dpi: z.number().int().min(72).optional().describe('Monochrome image downsample target DPI (overrides downsample)'),

@@ -1,7 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_separation_info — 色分解情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Ink/ — Ink, InkInfo
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

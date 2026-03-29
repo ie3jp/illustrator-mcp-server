@@ -5,8 +5,14 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
+/**
+ * create_path — カスタムパスの作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.add()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — setEntirePath(), closed
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/ — anchor, leftDirection, rightDirection, pointType
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -108,7 +114,7 @@ export function register(server: McpServer): void {
       description: 'Create a custom path. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         anchors: z.array(anchorSchema).describe('Array of anchor points'),
-        closed: z.boolean().optional().default(false).describe('Whether to close the path'),
+        closed: coerceBoolean.optional().default(false).describe('Whether to close the path'),
         fill: colorSchema.describe('Fill color'),
         stroke: strokeSchema.describe('Stroke settings'),
         layer_name: z.string().optional().describe('Target layer name'),

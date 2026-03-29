@@ -3,6 +3,11 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
+/**
+ * assign_color_profile — カラープロファイルの割り当て
+ *
+ * 注意: Document.colorProfileName はリファレンスに記載がないが、実際のIllustratorでは動作する。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

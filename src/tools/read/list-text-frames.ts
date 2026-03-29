@@ -5,8 +5,12 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+import { READ_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * list_text_frames — テキストフレーム一覧の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/ — TextFrameItems collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/ — contents, kind, textRange
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -228,7 +232,7 @@ export function register(server: McpServer): void {
         layer_name: z.string().optional().describe('Filter by layer name'),
         artboard_index: z.number().int().min(0).optional().describe('Filter by artboard index (0-based integer)'),
         sort: z.enum(['reading-order']).optional().describe('Sort order. "reading-order" sorts by artboardIndex asc → y asc → x asc (rows within ~5pt tolerance are treated as the same line)'),
-        contents_only: z.boolean().optional().describe('When true, return only uuid, contents, and artboardIndex (no position/font/style info). Useful for text proofreading.'),
+        contents_only: coerceBoolean.optional().describe('When true, return only uuid, contents, and artboardIndex (no position/font/style info). Useful for text proofreading.'),
         offset: z.number().int().min(0).optional().describe('Number of items to skip (for pagination). Applied after sort.'),
         limit: z.number().int().min(1).optional().describe('Maximum number of items to return (for pagination). Applied after sort.'),
         coordinate_system: coordinateSystemSchema,

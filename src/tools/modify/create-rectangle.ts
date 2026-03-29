@@ -7,6 +7,11 @@ import {
 } from '../session.js';
 import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_rectangle — 矩形の作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.rectangle(top, left, width, height)
+ * JSX API: PathItems.rectangle(), PathItems.roundedRectangle()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

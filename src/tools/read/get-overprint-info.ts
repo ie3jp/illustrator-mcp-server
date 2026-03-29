@@ -1,7 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_overprint_info — オーバープリント設定の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — overprintFill, overprintStroke
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

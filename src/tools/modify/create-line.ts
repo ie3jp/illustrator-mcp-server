@@ -7,6 +7,11 @@ import {
 } from '../session.js';
 import { colorSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_line — 直線の作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.add()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — PathItem.setEntirePath()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

@@ -6,7 +6,10 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_selection — 現在の選択オブジェクト情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.selection
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

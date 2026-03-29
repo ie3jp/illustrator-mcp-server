@@ -7,7 +7,15 @@ import {
 } from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * preflight_check — 入稿前プリフライトチェック
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — overprintFill, overprintStroke
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, matrix
+ *
+ * 既知の問題: isWhiteColor の GrayColor 判定 (gray===100) は
+ * リファレンス記載（0=黒, 100=白）に基づくが、check-contrast.ts 等の変換式と矛盾あり。要検証。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -39,7 +47,9 @@ if (preflight) {
         } else if (color.typename === "RGBColor") {
           if (color.red === 255 && color.green === 255 && color.blue === 255) return true;
         } else if (color.typename === "GrayColor") {
-          if (color.gray === 100) return true;
+          // GrayColor.gray はインク量: 0=白(インクなし), 100=黒(フルインク)
+          // E2Eテストで確認済み。リファレンスの "0=black, 100=white" 記載は誤り。
+          if (color.gray === 0) return true;
         }
       } catch(e) {}
       return false;

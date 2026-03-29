@@ -3,6 +3,13 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { colorSchema, COLOR_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
+/**
+ * replace_color — 塗り/線の色を一括置換
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — fillColor, strokeColor
+ *
+ * 制限事項: SpotColor, GrayColor のマッチングは未対応。
+ * クロスカラースペース（RGB→CMYK等）のマッチングも不可。
+ */
 const jsxCode = `
 ${COLOR_HELPERS_JSX}
 

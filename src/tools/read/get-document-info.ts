@@ -7,7 +7,12 @@ import {
   detectWorkflow,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_document_info — ドキュメントの基本情報取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — name, fullName, width, height, documentColorSpace, rulerUnits
+ *
+ * 注意: Document.colorProfileName はリファレンスに記載がないが実際は動作する。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

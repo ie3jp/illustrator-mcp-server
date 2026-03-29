@@ -7,6 +7,11 @@ import {
 } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * place_color_chips — ドキュメント使用色のカラーチップ配置
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.rectangle()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/ — TextFrameItems.add()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

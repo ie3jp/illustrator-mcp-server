@@ -4,6 +4,10 @@ import { executeJsx } from '../../executor/jsx-runner.js';
 import { invalidateAutoDetectCache } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_document — 新規ドキュメントの作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ — Documents.add(colorSpace, width, height)
+ */
 const jsxCode = `
 try {
   var verErr = checkIllustratorVersion();

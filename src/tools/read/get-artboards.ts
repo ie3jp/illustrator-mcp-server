@@ -6,7 +6,11 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_artboards — アートボード情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/ — Artboards collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Artboard/ — artboardRect, name
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

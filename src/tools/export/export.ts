@@ -1,8 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
-import { WRITE_IDEMPOTENT_ANNOTATIONS } from '../modify/shared.js';
-
+import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * export — SVG/PNG/JPG/WebP 書き出し
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — exportFile()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/
+ *
+ * 注意: SVGIdType / idType はリファレンスに記載がないが try/catch で安全に処理。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -252,9 +260,9 @@ export function register(server: McpServer): void {
         scale: z.number().optional().default(1).describe('Scale factor'),
         svg_options: z
           .object({
-            text_outline: z.boolean().optional().describe('Convert text to outlines'),
-            css_properties: z.boolean().optional().describe('Export as CSS properties'),
-            embed_images: z.boolean().optional().describe('Embed raster images'),
+            text_outline: coerceBoolean.optional().describe('Convert text to outlines'),
+            css_properties: coerceBoolean.optional().describe('Export as CSS properties'),
+            embed_images: coerceBoolean.optional().describe('Embed raster images'),
              id_naming: z
                .enum(['layer', 'object', 'auto'])
                .optional()
@@ -270,7 +278,7 @@ export function register(server: McpServer): void {
               .string()
               .optional()
               .describe('"transparent", "white", or color code'),
-             antialiasing: z.boolean().optional().describe('Anti-aliasing'),
+             antialiasing: coerceBoolean.optional().describe('Anti-aliasing'),
            })
            .optional()
            .describe('Raster export options'),

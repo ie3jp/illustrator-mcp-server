@@ -2,7 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_colors — ドキュメントの色情報取得（スウォッチ・グラデーション・パターン・スポットカラー）
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/ — Swatches collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Gradient/ — Gradient, GradientStop
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Spot/ — Spot color
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Pattern/ — Pattern
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

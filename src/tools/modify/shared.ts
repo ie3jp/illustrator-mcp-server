@@ -1,5 +1,18 @@
 import { z } from 'zod';
 
+// --- boolean coerce (MCP クライアントが "true"/"false" 文字列を送る場合の対策) ---
+
+export const coerceBoolean = z.preprocess(
+  (val) => {
+    if (typeof val === 'string') {
+      if (val === 'true') return true;
+      if (val === 'false') return false;
+    }
+    return val;
+  },
+  z.boolean(),
+);
+
 // --- 共通 annotations 定数 ---
 
 export const READ_ANNOTATIONS = {
@@ -30,7 +43,7 @@ export const DESTRUCTIVE_ANNOTATIONS = {
   openWorldHint: false,
 } as const;
 
-const cmykColorSchema = z.object({
+export const cmykColorSchema = z.object({
   type: z.literal('cmyk').describe('Color type'),
   c: z.number().describe('Cyan'),
   m: z.number().describe('Magenta'),
@@ -38,11 +51,16 @@ const cmykColorSchema = z.object({
   k: z.number().describe('Black'),
 });
 
-const rgbColorSchema = z.object({
+export const rgbColorSchema = z.object({
   type: z.literal('rgb').describe('Color type'),
   r: z.number().describe('Red'),
   g: z.number().describe('Green'),
   b: z.number().describe('Blue'),
+});
+
+export const grayColorSchema = z.object({
+  type: z.literal('gray').describe('Color type'),
+  value: z.number().min(0).max(100).describe('Gray value (0-100)'),
 });
 
 const noColorSchema = z.object({
@@ -50,7 +68,7 @@ const noColorSchema = z.object({
 });
 
 export const colorSchema = z
-  .discriminatedUnion('type', [cmykColorSchema, rgbColorSchema, noColorSchema])
+  .discriminatedUnion('type', [cmykColorSchema, rgbColorSchema, grayColorSchema, noColorSchema])
   .optional();
 
 export const strokeSchema = z
@@ -92,6 +110,11 @@ function createColor(colorObj) {
     c.red = colorObj.r;
     c.green = colorObj.g;
     c.blue = colorObj.b;
+    return c;
+  }
+  if (colorObj.type === "gray") {
+    var c = new GrayColor();
+    c.gray = colorObj.value;
     return c;
   }
   return new NoColor();

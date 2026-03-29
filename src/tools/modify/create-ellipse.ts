@@ -7,6 +7,10 @@ import {
 } from '../session.js';
 import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_ellipse — 楕円の作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.ellipse(top, left, width, height)
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

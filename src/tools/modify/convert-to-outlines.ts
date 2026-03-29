@@ -3,6 +3,10 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
+/**
+ * convert_to_outlines — テキストのアウトライン化
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/ — TextFrameItem.createOutline()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

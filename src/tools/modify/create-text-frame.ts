@@ -7,6 +7,11 @@ import {
 } from '../session.js';
 import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_text_frame — テキストフレームの作成（ポイント/エリア）
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/ — TextFrameItems.pointText(), areaText()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

@@ -6,7 +6,10 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * find_objects — 条件によるオブジェクト検索
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, name, geometricBounds
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

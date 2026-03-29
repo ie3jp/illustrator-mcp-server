@@ -6,7 +6,11 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_layers — レイヤー一覧の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Layers/ — Layers collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Layer/ — name, visible, locked, color
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

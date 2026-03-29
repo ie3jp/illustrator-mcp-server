@@ -2,7 +2,11 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * extract_design_tokens — デザイントークン（色・タイポグラフィ・スペーシング）の抽出
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/ — Swatches
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

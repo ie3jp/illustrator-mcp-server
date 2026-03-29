@@ -7,7 +7,11 @@ import {
 } from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_images — 配置画像（リンク/埋め込み）の情報取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, matrix, contentVariable
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/RasterItem/ — colorSpace, transparent, imageColorSpace
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

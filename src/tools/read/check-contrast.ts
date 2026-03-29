@@ -2,7 +2,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * check_contrast — WCAG コントラスト比チェック
+ *
+ * 既知の問題: GrayColor の gray プロパティの解釈がリファレンス（0=黒, 100=白）と
+ * インク量解釈（0=白, 100=黒）で矛盾あり。現在のコードはインク量解釈を使用。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -145,7 +150,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         color1: z
           .object({
-            type: z.enum(['cmyk', 'rgb']),
+            type: z.enum(['cmyk', 'rgb', 'gray']),
             c: z.number().optional(),
             m: z.number().optional(),
             y: z.number().optional(),
@@ -153,12 +158,13 @@ export function register(server: McpServer): void {
             r: z.number().optional(),
             g: z.number().optional(),
             b: z.number().optional(),
+            value: z.number().optional(),
           })
           .optional()
           .describe('First color (manual mode)'),
         color2: z
           .object({
-            type: z.enum(['cmyk', 'rgb']),
+            type: z.enum(['cmyk', 'rgb', 'gray']),
             c: z.number().optional(),
             m: z.number().optional(),
             y: z.number().optional(),
@@ -166,6 +172,7 @@ export function register(server: McpServer): void {
             r: z.number().optional(),
             g: z.number().optional(),
             b: z.number().optional(),
+            value: z.number().optional(),
           })
           .optional()
           .describe('Second color (manual mode)'),

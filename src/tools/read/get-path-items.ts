@@ -6,7 +6,12 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
-
+/**
+ * get_path_items — パスアイテム情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — pathPoints, closed, filled, stroked
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/ — anchor, leftDirection, rightDirection
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {

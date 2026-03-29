@@ -7,6 +7,12 @@ import {
 } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * resize_for_variation — アートボード単位のサイズバリエーション生成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/ — Artboards.add()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — duplicate(), resize()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — selectObjectsOnActiveArtboard()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
