@@ -245,6 +245,10 @@ function getArtboardRectByIndex(index) {
 // アートボード矩形キャッシュ（同一 JSX 実行内で再利用）
 var _artboardRectsCache = null;
 
+function invalidateArtboardCache() {
+  _artboardRectsCache = null;
+}
+
 function _getArtboardRects() {
   if (!_artboardRectsCache) {
     _artboardRectsCache = [];
@@ -425,4 +429,79 @@ function iterateAllItems(container, callback) {
       iterateAllItems(item, callback);
     }
   }
+}
+
+// --- 操作結果の検証（Post-Operation Verification） ---
+
+/**
+ * 単一アイテムの現在の状態をスナップショットとして返す。
+ * 操作後に呼び出し、結果に含めることで「実際にどうなったか」を確認できる。
+ *
+ * @param {PageItem} item - 検証対象
+ * @param {string} [coordSystem] - "artboard-web" | "document"
+ * @param {Array} [artboardRect] - アートボード矩形（artboard-web時に必要）
+ * @returns {Object} アイテムのスナップショット
+ */
+function verifyItem(item, coordSystem, artboardRect) {
+  var snap = {
+    name: item.name || "",
+    type: getItemType(item),
+    bounds: getBounds(item, coordSystem, artboardRect)
+  };
+
+  if (item.typename === "TextFrame") {
+    snap.contents = item.contents;
+    snap.textKind = getTextKind(item);
+  }
+
+  try {
+    if (item.filled) {
+      snap.fill = colorToObject(item.fillColor);
+    } else {
+      snap.fill = { type: "none" };
+    }
+  } catch(e) {}
+
+  try {
+    if (item.stroked) {
+      snap.stroke = { color: colorToObject(item.strokeColor), width: item.strokeWidth };
+    }
+  } catch(e) {}
+
+  snap.layer = getParentLayerName(item);
+  snap.visible = item.hidden !== true;
+
+  return snap;
+}
+
+/**
+ * 指定アートボード上の名前付きアイテムのスナップショットを返す。
+ * アートボード操作やバッチ操作の検証に使う。
+ *
+ * @param {number} artboardIndex - アートボードインデックス
+ * @returns {Object} { artboard: string, items: Array }
+ */
+function verifyArtboardContents(artboardIndex) {
+  var doc = app.activeDocument;
+  var ab = doc.artboards[artboardIndex];
+  var abRect = ab.artboardRect;
+  var items = [];
+
+  for (var i = 0; i < doc.pageItems.length; i++) {
+    var item = doc.pageItems[i];
+    var gb = item.geometricBounds;
+    var cx = (gb[0] + gb[2]) / 2;
+    var cy = (gb[1] + gb[3]) / 2;
+    if (cx >= abRect[0] && cx <= abRect[2] && cy <= abRect[1] && cy >= abRect[3]) {
+      if (item.name && item.name !== "") {
+        var entry = { name: item.name, type: getItemType(item) };
+        if (item.typename === "TextFrame") {
+          entry.contents = item.contents;
+        }
+        items.push(entry);
+      }
+    }
+  }
+
+  return { artboard: ab.name, index: artboardIndex, itemCount: items.length, items: items };
 }
