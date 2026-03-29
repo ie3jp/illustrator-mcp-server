@@ -370,3 +370,59 @@ function findItemByUUID(uuid) {
   if (!_uuidIndex) _buildUUIDIndex();
   return _uuidIndex[uuid] || null;
 }
+
+// --- レイヤー解決 ---
+
+function resolveTargetLayer(doc, layerName) {
+  if (!layerName) return doc.activeLayer;
+  try {
+    return doc.layers.getByName(layerName);
+  } catch (e) {
+    var nl = doc.layers.add();
+    nl.name = layerName;
+    return nl;
+  }
+}
+
+// --- 座標変換（Web → Illustrator ネイティブ） ---
+
+function webToAiPoint(x, y, coordSystem, artboardRect) {
+  if (coordSystem === "artboard-web" && artboardRect) {
+    return [artboardRect[0] + x, artboardRect[1] + (-y)];
+  }
+  return [x, y];
+}
+
+// --- 親レイヤー名取得 ---
+
+function getParentLayerName(item) {
+  var obj = item.parent;
+  while (obj) {
+    if (obj.typename === "Layer") return obj.name;
+    try { obj = obj.parent; } catch(e) { break; }
+  }
+  return "";
+}
+
+// --- テキストフレーム種別 ---
+
+function getTextKind(tf) {
+  try {
+    if (tf.kind === TextType.POINTTEXT) return "point";
+    if (tf.kind === TextType.AREATEXT) return "area";
+    if (tf.kind === TextType.PATHTEXT) return "path";
+  } catch(e) {}
+  return "unknown";
+}
+
+// --- 再帰的アイテム走査 ---
+
+function iterateAllItems(container, callback) {
+  for (var i = 0; i < container.pageItems.length; i++) {
+    var item = container.pageItems[i];
+    callback(item);
+    if (item.typename === "GroupItem") {
+      iterateAllItems(item, callback);
+    }
+  }
+}

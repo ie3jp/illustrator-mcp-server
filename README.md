@@ -477,6 +477,32 @@ Workflow templates that guide Claude through multi-step tasks. Available in the 
 
 ---
 
+## Claude Code Skills
+
+Add pre-built workflows as slash commands in Claude Code, combining multiple MCP tools into guided processes.
+
+### Pre-press Preflight Check (`/illustrator-preflight`)
+
+Runs `preflight_check` + `get_overprint_info` + `check_text_consistency` in parallel, then merges results into a unified report grouped by severity (Critical / Warning / Info). Catches print-critical issues that are easy to miss manually.
+
+**Install:**
+
+```bash
+claude install-skill /path/to/illustrator-mcp-server/skills/illustrator-preflight
+```
+
+Or download the `.skill` file from GitHub Releases:
+
+```bash
+claude install-skill ./illustrator-preflight.skill
+```
+
+**Usage:**
+
+Type `/illustrator-preflight` in Claude Code, or just ask "run a preflight check".
+
+---
+
 ## Features
 
 - **39 tools + 2 prompts** — 19 read / 16 modify / 2 export / 2 utility

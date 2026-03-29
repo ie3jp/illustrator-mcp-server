@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, COLOR_HELPERS_JSX } from './shared.js';
+import { colorSchema, COLOR_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 ${COLOR_HELPERS_JSX}
@@ -114,12 +114,7 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Layer name to limit replacement scope (default: entire document)'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);

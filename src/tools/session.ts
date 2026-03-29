@@ -53,9 +53,9 @@ let autoDetectCache: AutoDetectCache | null = null;
 /** Lightweight JSX to fetch only document signals needed for workflow detection */
 const DETECT_SIGNALS_JSX = `
 try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
+  var preflight = preflightChecks();
+  if (preflight) {
+    writeResultFile(RESULT_PATH, preflight);
   } else {
     var doc = app.activeDocument;
     var filePath = "";

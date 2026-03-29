@@ -5,6 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -39,21 +40,13 @@ if (preflight) {
       } else {
         var tf = found;
 
-        // テキスト種別
-        var textKind = "unknown";
-        if (tf.kind === TextType.POINTTEXT) {
-          textKind = "point";
-        } else if (tf.kind === TextType.AREATEXT) {
-          textKind = "area";
-        } else if (tf.kind === TextType.PATHTEXT) {
-          textKind = "path";
-        }
+        var textKind = getTextKind(tf);
 
         // 座標
         var itemAbIdx = getArtboardIndexForItem(tf);
         var boundsAbRect = null;
-        if (coordSystem === "artboard-web" && itemAbIdx >= 0) {
-          boundsAbRect = doc.artboards[itemAbIdx].artboardRect;
+        if (coordSystem === "artboard-web") {
+          boundsAbRect = getArtboardRectByIndex(itemAbIdx);
         }
         var bounds = getBounds(tf, coordSystem, boundsAbRect);
 
@@ -233,12 +226,7 @@ export function register(server: McpServer): void {
         uuid: z.string().describe('UUID of the target text frame'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

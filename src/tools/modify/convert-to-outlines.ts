@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -13,28 +14,6 @@ if (preflight) {
     var target = params.target;
     var count = 0;
     var hasError = false;
-
-    function findItemByUUID(uuid) {
-      var doc = app.activeDocument;
-      function search(items) {
-        for (var i = 0; i < items.length; i++) {
-          var item = items[i];
-          try {
-            if (item.note === uuid) return item;
-          } catch(e) {}
-          if (item.typename === "GroupItem") {
-            var found = search(item.pageItems);
-            if (found) return found;
-          }
-        }
-        return null;
-      }
-      for (var li = 0; li < doc.layers.length; li++) {
-        var found = search(doc.layers[li].pageItems);
-        if (found) return found;
-      }
-      return null;
-    }
 
     if (target === "selection") {
       var sel = doc.selection;
@@ -93,12 +72,7 @@ export function register(server: McpServer): void {
           .string()
           .describe('Target: "selection" (selected), "all" (all text), or layer name'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });

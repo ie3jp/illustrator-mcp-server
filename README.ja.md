@@ -489,6 +489,32 @@ Claude:  → extract_design_tokens (format: "css")
 
 ---
 
+## Claude Code Skills
+
+MCP ツールを組み合わせたワークフローを、スラッシュコマンドとして Claude Code に追加できます。
+
+### 入稿前プリフライトチェック (`/illustrator-preflight`)
+
+`preflight_check` + `get_overprint_info` + `check_text_consistency` を並列実行し、結果を重要度別（Critical / Warning / Info）に統合レポートします。印刷事故につながる問題を見落としなくチェックできます。
+
+**インストール:**
+
+```bash
+claude install-skill /path/to/illustrator-mcp-server/skills/illustrator-preflight
+```
+
+または、GitHub Releases から `.skill` ファイルをダウンロードして:
+
+```bash
+claude install-skill ./illustrator-preflight.skill
+```
+
+**使い方:**
+
+Claude Code で `/illustrator-preflight` と入力するか、「入稿前チェックして」と依頼してください。
+
+---
+
 ## 特徴
 
 - **39 ツール + 2 Prompts** — 読み取り 19 / 操作 16 / 書き出し 2 / ユーティリティ 2

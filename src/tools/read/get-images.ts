@@ -6,13 +6,14 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var includePrintInfo = (params && typeof params.include_print_info === "boolean") ? params.include_print_info : false;
@@ -27,10 +28,7 @@ try {
       var uuid = ensureUUID(item);
       var zIdx = getZIndex(item);
       var abIndex = getArtboardIndexForItem(item);
-      var artboardRect = null;
-      if (abIndex >= 0) {
-        artboardRect = doc.artboards[abIndex].artboardRect;
-      }
+      var artboardRect = getArtboardRectByIndex(abIndex);
       var bounds = getBounds(item, coordSystem, artboardRect);
 
       var info = {
@@ -77,10 +75,7 @@ try {
       var rUuid = ensureUUID(rItem);
       var rZIdx = getZIndex(rItem);
       var rAbIndex = getArtboardIndexForItem(rItem);
-      var rArtboardRect = null;
-      if (rAbIndex >= 0) {
-        rArtboardRect = doc.artboards[rAbIndex].artboardRect;
-      }
+      var rArtboardRect = getArtboardRectByIndex(rAbIndex);
       var rBounds = getBounds(rItem, coordSystem, rArtboardRect);
 
       var rInfo = {
@@ -167,9 +162,9 @@ try {
       coordinateSystem: coordSystem,
       images: images
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -187,12 +182,7 @@ export function register(server: McpServer): void {
           .default(false)
           .describe('Include print diagnostics: color space mismatch flag, scale factor (%). Only available for embedded raster images.'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

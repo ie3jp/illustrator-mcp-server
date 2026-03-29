@@ -5,13 +5,14 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var targetUuid = (params && params.target) ? params.target : null;
@@ -43,8 +44,7 @@ try {
       var zIdx = getZIndex(item);
       var itemType = getItemType(item);
       var abIndex = getArtboardIndexForItem(item);
-      var abRect = null;
-      if (abIndex >= 0) { abRect = doc.artboards[abIndex].artboardRect; }
+      var abRect = getArtboardRectByIndex(abIndex);
       var bounds = getBounds(item, coordSys, abRect);
 
       var info = {
@@ -112,27 +112,9 @@ try {
 
     var items = [];
 
-    function findByNote(items, uuid) {
-      for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        try { if (item.note === uuid) return item; } catch(e) {}
-        if (item.typename === "GroupItem") {
-          try {
-            var child = findByNote(item.pageItems, uuid);
-            if (child) return child;
-          } catch(e2) {}
-        }
-      }
-      return null;
-    }
-
     if (targetUuid) {
       // Find specific item by UUID
-      var targetItem = null;
-      for (var li = 0; li < doc.layers.length; li++) {
-        targetItem = findByNote(doc.layers[li].pageItems, targetUuid);
-        if (targetItem) break;
-      }
+      var targetItem = findItemByUUID(targetUuid);
       if (targetItem) {
         items.push(getEffectInfo(targetItem, coordSystem));
       } else {
@@ -158,9 +140,9 @@ try {
         items: items
       });
     }
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -175,12 +157,7 @@ export function register(server: McpServer): void {
         selection_only: z.boolean().optional().default(false).describe('Selected objects only'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

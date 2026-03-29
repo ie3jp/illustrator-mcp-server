@@ -1,13 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var doc = app.activeDocument;
     var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
 
@@ -66,9 +67,9 @@ try {
       fontEntries: fontEntries,
       objectBounds: objectBounds
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -199,12 +200,7 @@ export function register(server: McpServer): void {
           .default('css')
           .describe('Output format'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const result = (await executeJsx(jsxCode, params)) as {

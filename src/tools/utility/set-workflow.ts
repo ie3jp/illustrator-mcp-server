@@ -8,6 +8,7 @@ import {
   getSessionWorkflow,
   getSessionCoordinateSystem,
 } from '../session.js';
+import { WRITE_IDEMPOTENT_ANNOTATIONS } from '../modify/shared.js';
 
 const workflowToCoord: Record<
   Exclude<WorkflowType, 'unknown'>,
@@ -44,12 +45,7 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Reset session to default behavior (auto-detect from document).'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
       if (params.clear) {

@@ -5,6 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -21,32 +22,17 @@ if (preflight) {
     if (!imgFile.exists) {
       writeResultFile(RESULT_PATH, { error: true, message: "Image file not found: " + filePath });
     } else {
-      var targetLayer = doc.activeLayer;
-      if (params.layer_name) {
-        try {
-          targetLayer = doc.layers.getByName(params.layer_name);
-        } catch (e) {
-          targetLayer = doc.layers.add();
-          targetLayer.name = params.layer_name;
-        }
-      }
+      var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
       var placed = targetLayer.placedItems.add();
       placed.file = imgFile;
 
       // Position
       if (typeof params.x === "number" && typeof params.y === "number") {
-        var inputX = params.x;
-        var inputY = params.y;
-        if (coordSystem === "artboard-web") {
-          var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-          var abRect = ab.artboardRect;
-          placed.left = abRect[0] + inputX;
-          placed.top = abRect[1] + (-inputY);
-        } else {
-          placed.left = inputX;
-          placed.top = inputY;
-        }
+        var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+        var pos = webToAiPoint(params.x, params.y, coordSystem, abRect);
+        placed.left = pos[0];
+        placed.top = pos[1];
       }
 
       if (params.name) {
@@ -112,12 +98,7 @@ export function register(server: McpServer): void {
         name: z.string().optional().describe('Object name'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

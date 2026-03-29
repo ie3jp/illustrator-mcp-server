@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -108,14 +109,15 @@ if (preflight) {
     }
     result.spots = spots;
 
-    // 使用色の収集とメッシュ検出
+    // 使用色の収集とメッシュ検出（1パスで diagnostics も同時集計）
     if (includeUsedColors) {
       var usedFills = [];
       var usedStrokes = [];
       var meshItems = [];
       var spotUsageCount = {};
+      var rgbInCmyk = 0;
+      var cmykInRgb = 0;
 
-      // doc.pathItems is document-wide (all layers), unlike doc.pageItems which only returns active layer
       for (var ii = 0; ii < doc.pathItems.length; ii++) {
         var item = doc.pathItems[ii];
 
@@ -124,6 +126,10 @@ if (preflight) {
             var fc = colorToObject(item.fillColor);
             if (includeDiagnostics && fc.type === "cmyk") {
               fc.inkCoverage = fc.c + fc.m + fc.y + fc.k;
+            }
+            if (includeDiagnostics) {
+              if (isCMYKDoc && fc.type === "rgb") rgbInCmyk++;
+              if (!isCMYKDoc && fc.type === "cmyk") cmykInRgb++;
             }
             usedFills.push(fc);
             if (fc.type === "spot") {
@@ -138,6 +144,10 @@ if (preflight) {
             var sc = colorToObject(item.strokeColor);
             if (includeDiagnostics && sc.type === "cmyk") {
               sc.inkCoverage = sc.c + sc.m + sc.y + sc.k;
+            }
+            if (includeDiagnostics) {
+              if (isCMYKDoc && sc.type === "rgb") rgbInCmyk++;
+              if (!isCMYKDoc && sc.type === "cmyk") cmykInRgb++;
             }
             usedStrokes.push(sc);
             if (sc.type === "spot") {
@@ -160,15 +170,7 @@ if (preflight) {
         spots[sci].usageCount = (count !== undefined) ? count : 0;
       }
 
-      // カラーモデルミスマッチ集計
       if (includeDiagnostics) {
-        var rgbInCmyk = 0;
-        var cmykInRgb = 0;
-        var allUsed = usedFills.concat(usedStrokes);
-        for (var di = 0; di < allUsed.length; di++) {
-          if (isCMYKDoc && allUsed[di].type === "rgb") rgbInCmyk++;
-          if (!isCMYKDoc && allUsed[di].type === "cmyk") cmykInRgb++;
-        }
         result.colorModelWarnings = {
           documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
           rgbColorsInCmykDoc: rgbInCmyk,
@@ -214,12 +216,7 @@ export function register(server: McpServer): void {
           .default(false)
           .describe('Include print diagnostics: gradient color space validation, ink coverage per color, color model mismatch warnings'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);

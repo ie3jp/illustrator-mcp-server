@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { invalidateAutoDetectCache } from '../session.js';
+import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 try {
@@ -39,12 +40,7 @@ export function register(server: McpServer): void {
           .default(false)
           .describe('Whether to save before closing (default: false)'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });

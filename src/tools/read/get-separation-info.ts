@@ -1,12 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var doc = app.activeDocument;
     var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
     var separations = [];
@@ -39,49 +40,29 @@ try {
       separations.push(spotInfo);
     }
 
+    // スポットカラー名→インデックスのマップを構築（O(1)ルックアップ）
+    var spotIndex = {};
+    for (var si2 = 0; si2 < separations.length; si2++) {
+      spotIndex[separations[si2].name] = si2;
+    }
+
+    function countColorUsage(color) {
+      if (color.typename === "CMYKColor" && isCMYKDoc) {
+        if (color.cyan > 0) separations[0].usageCount++;
+        if (color.magenta > 0) separations[1].usageCount++;
+        if (color.yellow > 0) separations[2].usageCount++;
+        if (color.black > 0) separations[3].usageCount++;
+      } else if (color.typename === "SpotColor") {
+        var idx = spotIndex[color.spot.name];
+        if (idx !== undefined) separations[idx].usageCount++;
+      }
+    }
+
     // Count usage by iterating pathItems
     for (var pi = 0; pi < doc.pathItems.length; pi++) {
       var item = doc.pathItems[pi];
-      // Check fill
-      try {
-        if (item.filled) {
-          var fc = item.fillColor;
-          if (fc.typename === "CMYKColor" && isCMYKDoc) {
-            if (fc.cyan > 0) separations[0].usageCount++;
-            if (fc.magenta > 0) separations[1].usageCount++;
-            if (fc.yellow > 0) separations[2].usageCount++;
-            if (fc.black > 0) separations[3].usageCount++;
-          } else if (fc.typename === "SpotColor") {
-            var spName = fc.spot.name;
-            for (var ssi = 0; ssi < separations.length; ssi++) {
-              if (separations[ssi].name === spName) {
-                separations[ssi].usageCount++;
-                break;
-              }
-            }
-          }
-        }
-      } catch(e) {}
-      // Check stroke
-      try {
-        if (item.stroked) {
-          var sc = item.strokeColor;
-          if (sc.typename === "CMYKColor" && isCMYKDoc) {
-            if (sc.cyan > 0) separations[0].usageCount++;
-            if (sc.magenta > 0) separations[1].usageCount++;
-            if (sc.yellow > 0) separations[2].usageCount++;
-            if (sc.black > 0) separations[3].usageCount++;
-          } else if (sc.typename === "SpotColor") {
-            var spName2 = sc.spot.name;
-            for (var ssi2 = 0; ssi2 < separations.length; ssi2++) {
-              if (separations[ssi2].name === spName2) {
-                separations[ssi2].usageCount++;
-                break;
-              }
-            }
-          }
-        }
-      } catch(e) {}
+      try { if (item.filled) countColorUsage(item.fillColor); } catch(e) {}
+      try { if (item.stroked) countColorUsage(item.strokeColor); } catch(e) {}
     }
 
     writeResultFile(RESULT_PATH, {
@@ -89,9 +70,9 @@ try {
       separationCount: separations.length,
       separations: separations
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -103,12 +84,7 @@ export function register(server: McpServer): void {
       description:
         'Get color separation information: CMYK process plates and spot color plates with usage counts',
       inputSchema: {},
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);

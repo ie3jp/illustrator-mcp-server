@@ -5,7 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX } from './shared.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -18,28 +18,9 @@ if (preflight) {
     var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
 
-    function webToAiCoords(x, y, artboardRect) {
-      if (artboardRect) {
-        return [artboardRect[0] + x, artboardRect[1] - y];
-      }
-      return [x, y];
-    }
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
-    var abRect = null;
-    if (coordSystem === "artboard-web") {
-      var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-      abRect = ab.artboardRect;
-    }
-
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
+    var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var anchors = params.anchors;
     var closed = params.closed || false;
@@ -48,7 +29,7 @@ if (preflight) {
     var anchorPositions = [];
     for (var i = 0; i < anchors.length; i++) {
       var pt = anchors[i];
-      var aiCoords = webToAiCoords(pt.x, pt.y, abRect);
+      var aiCoords = webToAiPoint(pt.x, pt.y, coordSystem, abRect);
       anchorPositions.push(aiCoords);
     }
 
@@ -70,12 +51,12 @@ if (preflight) {
       }
 
       if (pt.left_handle) {
-        var lh = webToAiCoords(pt.left_handle.x, pt.left_handle.y, abRect);
+        var lh = webToAiPoint(pt.left_handle.x, pt.left_handle.y, coordSystem, abRect);
         pp.leftDirection = lh;
       }
 
       if (pt.right_handle) {
-        var rh = webToAiCoords(pt.right_handle.x, pt.right_handle.y, abRect);
+        var rh = webToAiPoint(pt.right_handle.x, pt.right_handle.y, coordSystem, abRect);
         pp.rightDirection = rh;
       }
     }
@@ -134,12 +115,7 @@ export function register(server: McpServer): void {
         name: z.string().optional().describe('Object name'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

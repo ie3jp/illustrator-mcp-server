@@ -5,13 +5,14 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var filterArtboard = (params && typeof params.artboard_index === "number") ? params.artboard_index : null;
@@ -31,12 +32,7 @@ try {
 
           if (filterArtboard !== null && abIdx !== filterArtboard) continue;
 
-          var layerName = "";
-          var current = tf.parent;
-          while (current) {
-            if (current.typename === "Layer") { layerName = current.name; break; }
-            current = current.parent;
-          }
+          var layerName = getParentLayerName(tf);
 
           frames.push({
             uuid: uuid,
@@ -52,9 +48,9 @@ try {
         frames: frames
       });
     }
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -321,12 +317,7 @@ export function register(server: McpServer): void {
           .describe('Filter by artboard index (0-based)'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

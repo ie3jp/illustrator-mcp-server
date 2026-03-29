@@ -5,6 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -54,11 +55,7 @@ if (preflight) {
       }
 
       if (sourceFrames !== null) {
-        // アートボード矩形の取得（座標変換用）
-        var artboardRect = null;
-        if (filterArtboard !== null) {
-          artboardRect = doc.artboards[filterArtboard].artboardRect;
-        }
+        var artboardRect = (filterArtboard !== null) ? getArtboardRectByIndex(filterArtboard) : null;
 
         var textFrames = [];
         var canPaginateEarly = contentsOnly && sortMode !== "reading-order";
@@ -91,7 +88,7 @@ if (preflight) {
             if (sortMode === "reading-order") {
               var sortAbRect = null;
               if (coordSystem === "artboard-web" && itemArtboardIndex >= 0) {
-                sortAbRect = doc.artboards[itemArtboardIndex].artboardRect;
+                sortAbRect = getArtboardRectByIndex(itemArtboardIndex);
               }
               var sortBounds = getBounds(tf, coordSystem, sortAbRect);
               contentsItem.x = sortBounds.x;
@@ -102,21 +99,13 @@ if (preflight) {
             continue;
           }
 
-          // テキスト種別
-          var textKind = "unknown";
-          if (tf.kind === TextType.POINTTEXT) {
-            textKind = "point";
-          } else if (tf.kind === TextType.AREATEXT) {
-            textKind = "area";
-          } else if (tf.kind === TextType.PATHTEXT) {
-            textKind = "path";
-          }
+          var textKind = getTextKind(tf);
 
           // 座標変換用のアートボード矩形
           var boundsAbRect = artboardRect;
           if (!boundsAbRect && coordSystem === "artboard-web") {
             if (itemArtboardIndex >= 0) {
-              boundsAbRect = doc.artboards[itemArtboardIndex].artboardRect;
+              boundsAbRect = getArtboardRectByIndex(itemArtboardIndex);
             }
           }
 
@@ -244,12 +233,7 @@ export function register(server: McpServer): void {
         limit: z.number().int().min(1).optional().describe('Maximum number of items to return (for pagination). Applied after sort.'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

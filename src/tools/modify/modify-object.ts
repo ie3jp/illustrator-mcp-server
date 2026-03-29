@@ -5,7 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -19,28 +19,6 @@ if (preflight) {
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
-    function findItemByUUID(uuid) {
-      var doc = app.activeDocument;
-      function search(items) {
-        for (var i = 0; i < items.length; i++) {
-          var item = items[i];
-          try {
-            if (item.note === uuid) return item;
-          } catch(e) {}
-          if (item.typename === "GroupItem") {
-            var found = search(item.pageItems);
-            if (found) return found;
-          }
-        }
-        return null;
-      }
-      for (var li = 0; li < doc.layers.length; li++) {
-        var found = search(doc.layers[li].pageItems);
-        if (found) return found;
-      }
-      return null;
-    }
-
     var item = findItemByUUID(params.uuid);
     if (!item) {
       writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + params.uuid });
@@ -50,15 +28,9 @@ if (preflight) {
 
       if (props.position) {
         try {
-          var px = props.position.x;
-          var py = props.position.y;
-          if (coordSystem === "artboard-web") {
-            var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-            var abRect = ab.artboardRect;
-            px = abRect[0] + px;
-            py = abRect[1] + (-py);
-          }
-          item.position = [px, py];
+          var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+          var pos = webToAiPoint(props.position.x, props.position.y, coordSystem, abRect);
+          item.position = pos;
         } catch(e) { errors.push("position: " + e.message); }
       }
 
@@ -176,12 +148,7 @@ export function register(server: McpServer): void {
           .describe('Properties to modify'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

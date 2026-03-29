@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { invalidateAutoDetectCache } from '../session.js';
+import { WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 try {
@@ -58,12 +59,7 @@ export function register(server: McpServer): void {
           .default('rgb')
           .describe('Color mode (default: rgb)'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });

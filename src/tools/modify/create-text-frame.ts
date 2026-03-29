@@ -5,7 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
+import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -19,24 +19,12 @@ if (preflight) {
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
-    function webToAiCoords(x, y, artboardRect) {
-      if (artboardRect) {
-        return [artboardRect[0] + x, artboardRect[1] - y];
-      }
-      return [x, y];
-    }
-
     var inputX = params.x;
     var inputY = params.y;
     var kind = params.kind || "point";
 
-    var abRect = null;
-    if (coordSystem === "artboard-web") {
-      var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-      abRect = ab.artboardRect;
-    }
-
-    var aiCoords = webToAiCoords(inputX, inputY, abRect);
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+    var aiCoords = webToAiPoint(inputX, inputY, coordSystem, abRect);
     var aiX = aiCoords[0];
     var aiY = aiCoords[1];
 
@@ -50,15 +38,7 @@ if (preflight) {
       }
     }
 
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
+    var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var tf;
     if (kind === "area") {
@@ -128,12 +108,7 @@ export function register(server: McpServer): void {
         name: z.string().optional().describe('Object name'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

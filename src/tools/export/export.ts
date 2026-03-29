@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
+import { WRITE_IDEMPOTENT_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -41,27 +42,7 @@ if (preflight) {
     } else {
       // UUID target — find and select (UUID は item.note に格納)
       targetType = "uuid";
-      function findByUUID(items, uuid) {
-        for (var i = 0; i < items.length; i++) {
-          var item = items[i];
-          try {
-            if (item.note === uuid) return item;
-          } catch(ex) {}
-          if (item.typename === "GroupItem") {
-            try {
-              var child = findByUUID(item.pageItems, uuid);
-              if (child) return child;
-            } catch(ex2) {}
-          }
-        }
-        return null;
-      }
-      // 全レイヤーを走査
-      var targetItem = null;
-      for (var li = 0; li < doc.layers.length; li++) {
-        targetItem = findByUUID(doc.layers[li].pageItems, target);
-        if (targetItem) break;
-      }
+      var targetItem = findItemByUUID(target);
       if (!targetItem) {
         writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + target });
         targetType = "error";
@@ -290,12 +271,7 @@ export function register(server: McpServer): void {
            .optional()
            .describe('Raster export options'),
        },
-       annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsxHeavy(jsxCode, params);

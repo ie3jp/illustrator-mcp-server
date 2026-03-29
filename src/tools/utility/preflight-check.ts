@@ -6,13 +6,14 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var minDPI = (params && params.min_dpi) ? params.min_dpi : 300;
@@ -42,29 +43,6 @@ try {
         }
       } catch(e) {}
       return false;
-    }
-
-    // Helper: get parent layer name
-    function getParentLayerName(item) {
-      var current = item.parent;
-      while (current) {
-        if (current.typename === "Layer") return current.name;
-        current = current.parent;
-      }
-      return "";
-    }
-
-    // Helper: recursive iteration over all page items
-    function iterateAllItems(container, callback) {
-      for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        try {
-          callback(item);
-          if (item.typename === "GroupItem") {
-            iterateAllItems(item, callback);
-          }
-        } catch(e) {}
-      }
     }
 
     // 1. RGB color in CMYK document
@@ -387,9 +365,9 @@ try {
         isCMYKDoc: isCMYKDoc
       }
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -413,12 +391,7 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Target PDF/X profile for compliance checks. x1a: no transparency/RGB, fonts embedded. x4: allows transparency, recommends ICC profile.'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

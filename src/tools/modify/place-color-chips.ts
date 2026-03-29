@@ -5,6 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -58,13 +59,7 @@ if (preflight) {
       }
 
       // Get or create layer
-      var chipLayer;
-      try {
-        chipLayer = doc.layers.getByName(layerName);
-      } catch(e) {
-        chipLayer = doc.layers.add();
-        chipLayer.name = layerName;
-      }
+      var chipLayer = resolveTargetLayer(doc, layerName);
 
       // Calculate start position
       var startX, startY;
@@ -217,12 +212,7 @@ export function register(server: McpServer): void {
           .describe('Layer name for color chips'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

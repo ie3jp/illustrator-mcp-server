@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
+import { WRITE_IDEMPOTENT_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -179,12 +180,7 @@ export function register(server: McpServer): void {
           .optional()
           .describe('PDF export options'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsxHeavy(jsxCode, params);

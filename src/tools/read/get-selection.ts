@@ -5,13 +5,14 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var doc = app.activeDocument;
@@ -30,10 +31,7 @@ try {
 
         // artboard detection for coordinate conversion
         var abIndex = getArtboardIndexForItem(item);
-        var artboardRect = null;
-        if (abIndex >= 0) {
-          artboardRect = doc.artboards[abIndex].artboardRect;
-        }
+        var artboardRect = getArtboardRectByIndex(abIndex);
 
         var bounds = getBounds(item, coordSystem, artboardRect);
 
@@ -68,16 +66,7 @@ try {
               info.fontSize = firstRange.characterAttributes.size;
             }
           } catch(e) {}
-          try {
-            var kind = item.kind;
-            if (kind === TextType.POINTTEXT) {
-              info.textKind = "point";
-            } else if (kind === TextType.AREATEXT) {
-              info.textKind = "area";
-            } else if (kind === TextType.PATHTEXT) {
-              info.textKind = "path";
-            }
-          } catch(e) {}
+          try { info.textKind = getTextKind(item); } catch(e) {}
         }
 
         if (itemType === "path") {
@@ -152,9 +141,9 @@ try {
         items: items
       });
     }
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -167,12 +156,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

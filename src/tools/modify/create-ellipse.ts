@@ -5,7 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX } from './shared.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -23,26 +23,12 @@ if (preflight) {
     var w = params.width;
     var h = params.height;
 
-    var left = inputX;
-    var top;
-    if (coordSystem === "artboard-web") {
-      var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-      var abRect = ab.artboardRect;
-      left = abRect[0] + inputX;
-      top = abRect[1] + (-inputY);
-    } else {
-      top = inputY;
-    }
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+    var pos = webToAiPoint(inputX, inputY, coordSystem, abRect);
+    var left = pos[0];
+    var top = pos[1];
 
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
+    var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var ellipse = targetLayer.pathItems.ellipse(top, left, w, h);
 
@@ -78,12 +64,7 @@ export function register(server: McpServer): void {
         name: z.string().optional().describe('Object name'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };

@@ -5,6 +5,7 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
+import { WRITE_ANNOTATIONS } from './shared.js';
 
 const jsxCode = `
 var preflight = preflightChecks();
@@ -34,23 +35,33 @@ if (preflight) {
       if (items.length < 2) {
         writeResultFile(RESULT_PATH, { error: true, message: "Could not find at least 2 objects with the given UUIDs" });
       } else {
+        // Pre-cache all bounds (1回のDOM アクセスで済ませる)
+        var boundsCache = [];
+        for (var bi = 0; bi < items.length; bi++) {
+          boundsCache.push(items[bi].geometricBounds);
+        }
+
         // Get reference bounds
         var refLeft, refRight, refTop, refBottom;
         if (reference === "artboard") {
           var abIdx = doc.artboards.getActiveArtboardIndex();
-          var abRect = doc.artboards[abIdx].artboardRect;
-          refLeft = abRect[0];
-          refTop = abRect[1];
-          refRight = abRect[2];
-          refBottom = abRect[3];
+          var abRect = getArtboardRectByIndex(abIdx);
+          if (!abRect) {
+            writeResultFile(RESULT_PATH, { error: true, message: "Could not resolve active artboard" });
+            items = []; // alignment/distribution をスキップ
+          } else {
+            refLeft = abRect[0];
+            refTop = abRect[1];
+            refRight = abRect[2];
+            refBottom = abRect[3];
+          }
         } else {
-          // "selection" — use bounding box of all items
           refLeft = Infinity;
           refTop = -Infinity;
           refRight = -Infinity;
           refBottom = Infinity;
-          for (var si = 0; si < items.length; si++) {
-            var sb = items[si].geometricBounds;
+          for (var si = 0; si < boundsCache.length; si++) {
+            var sb = boundsCache[si];
             if (sb[0] < refLeft) refLeft = sb[0];
             if (sb[1] > refTop) refTop = sb[1];
             if (sb[2] > refRight) refRight = sb[2];
@@ -61,79 +72,87 @@ if (preflight) {
         // Alignment
         if (alignment) {
           for (var ai = 0; ai < items.length; ai++) {
-            var item = items[ai];
-            var b = item.geometricBounds;
+            var b = boundsCache[ai];
             var w = b[2] - b[0];
             var h = b[1] - b[3];
 
             if (alignment === "left") {
-              item.position = [refLeft, b[1]];
+              items[ai].position = [refLeft, b[1]];
             } else if (alignment === "right") {
-              item.position = [refRight - w, b[1]];
+              items[ai].position = [refRight - w, b[1]];
             } else if (alignment === "center_h") {
               var cx = (refLeft + refRight) / 2;
-              item.position = [cx - w / 2, b[1]];
+              items[ai].position = [cx - w / 2, b[1]];
             } else if (alignment === "top") {
-              item.position = [b[0], refTop];
+              items[ai].position = [b[0], refTop];
             } else if (alignment === "bottom") {
-              item.position = [b[0], refBottom + h];
+              items[ai].position = [b[0], refBottom + h];
             } else if (alignment === "center_v") {
               var cy = (refTop + refBottom) / 2;
-              item.position = [b[0], cy + h / 2];
+              items[ai].position = [b[0], cy + h / 2];
             }
           }
         }
 
-        // Distribution
+        // Distribution (bounds を再取得 — alignment で位置が変わっている可能性あり)
         if (distribute) {
-          // Sort items by position
-          var sorted = items.slice();
+          // 整列後の bounds を再取得
+          var distBounds = [];
+          for (var dbi = 0; dbi < items.length; dbi++) {
+            distBounds.push(items[dbi].geometricBounds);
+          }
+
+          // ソート用のインデックス配列を構築（bounds と item の対応を維持）
+          var indices = [];
+          for (var ii = 0; ii < items.length; ii++) { indices.push(ii); }
+
           if (distribute === "horizontal") {
-            sorted.sort(function(a, b) { return a.geometricBounds[0] - b.geometricBounds[0]; });
-            // Calculate total item widths
+            indices.sort(function(a, b) { return distBounds[a][0] - distBounds[b][0]; });
             var totalWidth = 0;
-            for (var di = 0; di < sorted.length; di++) {
-              var db = sorted[di].geometricBounds;
+            for (var di = 0; di < indices.length; di++) {
+              var db = distBounds[indices[di]];
               totalWidth += (db[2] - db[0]);
             }
-            var firstLeft = sorted[0].geometricBounds[0];
-            var lastRight = sorted[sorted.length - 1].geometricBounds[2];
+            var firstLeft = distBounds[indices[0]][0];
+            var lastRight = distBounds[indices[indices.length - 1]][2];
             var totalSpace = (lastRight - firstLeft) - totalWidth;
-            var gap = totalSpace / (sorted.length - 1);
+            var gap = totalSpace / (indices.length - 1);
             var currentX = firstLeft;
-            for (var di2 = 0; di2 < sorted.length; di2++) {
-              var db2 = sorted[di2].geometricBounds;
-              var itemW = db2[2] - db2[0];
-              sorted[di2].position = [currentX, db2[1]];
+            for (var di2 = 0; di2 < indices.length; di2++) {
+              var idx = indices[di2];
+              var itemW = distBounds[idx][2] - distBounds[idx][0];
+              items[idx].position = [currentX, distBounds[idx][1]];
               currentX += itemW + gap;
             }
           } else if (distribute === "vertical") {
-            sorted.sort(function(a, b) { return b.geometricBounds[1] - a.geometricBounds[1]; }); // top to bottom
+            indices.sort(function(a, b) { return distBounds[b][1] - distBounds[a][1]; });
             var totalHeight = 0;
-            for (var dj = 0; dj < sorted.length; dj++) {
-              var dbv = sorted[dj].geometricBounds;
+            for (var dj = 0; dj < indices.length; dj++) {
+              var dbv = distBounds[indices[dj]];
               totalHeight += (dbv[1] - dbv[3]);
             }
-            var firstTop = sorted[0].geometricBounds[1];
-            var lastBottom = sorted[sorted.length - 1].geometricBounds[3];
+            var firstTop = distBounds[indices[0]][1];
+            var lastBottom = distBounds[indices[indices.length - 1]][3];
             var totalSpaceV = (firstTop - lastBottom) - totalHeight;
-            var gapV = totalSpaceV / (sorted.length - 1);
+            var gapV = totalSpaceV / (indices.length - 1);
             var currentY = firstTop;
-            for (var dj2 = 0; dj2 < sorted.length; dj2++) {
-              var dbv2 = sorted[dj2].geometricBounds;
-              var itemH = dbv2[1] - dbv2[3];
-              sorted[dj2].position = [dbv2[0], currentY];
+            for (var dj2 = 0; dj2 < indices.length; dj2++) {
+              var idxV = indices[dj2];
+              var itemH = distBounds[idxV][1] - distBounds[idxV][3];
+              items[idxV].position = [distBounds[idxV][0], currentY];
               currentY -= itemH + gapV;
             }
           }
         }
 
-        writeResultFile(RESULT_PATH, {
-          success: true,
-          alignedCount: items.length,
-          alignment: alignment || null,
-          distribute: distribute
-        });
+        if (items.length > 0) {
+          writeResultFile(RESULT_PATH, {
+            success: true,
+            alignedCount: items.length,
+            alignment: alignment || null,
+            distribute: distribute
+          });
+        }
       }
     }
   } catch (e) {
@@ -168,12 +187,7 @@ export function register(server: McpServer): void {
           .describe('Align relative to selection bounding box or active artboard'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
