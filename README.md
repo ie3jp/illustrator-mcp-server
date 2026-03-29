@@ -488,18 +488,12 @@ Runs `preflight_check` + `get_overprint_info` + `check_text_consistency` in para
 **Install:**
 
 ```bash
-claude install-skill /path/to/illustrator-mcp-server/skills/illustrator-preflight
-```
-
-Or download the `.skill` file from GitHub Releases:
-
-```bash
-claude install-skill ./illustrator-preflight.skill
+/plugin install illustrator-preflight
 ```
 
 **Usage:**
 
-Type `/illustrator-preflight` in Claude Code, or just ask "run a preflight check".
+Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask "run a preflight check".
 
 ---
 
@@ -557,7 +551,7 @@ Type `/illustrator-preflight` in Claude Code, or just ask "run a preflight check
 | `place_image` | Place an image file as linked or embedded |
 | `modify_object` | Modify properties of an existing object |
 | `convert_to_outlines` | Convert text to outlines |
-| `apply_color_profile` | Apply a color profile |
+| `assign_color_profile` | Assign (tag) a color profile (does not convert color values) |
 | `create_document` | Create a new document (size, color mode) |
 | `close_document` | Close the active document |
 | `resize_for_variation` | Create size variations from a source artboard (proportional scaling) |

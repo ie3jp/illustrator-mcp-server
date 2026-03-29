@@ -1,6 +1,6 @@
 ---
 name: illustrator-preflight
-description: Run comprehensive pre-press preflight checks on Adobe Illustrator documents using illustrator-mcp tools. Detects print-critical issues (RGB in CMYK, broken links, low-res images, white overprint, text not outlined), text consistency problems (dummy text, notation variations), and PDF/X compliance. Use when user asks to check a document before printing, submission, or handoff — or mentions "preflight", "入稿チェック", "印刷チェック", "納品前チェック".
+description: Run comprehensive pre-press preflight checks on Adobe Illustrator documents using illustrator-mcp tools. Detects print-critical issues (RGB in CMYK, broken links, low-res images, white overprint, text not outlined), text consistency problems (dummy text, notation variations), and PDF/X compliance. Use when user asks to check a document before printing, submission, or handoff — or mentions "preflight", "pre-press check", "print check", "submission check".
 ---
 
 # Illustrator Preflight Check
@@ -72,8 +72,8 @@ For each critical issue that is auto-fixable (e.g., white overprint), offer to f
 
 Some checks require asking the user before acting:
 
-- **Non-outlined text**: Ask "入稿先でフォント埋め込みPDFは受け付けていますか？" before recommending outlining
-- **Spot colors**: Ask "スポットカラーは意図的ですか？（特色印刷 or CMYK変換？）"
+- **Non-outlined text**: Ask whether the print shop accepts font-embedded PDFs before recommending outlining
+- **Spot colors**: Ask whether spot colors are intentional (special ink printing or should be converted to CMYK)
 - **Transparency with PDF/X-1a target**: Flag as critical; with X-4 or no target, flag as warning
 - **DPI threshold**: If user hasn't specified, use 300 for print, 72 for web/screen
 
@@ -88,3 +88,7 @@ When the user agrees to fix issues, use these tools:
 - RGB to CMYK color conversion — requires designer decision on color appearance
 - Broken links — requires user to locate and relink original files
 - Low resolution images — requires higher resolution source
+
+## Language
+
+Always respond in the user's language.
