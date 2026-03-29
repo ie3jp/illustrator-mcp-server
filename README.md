@@ -499,7 +499,7 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 
 ## Features
 
-- **39 tools + 2 prompts** — 19 read / 16 modify / 2 export / 2 utility
+- **61 tools + 2 prompts** — 21 read / 35 modify / 2 export / 3 utility
 - **Web coordinate system** — Y-axis down, artboard-relative (same as CSS/SVG)
 - **UUID tracking** — Stable object identification across tool calls
 
@@ -507,7 +507,7 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 
 ## Tool Reference
 
-### Read Tools (19)
+### Read Tools (21)
 
 <details>
 <summary>Click to expand</summary>
@@ -533,10 +533,12 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 | `find_objects` | Search by criteria (name, type, color, font, etc.) |
 | `check_contrast` | WCAG color contrast ratio check (manual or auto-detect overlapping pairs) |
 | `extract_design_tokens` | Extract design tokens as CSS custom properties, JSON, or Tailwind config |
+| `list_fonts` | List fonts available in Illustrator (no document required) |
+| `convert_coordinate` | Convert points between artboard and document coordinate systems |
 
 </details>
 
-### Modify Tools (16)
+### Modify Tools (35)
 
 <details>
 <summary>Click to expand</summary>
@@ -559,6 +561,25 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 | `replace_color` | Find and replace colors across document (with tolerance) |
 | `manage_layers` | Add, rename, show/hide, lock/unlock, reorder, or delete layers |
 | `place_color_chips` | Extract unique colors and place color chip swatches outside artboard |
+| `save_document` | Save or save-as the active document |
+| `open_document` | Open a document from file path |
+| `group_objects` | Group objects (supports clipping masks) |
+| `ungroup_objects` | Ungroup a group, releasing children |
+| `duplicate_objects` | Duplicate objects with optional offset |
+| `set_z_order` | Change stacking order (front/back) |
+| `move_to_layer` | Move objects to a different layer |
+| `manage_artboards` | Add, remove, resize, rename, rearrange artboards |
+| `manage_swatches` | Add, update, or delete swatches |
+| `manage_linked_images` | Relink or embed placed images |
+| `manage_datasets` | List/apply/create datasets, import/export variables |
+| `apply_graphic_style` | Apply a graphic style to objects |
+| `list_graphic_styles` | List all graphic styles in the document |
+| `apply_text_style` | Apply character or paragraph style to text |
+| `list_text_styles` | List all character and paragraph styles |
+| `create_gradient` | Create gradients and apply to objects |
+| `create_path_text` | Create text along a path |
+| `place_symbol` | Place or replace symbol instances |
+| `undo` | Undo/redo operations (multi-step) |
 
 </details>
 
@@ -569,12 +590,13 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 | `export` | SVG / PNG / JPG export (by artboard, selection, or UUID) |
 | `export_pdf` | Print-ready PDF export (crop marks, bleed, selective downsampling, output intent) |
 
-### Utility (2)
+### Utility (3)
 
 | Tool | Description |
 |---|---|
 | `preflight_check` | Pre-press check (RGB mixing, broken links, low resolution, white overprint, transparency+overprint interaction, PDF/X compliance, etc.) |
 | `check_text_consistency` | Text consistency check (placeholder detection, notation variation patterns, full text listing for LLM analysis) |
+| `set_workflow` | Set workflow mode (web/print) to configure default coordinate system |
 
 ---
 
@@ -633,7 +655,7 @@ npm test
 npx tsx test/e2e/smoke-test.ts
 ```
 
-The E2E test creates a fresh document, places test objects, runs all 45 test cases across 5 phases, and cleans up automatically.
+The E2E test creates a fresh document, places test objects, runs 106 test cases across 6 phases covering all registered tools, and cleans up automatically.
 
 ---
 
