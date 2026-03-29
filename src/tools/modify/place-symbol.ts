@@ -40,7 +40,7 @@ if (preflight) {
           si.position = webToAiPoint(params.x, params.y, coordSystem, abRect);
         }
         var uuid = ensureUUID(si);
-        writeResultFile(RESULT_PATH, { success: true, uuid: uuid, symbolName: params.symbol_name });
+        writeResultFile(RESULT_PATH, { success: true, uuid: uuid, symbolName: params.symbol_name, verified: verifyItem(si) });
       }
     } else if (params.action === "replace") {
       if (!params.uuid) {

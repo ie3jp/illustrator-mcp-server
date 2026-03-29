@@ -52,7 +52,8 @@ if (preflight) {
       writeResultFile(RESULT_PATH, {
         success: true,
         uuid: uuid,
-        childCount: group.pageItems.length
+        childCount: group.pageItems.length,
+        verified: verifyItem(group)
       });
     }
   } catch (e) {

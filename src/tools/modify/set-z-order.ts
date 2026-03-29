@@ -35,7 +35,8 @@ if (preflight) {
         success: true,
         uuid: params.uuid,
         command: params.command,
-        newZIndex: getZIndex(item)
+        newZIndex: getZIndex(item),
+        verified: verifyItem(item)
       });
     }
   } catch (e) {

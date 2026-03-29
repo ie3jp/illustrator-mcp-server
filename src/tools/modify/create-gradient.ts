@@ -63,12 +63,20 @@ if (preflight) {
       }
     }
 
+    var verifiedItems = [];
+    if (params.apply_to_uuids) {
+      for (var vi = 0; vi < params.apply_to_uuids.length; vi++) {
+        var vItem = findItemByUUID(params.apply_to_uuids[vi]);
+        if (vItem) verifiedItems.push(verifyItem(vItem));
+      }
+    }
     writeResultFile(RESULT_PATH, {
       success: true,
       name: params.name,
       type: params.type || "linear",
       stopCount: stops.length,
-      appliedCount: appliedCount
+      appliedCount: appliedCount,
+      verified: verifiedItems
     });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "create_gradient failed: " + e.message, line: e.line });

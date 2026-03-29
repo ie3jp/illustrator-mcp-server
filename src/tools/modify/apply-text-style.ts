@@ -55,7 +55,8 @@ if (preflight) {
         writeResultFile(RESULT_PATH, {
           success: true,
           styleType: params.style_type,
-          styleName: params.style_name
+          styleName: params.style_name,
+          verified: verifyItem(item)
         });
       }
     }

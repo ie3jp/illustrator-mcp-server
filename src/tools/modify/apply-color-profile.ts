@@ -39,12 +39,15 @@ if (preflight) {
     }
 
     if (!hasError) {
+      var actualProfile = "";
+      try { actualProfile = doc.colorProfileName; } catch(e2) { actualProfile = "(unavailable)"; }
       writeResultFile(RESULT_PATH, {
         assigned: true,
         converted: false,
         previousProfile: oldProfile,
         newProfile: profile,
-        note: note
+        note: note,
+        verified: { actualProfile: actualProfile }
       });
     }
   } catch (e) {

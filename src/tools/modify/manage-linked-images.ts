@@ -42,7 +42,8 @@ if (preflight) {
               success: true,
               action: "relink",
               uuid: params.uuid,
-              newPath: params.new_path
+              newPath: params.new_path,
+              verified: verifyItem(item)
             });
           }
         }
@@ -59,11 +60,19 @@ if (preflight) {
           }
         }
         if (resultUuid) {
+          var embeddedItem = null;
+          for (var ei = 0; ei < doc.rasterItems.length; ei++) {
+            if (ensureUUID(doc.rasterItems[ei]) === resultUuid) {
+              embeddedItem = doc.rasterItems[ei];
+              break;
+            }
+          }
           writeResultFile(RESULT_PATH, {
             success: true,
             action: "embed",
             previousUuid: params.uuid,
-            newUuid: resultUuid
+            newUuid: resultUuid,
+            verified: embeddedItem ? verifyItem(embeddedItem) : null
           });
         } else {
           writeResultFile(RESULT_PATH, {

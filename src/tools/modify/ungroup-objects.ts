@@ -42,10 +42,15 @@ if (preflight) {
       }
       group.remove();
 
+      var verifiedChildren = [];
+      for (var vi = 0; vi < children.length; vi++) {
+        verifiedChildren.push(verifyItem(children[vi]));
+      }
       writeResultFile(RESULT_PATH, {
         success: true,
         releasedCount: childUuids.length,
-        childUuids: childUuids
+        childUuids: childUuids,
+        verified: verifiedChildren
       });
     }
   } catch (e) {

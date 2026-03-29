@@ -60,7 +60,7 @@ if (preflight) {
         }
 
         var uuid = ensureUUID(dup);
-        results.push({ sourceUuid: params.uuids[i], newUuid: uuid });
+        results.push({ sourceUuid: params.uuids[i], newUuid: uuid, verified: verifyItem(dup) });
       }
 
       writeResultFile(RESULT_PATH, {

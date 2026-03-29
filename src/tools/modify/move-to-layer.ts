@@ -42,10 +42,16 @@ if (preflight) {
         }
       }
 
+      var verifiedItems = [];
+      for (var vi = 0; vi < params.uuids.length; vi++) {
+        var vItem = findItemByUUID(params.uuids[vi]);
+        if (vItem) verifiedItems.push(verifyItem(vItem));
+      }
       writeResultFile(RESULT_PATH, {
         success: true,
         movedCount: movedCount,
-        targetLayer: params.target_layer
+        targetLayer: params.target_layer,
+        verified: verifiedItems
       });
     }
   } catch (e) {

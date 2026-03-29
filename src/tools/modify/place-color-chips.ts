@@ -168,11 +168,17 @@ if (preflight) {
         placedCount++;
       }
 
+      var verifiedChips = [];
+      var chipItems = chipLayer.pageItems;
+      for (var vci = 0; vci < chipItems.length && vci < 5; vci++) {
+        verifiedChips.push(verifyItem(chipItems[vci]));
+      }
       writeResultFile(RESULT_PATH, {
         success: true,
         chipCount: placedCount,
         layerName: layerName,
-        position: position
+        position: position,
+        verified: verifiedChips
       });
     }
   } catch (e) {

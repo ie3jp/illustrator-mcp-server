@@ -152,11 +152,18 @@ if (preflight) {
         }
 
         if (items.length > 0) {
+          var coordSystem = params.coordinate_system || "artboard-web";
+          var verifyAbRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+          var verifiedItems = [];
+          for (var vi = 0; vi < items.length; vi++) {
+            verifiedItems.push(verifyItem(items[vi], coordSystem, verifyAbRect));
+          }
           writeResultFile(RESULT_PATH, {
             success: true,
             alignedCount: items.length,
             alignment: alignment || null,
-            distribute: distribute
+            distribute: distribute,
+            verified: verifiedItems
           });
         }
       }
