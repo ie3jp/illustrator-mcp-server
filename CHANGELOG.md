@@ -1,11 +1,8 @@
 # Changelog
 
-## [1.2.4] - 2026-03-30
+## [1.2.5] - 2026-03-30
 
 ### Added
-- **create_document** tool — create new Illustrator documents (size, color mode)
-- **close_document** tool — close the active document (with save option)
-- **place_image** tool — place image files as linked or embedded (with UUID tracking after embed)
 - **19 new tools** (Phase 6) — manage_datasets, create_gradient, apply_graphic_style, list_graphic_styles, convert_to_outlines, assign_color_profile, get_separation_info, get_overprint_info, check_text_consistency, list_text_styles, apply_text_style, get_guidelines, create_path_text, place_color_chips, set_z_order, resize_for_variation, extract_design_tokens, get_effects, convert_coordinate
 - **LLM manual E2E tests** — 9 test cases verifying LLM understanding of tool constraints (clipping mask order, gradient+mask, embed UUID change, cross-colorspace limits, artboard deletion, text line breaks, stack order, export side effects, GrayColor interpretation)
 
@@ -18,6 +15,17 @@
 ### Changed
 - E2E test suite expanded to 106 test cases across 6 phases covering all registered tools
 - README updated to 61 tools + 3 utilities
+
+## [1.2.4] - 2025-03-25
+
+### Added
+- **create_document** tool — create new Illustrator documents (size, color mode)
+- **close_document** tool — close the active document (with save option)
+- **place_image** tool — place image files as linked or embedded (with UUID tracking after embed)
+- Image resolution E2E tests — linked/embedded image verification, preflight low-resolution detection
+
+### Changed
+- E2E test suite fully automated — creates fresh document, places test objects (shapes, text, images), runs 45 tests across 5 phases, and cleans up automatically. No pre-existing files required.
 
 ## [1.2.3] - 2025-03-24
 
