@@ -1,8 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX } from './shared.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_ellipse — 楕円の作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.ellipse(top, left, width, height)
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -19,26 +27,12 @@ if (preflight) {
     var w = params.width;
     var h = params.height;
 
-    var left = inputX;
-    var top;
-    if (coordSystem === "artboard-web") {
-      var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-      var abRect = ab.artboardRect;
-      left = abRect[0] + inputX;
-      top = abRect[1] + (-inputY);
-    } else {
-      top = inputY;
-    }
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+    var pos = webToAiPoint(inputX, inputY, coordSystem, abRect);
+    var left = pos[0];
+    var top = pos[1];
 
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
+    var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var ellipse = targetLayer.pathItems.ellipse(top, left, w, h);
 
@@ -72,21 +66,13 @@ export function register(server: McpServer): void {
         stroke: strokeSchema.describe('Stroke settings'),
         layer_name: z.string().optional().describe('Target layer name'),
         name: z.string().optional().describe('Object name'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

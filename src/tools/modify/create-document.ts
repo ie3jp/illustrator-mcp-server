@@ -1,7 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { invalidateAutoDetectCache } from '../session.js';
+import { WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_document — 新規ドキュメントの作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ — Documents.add(colorSpace, width, height)
+ */
 const jsxCode = `
 try {
   var verErr = checkIllustratorVersion();
@@ -57,15 +63,11 @@ export function register(server: McpServer): void {
           .default('rgb')
           .describe('Color mode (default: rgb)'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });
+      invalidateAutoDetectCache();
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

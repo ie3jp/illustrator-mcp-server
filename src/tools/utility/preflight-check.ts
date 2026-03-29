@@ -1,17 +1,31 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
-
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * preflight_check — 入稿前プリフライトチェック
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — overprintFill, overprintStroke
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, matrix
+ *
+ * 既知の問題: isWhiteColor の GrayColor 判定 (gray===100) は
+ * リファレンス記載（0=黒, 100=白）に基づくが、check-contrast.ts 等の変換式と矛盾あり。要検証。
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var minDPI = (params && params.min_dpi) ? params.min_dpi : 300;
+    var targetPdfProfile = (params && params.target_pdf_profile) ? params.target_pdf_profile : null;
     var doc = app.activeDocument;
     var results = [];
     var docColorSpace = doc.documentColorSpace;
@@ -33,33 +47,12 @@ try {
         } else if (color.typename === "RGBColor") {
           if (color.red === 255 && color.green === 255 && color.blue === 255) return true;
         } else if (color.typename === "GrayColor") {
+          // GrayColor.gray はインク量: 0=白(インクなし), 100=黒(フルインク)
+          // E2Eテストで確認済み。リファレンスの "0=black, 100=white" 記載は誤り。
           if (color.gray === 0) return true;
         }
       } catch(e) {}
       return false;
-    }
-
-    // Helper: get parent layer name
-    function getParentLayerName(item) {
-      var current = item.parent;
-      while (current) {
-        if (current.typename === "Layer") return current.name;
-        current = current.parent;
-      }
-      return "";
-    }
-
-    // Helper: recursive iteration over all page items
-    function iterateAllItems(container, callback) {
-      for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        try {
-          callback(item);
-          if (item.typename === "GroupItem") {
-            iterateAllItems(item, callback);
-          }
-        } catch(e) {}
-      }
     }
 
     // 1. RGB color in CMYK document
@@ -317,9 +310,52 @@ try {
               uuid: uuid8,
               details: { name: item.name || "", layerName: getParentLayerName(item), reason: reason }
             });
+
+            // 9. Transparency + overprint interaction
+            if (item.typename === "PathItem") {
+              var hasFillOPTrans = false;
+              var hasStrokeOPTrans = false;
+              try { hasFillOPTrans = item.fillOverprint; } catch(e4) {}
+              try { hasStrokeOPTrans = item.strokeOverprint; } catch(e4) {}
+              if (hasFillOPTrans || hasStrokeOPTrans) {
+                results.push({
+                  level: "error",
+                  category: "transparency_overprint_interaction",
+                  message: "Transparency + overprint on same object (unpredictable print result)",
+                  uuid: uuid8,
+                  details: { name: item.name || "", layerName: getParentLayerName(item), reason: reason + " + overprint" }
+                });
+              }
+
+              // 10. Spot color + opacity interaction
+              try {
+                if (item.filled && item.fillColor.typename === "SpotColor" && item.opacity < 100) {
+                  results.push({
+                    level: "warning",
+                    category: "spot_transparency",
+                    message: "Spot color with transparency (may convert to process color unexpectedly)",
+                    uuid: uuid8,
+                    details: { spotName: item.fillColor.spot.name, opacity: item.opacity }
+                  });
+                }
+              } catch(e4) {}
+            }
           }
         } catch(e) {}
       });
+    }
+
+    // Collect summary counts for PDF/X compliance (processed in Node.js)
+    var hasRGBItems = false;
+    var hasTransparencyItems = false;
+    var hasNonOutlinedText = false;
+    var hasSpotColors = (doc.spots.length > 1);
+    var colorProfileName = "";
+    try { colorProfileName = doc.colorProfileName || ""; } catch(e9) {}
+    for (var ri2 = 0; ri2 < results.length; ri2++) {
+      if (results[ri2].category === "rgb_in_cmyk") hasRGBItems = true;
+      if (results[ri2].category === "transparency") hasTransparencyItems = true;
+      if (results[ri2].category === "non_outlined_text") hasNonOutlinedText = true;
     }
 
     writeResultFile(RESULT_PATH, {
@@ -328,11 +364,20 @@ try {
       checkCount: results.length,
       results: results,
       placedImageData: placedImageData,
-      minDPI: minDPI
+      minDPI: minDPI,
+      targetPdfProfile: targetPdfProfile,
+      pdfxSummary: {
+        hasRGBItems: hasRGBItems,
+        hasTransparencyItems: hasTransparencyItems,
+        hasNonOutlinedText: hasNonOutlinedText,
+        hasSpotColors: hasSpotColors,
+        colorProfileName: colorProfileName,
+        isCMYKDoc: isCMYKDoc
+      }
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -341,12 +386,9 @@ export function register(server: McpServer): void {
     'preflight_check',
     {
       title: 'Preflight Check',
-      description: 'Run pre-press quality checks',
+      description: 'Run pre-press quality checks. Note: GrayColor uses ink-quantity interpretation (0=white/no ink, 100=black/full ink), which differs from the API reference.',
       inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        coordinate_system: coordinateSystemSchema,
         min_dpi: z
           .number()
           .int()
@@ -354,16 +396,16 @@ export function register(server: McpServer): void {
           .optional()
           .default(300)
           .describe('Minimum acceptable DPI for images (default: 300)'),
+        target_pdf_profile: z
+          .enum(['x1a', 'x4'])
+          .optional()
+          .describe('Target PDF/X profile for compliance checks. x1a: no transparency/RGB, fonts embedded. x4: allows transparency, recommends ICC profile.'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = (await executeJsx(jsxCode, params)) as {
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = (await executeJsx(jsxCode, resolvedParams)) as {
         checkCount: number;
         results: Array<{
           level: string;
@@ -421,6 +463,73 @@ export function register(server: McpServer): void {
         delete result.minDPI;
         result.checkCount = result.results.length;
       }
+
+      // PDF/X compliance checks (Node.js side)
+      const targetProfile = result?.targetPdfProfile as string | null;
+      const pdfxSummary = result?.pdfxSummary as {
+        hasRGBItems: boolean;
+        hasTransparencyItems: boolean;
+        hasNonOutlinedText: boolean;
+        hasSpotColors: boolean;
+        colorProfileName: string;
+        isCMYKDoc: boolean;
+      } | undefined;
+
+      if (targetProfile && pdfxSummary) {
+        if (targetProfile === 'x1a') {
+          if (pdfxSummary.hasTransparencyItems) {
+            result.results.push({
+              level: 'error',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-1a does not allow transparency. Flatten all transparency before export.',
+              uuid: null,
+              details: { profile: 'x1a' },
+            });
+          }
+          if (pdfxSummary.hasRGBItems || !pdfxSummary.isCMYKDoc) {
+            result.results.push({
+              level: 'error',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-1a requires all colors in CMYK or spot. RGB colors detected.',
+              uuid: null,
+              details: { profile: 'x1a' },
+            });
+          }
+          if (pdfxSummary.hasNonOutlinedText) {
+            result.results.push({
+              level: 'warning',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-1a requires all fonts embedded. Consider converting text to outlines.',
+              uuid: null,
+              details: { profile: 'x1a' },
+            });
+          }
+        } else if (targetProfile === 'x4') {
+          if (pdfxSummary.hasRGBItems && pdfxSummary.isCMYKDoc) {
+            result.results.push({
+              level: 'warning',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-4 allows RGB but mixed color spaces may cause conversion issues.',
+              uuid: null,
+              details: { profile: 'x4' },
+            });
+          }
+          if (!pdfxSummary.colorProfileName) {
+            result.results.push({
+              level: 'warning',
+              category: 'pdfx_compliance',
+              message: 'PDF/X-4 recommends an ICC color profile. No profile detected.',
+              uuid: null,
+              details: { profile: 'x4' },
+            });
+          }
+        }
+        result.checkCount = result.results.length;
+      }
+
+      // Clean up internal fields
+      delete result.targetPdfProfile;
+      delete result.pdfxSummary;
 
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

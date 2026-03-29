@@ -1,7 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_artboards — アートボード情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Artboards/ — Artboards collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Artboard/ — artboardRect, name
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -46,7 +55,10 @@ if (preflight) {
       };
 
       if (coordSystem === "artboard-web") {
-        info.position = { x: rect[0], y: -rect[1] };
+        // artboard-web モードでは各アートボード自体の origin は常に (0,0)
+        // ドキュメント上の絶対位置は rawPosition で返す
+        info.position = { x: 0, y: 0 };
+        info.rawPosition = { x: rect[0], y: -rect[1] };
       } else {
         info.position = { x: rect[0], y: rect[1] };
       }
@@ -70,21 +82,13 @@ export function register(server: McpServer): void {
       description: 'Get all artboard information',
       inputSchema: {
         index: z.number().int().min(0).optional().describe('Get a specific artboard by index (0-based integer)'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

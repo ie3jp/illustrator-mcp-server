@@ -63,6 +63,15 @@ const JSX_HELPERS_PATH = path.resolve(
   '../jsx/helpers/common.jsx',
 );
 
+// helpers ファイルをメモリにキャッシュ（毎回のディスク読み込みを排除）
+let _helpersCache: string | null = null;
+async function getHelpers(): Promise<string> {
+  if (!_helpersCache) {
+    _helpersCache = await fs.readFile(JSX_HELPERS_PATH, 'utf-8');
+  }
+  return _helpersCache;
+}
+
 // タイムアウト設定（ms）
 const TIMEOUT_NORMAL = 30_000;
 const TIMEOUT_HEAVY = 60_000;
@@ -82,7 +91,7 @@ async function buildJsx(
   paramsPath: string,
   resultPath: string,
 ): Promise<string> {
-  const helpers = await fs.readFile(JSX_HELPERS_PATH, 'utf-8');
+  const helpers = await getHelpers();
   return `(function() {
 ${helpers}
 var PARAMS_PATH = ${JSON.stringify(paramsPath)};
@@ -200,7 +209,10 @@ async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
     );
   }
   if (result.error) {
-    throw new Error(result.message || 'An unknown error occurred during JSX execution');
+    const parts: string[] = [];
+    if (result.message) parts.push(result.message as string);
+    if (result.line != null) parts.push(`(JSX line ${result.line})`);
+    throw new Error(parts.length > 0 ? parts.join(' ') : 'An unknown error occurred during JSX execution');
   }
   return result;
 }
@@ -216,41 +228,42 @@ async function executeJsxRaw(
   timeout: number = TIMEOUT_NORMAL,
   activate: boolean = false,
 ): Promise<JsxResult> {
-  pendingCount++;
-  try {
-    const transport = getTransport();
-    switch (transport) {
-      case 'osascript':
-        return await executeViaOsascript(jsxCode, params, timeout, activate);
-      case 'powershell':
-        return await executeViaPowerShell(jsxCode, params, timeout);
-      default: {
-        const _: never = transport;
-        throw new Error(`Unknown transport: ${_ as string}`);
-      }
-    }
-  } finally {
-    pendingCount--;
-    if (pendingCount === 0 && pendingResolvers.length > 0) {
-      pendingResolvers.splice(0).forEach((r) => r());
+  const transport = getTransport();
+  switch (transport) {
+    case 'osascript':
+      return await executeViaOsascript(jsxCode, params, timeout, activate);
+    case 'powershell':
+      return await executeViaPowerShell(jsxCode, params, timeout);
+    default: {
+      const _: never = transport;
+      throw new Error(`Unknown transport: ${_ as string}`);
     }
   }
 }
 
 /**
  * JSX を実行する（排他制御付き — 公開 API）
+ * pendingCount は jsxLimit の外側で管理し、キュー待ちのタスクも追跡する
  */
 export async function executeJsx(
   jsxCode: string,
   params?: unknown,
   options?: { timeout?: number; activate?: boolean },
 ): Promise<JsxResult> {
-  return jsxLimit(() => executeJsxRaw(
-    jsxCode,
-    params,
-    options?.timeout ?? TIMEOUT_NORMAL,
-    options?.activate ?? false,
-  ));
+  pendingCount++;
+  try {
+    return await jsxLimit(() => executeJsxRaw(
+      jsxCode,
+      params,
+      options?.timeout ?? TIMEOUT_NORMAL,
+      options?.activate ?? false,
+    ));
+  } finally {
+    pendingCount--;
+    if (pendingCount === 0 && pendingResolvers.length > 0) {
+      pendingResolvers.splice(0).forEach((r) => r());
+    }
+  }
 }
 
 /**

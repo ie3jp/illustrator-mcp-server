@@ -1,17 +1,29 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
-
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_images — 配置画像（リンク/埋め込み）の情報取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, matrix, contentVariable
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/RasterItem/ — colorSpace, transparent, imageColorSpace
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
+    var includePrintInfo = (params && typeof params.include_print_info === "boolean") ? params.include_print_info : false;
     var doc = app.activeDocument;
+    var docColorSpace = doc.documentColorSpace;
+    var isCMYKDoc = (docColorSpace === DocumentColorSpace.CMYK);
     var images = [];
 
     // Linked images (PlacedItems)
@@ -20,10 +32,7 @@ try {
       var uuid = ensureUUID(item);
       var zIdx = getZIndex(item);
       var abIndex = getArtboardIndexForItem(item);
-      var artboardRect = null;
-      if (abIndex >= 0) {
-        artboardRect = doc.artboards[abIndex].artboardRect;
-      }
+      var artboardRect = getArtboardRectByIndex(abIndex);
       var bounds = getBounds(item, coordSystem, artboardRect);
 
       var info = {
@@ -70,10 +79,7 @@ try {
       var rUuid = ensureUUID(rItem);
       var rZIdx = getZIndex(rItem);
       var rAbIndex = getArtboardIndexForItem(rItem);
-      var rArtboardRect = null;
-      if (rAbIndex >= 0) {
-        rArtboardRect = doc.artboards[rAbIndex].artboardRect;
-      }
+      var rArtboardRect = getArtboardRectByIndex(rAbIndex);
       var rBounds = getBounds(rItem, coordSystem, rArtboardRect);
 
       var rInfo = {
@@ -140,6 +146,18 @@ try {
         } catch(e3) {}
       } catch (e) {}
 
+      // Print diagnostics
+      if (includePrintInfo) {
+        rInfo.colorSpaceMismatch = false;
+        if (rInfo.colorSpace) {
+          if (isCMYKDoc && rInfo.colorSpace === "RGB") rInfo.colorSpaceMismatch = true;
+          if (!isCMYKDoc && rInfo.colorSpace === "CMYK") rInfo.colorSpaceMismatch = true;
+        }
+        if (rInfo.pixelWidth && rInfo.pixelHeight && placedWidthPt > 0) {
+          rInfo.scaleFactor = Math.round((placedWidthPt / rInfo.pixelWidth) * 100);
+        }
+      }
+
       images.push(rInfo);
     }
 
@@ -148,9 +166,9 @@ try {
       coordinateSystem: coordSystem,
       images: images
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -161,20 +179,18 @@ export function register(server: McpServer): void {
       title: 'Get Images',
       description: 'Get embedded and linked image information',
       inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
+        coordinate_system: coordinateSystemSchema,
+        include_print_info: z
+          .boolean()
           .optional()
-          .default('artboard-web'),
+          .default(false)
+          .describe('Include print diagnostics: color space mismatch flag, scale factor (%). Only available for embedded raster images.'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = (await executeJsx(jsxCode, params)) as {
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = (await executeJsx(jsxCode, resolvedParams)) as {
         imageCount: number;
         coordinateSystem: string;
         images: Array<{
@@ -205,6 +221,10 @@ export function register(server: McpServer): void {
                 const ppiH = Math.round(dims.width / widthInches);
                 const ppiV = Math.round(dims.height / heightInches);
                 img.resolution = Math.min(ppiH, ppiV);
+                // Print diagnostics for linked images
+                if (resolvedParams.include_print_info) {
+                  img.scaleFactor = Math.round((img.widthPt / dims.width) * 100);
+                }
               }
             } catch {
               // Skip unreadable files

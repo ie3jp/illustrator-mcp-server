@@ -84,7 +84,9 @@ function readParamsFile(filePath) {
 function writeResultFile(filePath, result) {
   var f = new File(filePath);
   f.encoding = "UTF-8";
-  f.open("w");
+  if (!f.open("w")) {
+    throw new Error("Cannot open result file for writing: " + filePath);
+  }
   f.write(jsonStringify(result));
   f.close();
 }
@@ -233,22 +235,36 @@ function getActiveArtboardRect() {
 }
 
 function getArtboardRectByIndex(index) {
-  var doc = app.activeDocument;
-  if (index >= 0 && index < doc.artboards.length) {
-    return doc.artboards[index].artboardRect;
+  var rects = _getArtboardRects();
+  if (index >= 0 && index < rects.length) {
+    return rects[index];
   }
   return null;
 }
 
+// アートボード矩形キャッシュ（同一 JSX 実行内で再利用）
+var _artboardRectsCache = null;
+
+function _getArtboardRects() {
+  if (!_artboardRectsCache) {
+    _artboardRectsCache = [];
+    var doc = app.activeDocument;
+    for (var i = 0; i < doc.artboards.length; i++) {
+      _artboardRectsCache.push(doc.artboards[i].artboardRect);
+    }
+  }
+  return _artboardRectsCache;
+}
+
 // アイテムがどのアートボードに属するか判定（中心座標ベース）
 function getArtboardIndexForItem(item) {
-  var doc = app.activeDocument;
+  var rects = _getArtboardRects();
   var b = item.geometricBounds;
   var cx = (b[0] + b[2]) / 2;
   var cy = (b[1] + b[3]) / 2;
 
-  for (var i = 0; i < doc.artboards.length; i++) {
-    var r = doc.artboards[i].artboardRect;
+  for (var i = 0; i < rects.length; i++) {
+    var r = rects[i];
     if (cx >= r[0] && cx <= r[2] && cy <= r[1] && cy >= r[3]) {
       return i;
     }
@@ -318,5 +334,95 @@ function getZIndex(item) {
     return idx;
   } catch(e) {
     return 0;
+  }
+}
+
+// --- UUID 検索（インデックス付き） ---
+
+// 同一 JSX 実行内で UUID→item マップを遅延構築し、2回目以降は O(1) で引く
+var _uuidIndex = null;
+
+function _buildUUIDIndex() {
+  _uuidIndex = {};
+  var doc = app.activeDocument;
+  for (var li = 0; li < doc.layers.length; li++) {
+    _indexContainer(doc.layers[li]);
+  }
+}
+
+function _indexContainer(container) {
+  for (var i = 0; i < container.pageItems.length; i++) {
+    var item = container.pageItems[i];
+    try {
+      if (item.note && item.note.length > 0) {
+        _uuidIndex[item.note] = item;
+      }
+    } catch(e) {}
+    try {
+      if (item.typename === "GroupItem") {
+        _indexContainer(item);
+      }
+    } catch(e) {}
+  }
+}
+
+function findItemByUUID(uuid) {
+  if (!_uuidIndex) _buildUUIDIndex();
+  return _uuidIndex[uuid] || null;
+}
+
+// --- レイヤー解決 ---
+
+function resolveTargetLayer(doc, layerName) {
+  if (!layerName) return doc.activeLayer;
+  try {
+    return doc.layers.getByName(layerName);
+  } catch (e) {
+    var nl = doc.layers.add();
+    nl.name = layerName;
+    return nl;
+  }
+}
+
+// --- 座標変換（Web → Illustrator ネイティブ） ---
+
+function webToAiPoint(x, y, coordSystem, artboardRect) {
+  if (coordSystem === "artboard-web" && artboardRect) {
+    return [artboardRect[0] + x, artboardRect[1] + (-y)];
+  }
+  return [x, y];
+}
+
+// --- 親レイヤー名取得 ---
+
+function getParentLayerName(item) {
+  var obj = item.parent;
+  while (obj) {
+    if (obj.typename === "Layer") return obj.name;
+    try { obj = obj.parent; } catch(e) { break; }
+  }
+  return "";
+}
+
+// --- テキストフレーム種別 ---
+
+function getTextKind(tf) {
+  try {
+    if (tf.kind === TextType.POINTTEXT) return "point";
+    if (tf.kind === TextType.AREATEXT) return "area";
+    if (tf.kind === TextType.PATHTEXT) return "path";
+  } catch(e) {}
+  return "unknown";
+}
+
+// --- 再帰的アイテム走査 ---
+
+function iterateAllItems(container, callback) {
+  for (var i = 0; i < container.pageItems.length; i++) {
+    var item = container.pageItems[i];
+    callback(item);
+    if (item.typename === "GroupItem") {
+      iterateAllItems(item, callback);
+    }
   }
 }

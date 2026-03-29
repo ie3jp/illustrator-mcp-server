@@ -1,13 +1,24 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+  detectWorkflow,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_document_info — ドキュメントの基本情報取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — name, fullName, width, height, documentColorSpace, rulerUnits
+ *
+ * 注意: Document.colorProfileName はリファレンスに記載がないが実際は動作する。
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
@@ -41,6 +52,20 @@ try {
       colorProfile = doc.colorProfileName;
     } catch (e) {
       colorProfile = "";
+    }
+
+    // ルーラー単位
+    var rulerUnits = "unknown";
+    try {
+      var ru = doc.rulerUnits;
+      if (ru === RulerUnits.Pixels) rulerUnits = "px";
+      else if (ru === RulerUnits.Points) rulerUnits = "pt";
+      else if (ru === RulerUnits.Millimeters) rulerUnits = "mm";
+      else if (ru === RulerUnits.Centimeters) rulerUnits = "cm";
+      else if (ru === RulerUnits.Inches) rulerUnits = "in";
+      else if (ru === RulerUnits.Picas) rulerUnits = "pica";
+    } catch (e) {
+      rulerUnits = "unknown";
     }
 
     // 裁ち落とし設定
@@ -97,6 +122,7 @@ try {
       height: docHeight,
       colorMode: colorMode,
       colorProfile: colorProfile,
+      rulerUnits: rulerUnits,
       bleed: bleed,
       rasterEffectResolution: rasterResolution,
       artboardCount: artboardCount,
@@ -105,9 +131,9 @@ try {
     };
 
     writeResultFile(RESULT_PATH, result);
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -118,20 +144,28 @@ export function register(server: McpServer): void {
       title: 'Get Document Info',
       description: 'Get document metadata',
       inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = {
+        ...params,
+        coordinate_system: await resolveCoordinateSystem(params.coordinate_system),
+      };
+      const result = await executeJsx(jsxCode, resolvedParams);
+
+      // Append workflow hint based on document signals
+      if (result && !result.error) {
+        const hint = detectWorkflow({
+          colorMode: (result.colorMode as string) ?? 'unknown',
+          rulerUnits: (result.rulerUnits as string) ?? 'unknown',
+          rasterEffectResolution: (result.rasterEffectResolution as number) ?? 0,
+          colorProfile: (result.colorProfile as string) ?? '',
+        });
+        result.workflowHint = hint;
+      }
+
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

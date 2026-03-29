@@ -1,11 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_guidelines — ガイドライン情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — guides property
+ */
 const jsxCode = `
-var err = preflightChecks();
-if (err) {
-  writeResultFile(RESULT_PATH, err);
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
@@ -83,23 +91,15 @@ export function register(server: McpServer): void {
       title: 'Get Guidelines',
       description: 'Get guide information',
       inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     },
   );

@@ -1,8 +1,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, COLOR_HELPERS_JSX } from './shared.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { colorSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_line — 直線の作成
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.add()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — PathItem.setEntirePath()
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -19,30 +28,12 @@ if (preflight) {
     var ix2 = params.x2;
     var iy2 = params.y2;
 
-    var px1, py1, px2, py2;
-    if (coordSystem === "artboard-web") {
-      var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-      var abRect = ab.artboardRect;
-      px1 = abRect[0] + ix1;
-      py1 = abRect[1] + (-iy1);
-      px2 = abRect[0] + ix2;
-      py2 = abRect[1] + (-iy2);
-    } else {
-      px1 = ix1;
-      py1 = iy1;
-      px2 = ix2;
-      py2 = iy2;
-    }
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+    var p1 = webToAiPoint(ix1, iy1, coordSystem, abRect);
+    var p2 = webToAiPoint(ix2, iy2, coordSystem, abRect);
+    var px1 = p1[0], py1 = p1[1], px2 = p2[0], py2 = p2[1];
 
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
+    var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var line = targetLayer.pathItems.add();
     line.setEntirePath([[px1, py1], [px2, py2]]);
@@ -99,21 +90,13 @@ export function register(server: McpServer): void {
           .describe('Stroke settings'),
         layer_name: z.string().optional().describe('Target layer name'),
         name: z.string().optional().describe('Object name'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

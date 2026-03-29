@@ -1,7 +1,12 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
-
+import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * export_pdf — PDF 書き出し
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.saveAs()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/ — PDFSaveOptions
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -19,11 +24,11 @@ if (preflight) {
     // Apply preset if specified
     if (preset !== "") {
       pdfOpts.pDFPreset = preset;
+    } else {
+      // プリセット未指定時のみデフォルト値を設定（プリセットの設定を上書きしない）
+      pdfOpts.compatibility = PDFCompatibility.ACROBAT7;
+      pdfOpts.preserveEditability = false;
     }
-
-    // Default to PDF/X-4 compatible
-    pdfOpts.compatibility = PDFCompatibility.ACROBAT7;
-    pdfOpts.preserveEditability = false;
 
     // トンボ種類（enum名とリテラル値の両方を試す）
     if (options.marks_style === "japanese") {
@@ -87,7 +92,23 @@ if (preflight) {
     }
 
     // Downsample images
-    if (options.downsample === true) {
+    if (typeof options.color_downsample_dpi === "number" || typeof options.grayscale_downsample_dpi === "number" || typeof options.monochrome_downsample_dpi === "number") {
+      // Selective downsampling per image type
+      var colorDpi = (typeof options.color_downsample_dpi === "number") ? options.color_downsample_dpi : 300;
+      pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.colorDownsampling = colorDpi;
+      pdfOpts.colorDownsamplingImageThreshold = Math.round(colorDpi * 1.5);
+
+      var grayDpi = (typeof options.grayscale_downsample_dpi === "number") ? options.grayscale_downsample_dpi : 300;
+      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.grayscaleDownsampling = grayDpi;
+      pdfOpts.grayscaleDownsamplingImageThreshold = Math.round(grayDpi * 1.5);
+
+      var monoDpi = (typeof options.monochrome_downsample_dpi === "number") ? options.monochrome_downsample_dpi : 1200;
+      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
+      pdfOpts.monochromeDownsampling = monoDpi;
+      pdfOpts.monochromeDownsamplingImageThreshold = Math.round(monoDpi * 1.5);
+    } else if (options.downsample === true) {
       pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
       pdfOpts.colorDownsampling = 300;
       pdfOpts.colorDownsamplingImageThreshold = 450;
@@ -101,6 +122,15 @@ if (preflight) {
       pdfOpts.colorDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
       pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
       pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
+    }
+
+    // Output intent ICC profile (version-dependent, may not be available)
+    if (typeof options.output_intent_profile === "string" && options.output_intent_profile !== "") {
+      try {
+        pdfOpts.outputIntentProfile = options.output_intent_profile;
+      } catch(e) {
+        // outputIntentProfile not supported in this Illustrator version
+      }
     }
 
     var outFile = new File(outputPath);
@@ -138,24 +168,23 @@ export function register(server: McpServer): void {
           .describe('PDF preset name (e.g. "[PDF/X-4:2008]")'),
         options: z
           .object({
-            trim_marks: z.boolean().optional().describe('Add trim marks'),
+            trim_marks: coerceBoolean.optional().describe('Add trim marks'),
             marks_style: z.enum(['japanese', 'roman']).optional().describe('Trim mark style (japanese or roman)'),
             trim_mark_weight: z.enum(['0.125', '0.25', '0.5']).optional().describe('Trim mark weight (pt)'),
-            registration_marks: z.boolean().optional().describe('Registration marks'),
-            color_bars: z.boolean().optional().describe('Color bars'),
-            page_information: z.boolean().optional().describe('Page information'),
-            bleed: z.boolean().optional().describe('Include bleed (3mm)'),
-            downsample: z.boolean().optional().describe('Downsample images'),
+            registration_marks: coerceBoolean.optional().describe('Registration marks'),
+            color_bars: coerceBoolean.optional().describe('Color bars'),
+            page_information: coerceBoolean.optional().describe('Page information'),
+            bleed: coerceBoolean.optional().describe('Include bleed (3mm)'),
+            downsample: coerceBoolean.optional().describe('Downsample all images (shorthand: color 300dpi, grayscale 300dpi, monochrome 1200dpi)'),
+            color_downsample_dpi: z.number().int().min(72).optional().describe('Color image downsample target DPI (overrides downsample)'),
+            grayscale_downsample_dpi: z.number().int().min(72).optional().describe('Grayscale image downsample target DPI (overrides downsample)'),
+            monochrome_downsample_dpi: z.number().int().min(72).optional().describe('Monochrome image downsample target DPI (overrides downsample)'),
+            output_intent_profile: z.string().optional().describe('Output intent ICC profile name (e.g. "Japan Color 2001 Coated"). Version-dependent feature.'),
           })
           .optional()
           .describe('PDF export options'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsxHeavy(jsxCode, params);

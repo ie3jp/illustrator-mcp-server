@@ -1,0 +1,19 @@
+{
+  "name": "illustrator-preflight",
+  "version": "1.0.0",
+  "description": "Pre-press preflight checks for Adobe Illustrator documents via illustrator-mcp tools. Detects print-critical issues, text consistency problems, and PDF/X compliance.",
+  "author": {
+    "name": "ie3jp",
+    "url": "https://github.com/ie3jp"
+  },
+  "repository": "https://github.com/ie3jp/illustrator-mcp-server",
+  "license": "MIT",
+  "keywords": [
+    "illustrator",
+    "preflight",
+    "print",
+    "prepress",
+    "pdf",
+    "mcp"
+  ]
+}

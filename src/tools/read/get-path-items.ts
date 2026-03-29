@@ -1,11 +1,21 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_path_items — パスアイテム情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — pathPoints, closed, filled, stroked
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathPoint/ — anchor, leftDirection, rightDirection
+ */
 const jsxCode = `
-var err = preflightChecks();
-if (err) {
-  writeResultFile(RESULT_PATH, err);
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
@@ -79,10 +89,7 @@ if (err) {
 
     function extractPathInfo(item) {
       var abIndex = getArtboardIndexForItem(item);
-      var artboardRect = null;
-      if (abIndex >= 0) {
-        artboardRect = doc.artboards[abIndex].artboardRect;
-      }
+      var artboardRect = getArtboardRectByIndex(abIndex);
 
       var bounds = getBounds(item, coordSystem, artboardRect);
       var uuid = ensureUUID(item);
@@ -110,6 +117,15 @@ if (err) {
       try { info.name = item.name || ""; } catch (e) {}
       try { info.closed = item.closed; } catch (e) {}
       try { info.opacity = item.opacity; } catch (e) {}
+
+      // Extract rotation from transformation matrix
+      try {
+        var m = item.matrix;
+        if (m) {
+          var rad = Math.atan2(m.mValueB, m.mValueA);
+          info.transform.rotation = Math.round(rad * 180 / Math.PI * 100) / 100;
+        }
+      } catch (e) {}
 
       // fill
       // Note: ExtendScript does not expose per-fill opacity on pathItems.
@@ -220,7 +236,7 @@ export function register(server: McpServer): void {
     'get_path_items',
     {
       title: 'Get Path Items',
-      description: 'Get path and shape data',
+      description: 'Get path and shape data. Note: fill/stroke do not include per-attribute opacity; use the item-level opacity field for transparency.',
       inputSchema: {
         layer_name: z
           .string()
@@ -236,23 +252,15 @@ export function register(server: McpServer): void {
           .optional()
           .default(false)
           .describe('Get selected paths only'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     },
   );

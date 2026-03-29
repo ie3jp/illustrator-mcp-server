@@ -1,36 +1,25 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * find_objects — 条件によるオブジェクト検索
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, name, geometricBounds
+ */
 const jsxCode = `
-var err = preflightChecks();
-if (err) {
-  writeResultFile(RESULT_PATH, err);
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = params.coordinate_system || "artboard-web";
     var doc = app.activeDocument;
     var results = [];
-
-    function getArtboardRect(item) {
-      var abIdx = getArtboardIndexForItem(item);
-      if (abIdx >= 0) {
-        return doc.artboards[abIdx].artboardRect;
-      }
-      return null;
-    }
-
-    function getParentLayerName(item) {
-      var obj = item;
-      try {
-        while (obj) {
-          if (obj.typename === "Layer") { return obj.name; }
-          obj = obj.parent;
-        }
-      } catch (e) {}
-      return "";
-    }
 
     function colorsMatch(actual, expected) {
       var tol = (expected.tolerance !== undefined) ? expected.tolerance : 5;
@@ -134,7 +123,7 @@ if (err) {
       for (var i = 0; i < container.pageItems.length; i++) {
         var item = container.pageItems[i];
         if (matchesFilters(item)) {
-          var abRect = getArtboardRect(item);
+          var abRect = getArtboardRectByIndex(getArtboardIndexForItem(item));
           var info = {
             uuid: ensureUUID(item),
             zIndex: getZIndex(item),
@@ -193,8 +182,8 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Object type'),
         layer_name: z.string().optional().describe('Layer name'),
-        fill_color: colorSchema.describe('Search by fill color (default tolerance: 5)'),
-        stroke_color: colorSchema.describe('Search by stroke color (default tolerance: 5)'),
+        fill_color: colorSchema.describe('Search by fill color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
+        stroke_color: colorSchema.describe('Search by stroke color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
         font_name: z.string().optional().describe('Font name (partial match)'),
         font_size: z
           .object({
@@ -204,23 +193,15 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Font size range'),
         artboard_index: z.number().int().min(0).optional().describe('Artboard index (0-based integer)'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     },
   );

@@ -1,8 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
+/**
+ * modify_object — オブジェクトのプロパティ変更
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — position, width, height, opacity, locked, hidden, name
+ *
+ * 注意: rotation の絶対角度指定は atan2(mValueB, mValueA) で現在角度を算出するため、
+ * skew/非等倍スケールされたオブジェクトでは不正確になる場合がある。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -15,28 +26,6 @@ if (preflight) {
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
-    function findItemByUUID(uuid) {
-      var doc = app.activeDocument;
-      function search(items) {
-        for (var i = 0; i < items.length; i++) {
-          var item = items[i];
-          try {
-            if (item.note === uuid) return item;
-          } catch(e) {}
-          if (item.typename === "GroupItem") {
-            var found = search(item.pageItems);
-            if (found) return found;
-          }
-        }
-        return null;
-      }
-      for (var li = 0; li < doc.layers.length; li++) {
-        var found = search(doc.layers[li].pageItems);
-        if (found) return found;
-      }
-      return null;
-    }
-
     var item = findItemByUUID(params.uuid);
     if (!item) {
       writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + params.uuid });
@@ -46,15 +35,9 @@ if (preflight) {
 
       if (props.position) {
         try {
-          var px = props.position.x;
-          var py = props.position.y;
-          if (coordSystem === "artboard-web") {
-            var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-            var abRect = ab.artboardRect;
-            px = abRect[0] + px;
-            py = abRect[1] + (-py);
-          }
-          item.position = [px, py];
+          var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+          var pos = webToAiPoint(props.position.x, props.position.y, coordSystem, abRect);
+          item.position = pos;
         } catch(e) { errors.push("position: " + e.message); }
       }
 
@@ -87,7 +70,18 @@ if (preflight) {
       }
 
       if (typeof props.rotation === "number") {
-        try { item.rotate(props.rotation); }
+        try {
+          if (props.rotation_mode === "absolute") {
+            // 現在の回転角を Matrix から算出し、差分を rotate() に渡す
+            var m = item.matrix;
+            var currentRad = Math.atan2(m.mValueB, m.mValueA);
+            var currentDeg = currentRad * 180 / Math.PI;
+            var delta = props.rotation - currentDeg;
+            item.rotate(delta);
+          } else {
+            item.rotate(props.rotation);
+          }
+        }
         catch(e) { errors.push("rotation: " + e.message); }
       }
 
@@ -97,7 +91,7 @@ if (preflight) {
       }
 
       if (typeof props.contents === "string") {
-        try { item.contents = props.contents; }
+        try { item.contents = props.contents.split(String.fromCharCode(10)).join(String.fromCharCode(13)); }
         catch(e) { errors.push("contents: " + e.message); }
       }
 
@@ -163,28 +157,21 @@ export function register(server: McpServer): void {
             fill: colorSchema.describe('Fill color'),
             stroke: strokeSchema.describe('Stroke settings'),
             opacity: z.number().optional().describe('Opacity (0-100)'),
-            rotation: z.number().optional().describe('Rotation delta in degrees (additive — each call adds to current rotation)'),
+            rotation: z.number().optional().describe('Rotation in degrees. Default mode is "delta" (additive). Use rotation_mode: "absolute" for target angle.'),
+            rotation_mode: z.enum(['delta', 'absolute']).optional().default('delta').describe('delta = add to current rotation, absolute = set to exact angle'),
             name: z.string().optional().describe('Object name'),
             contents: z.string().optional().describe('Text contents (for text frames)'),
             font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),
             font_size: z.number().optional().describe('Font size (for text frames)'),
           })
           .describe('Properties to modify'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

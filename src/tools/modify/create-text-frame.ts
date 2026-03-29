@@ -1,8 +1,17 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX } from './shared.js';
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
+/**
+ * create_text_frame — テキストフレームの作成（ポイント/エリア）
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/ — TextFrameItems.pointText(), areaText()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -15,24 +24,12 @@ if (preflight) {
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
-    function webToAiCoords(x, y, artboardRect) {
-      if (artboardRect) {
-        return [artboardRect[0] + x, artboardRect[1] - y];
-      }
-      return [x, y];
-    }
-
     var inputX = params.x;
     var inputY = params.y;
     var kind = params.kind || "point";
 
-    var abRect = null;
-    if (coordSystem === "artboard-web") {
-      var ab = doc.artboards[doc.artboards.getActiveArtboardIndex()];
-      abRect = ab.artboardRect;
-    }
-
-    var aiCoords = webToAiCoords(inputX, inputY, abRect);
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+    var aiCoords = webToAiPoint(inputX, inputY, coordSystem, abRect);
     var aiX = aiCoords[0];
     var aiY = aiCoords[1];
 
@@ -46,27 +43,28 @@ if (preflight) {
       }
     }
 
-    var targetLayer = doc.activeLayer;
-    if (params.layer_name) {
-      try {
-        targetLayer = doc.layers.getByName(params.layer_name);
-      } catch (e) {
-        targetLayer = doc.layers.add();
-        targetLayer.name = params.layer_name;
-      }
-    }
+    var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
     var tf;
+    var rectPath = null;
     if (kind === "area") {
       var w = params.width || 100;
       var h = params.height || 100;
-      var rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
-      tf = targetLayer.textFrames.areaText(rectPath);
+      rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
+      try {
+        tf = targetLayer.textFrames.areaText(rectPath);
+      } catch (eArea) {
+        try { rectPath.remove(); } catch (_) {}
+        throw eArea;
+      }
     } else {
       tf = targetLayer.textFrames.pointText([aiX, aiY]);
     }
 
-    tf.contents = params.contents || "";
+    var rawContents = params.contents || "";
+    // Handle literal \\n (backslash + n) from MCP parameter passing
+    rawContents = rawContents.replace(/\\\\n/g, String.fromCharCode(10));
+    tf.contents = rawContents.split(String.fromCharCode(10)).join(String.fromCharCode(13));
 
     if (params.name) {
       tf.name = params.name;
@@ -108,7 +106,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         x: z.number().describe('X coordinate'),
         y: z.number().describe('Y coordinate'),
-        contents: z.string().describe('Text contents'),
+        contents: z.string().describe('Text contents. Use \\n for line breaks (automatically converted to CR for Illustrator).'),
         kind: z
           .enum(['point', 'area'])
           .optional()
@@ -121,21 +119,13 @@ export function register(server: McpServer): void {
         fill: colorSchema.describe('Text color'),
         layer_name: z.string().optional().describe('Target layer name'),
         name: z.string().optional().describe('Object name'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

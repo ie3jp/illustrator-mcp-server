@@ -1,7 +1,13 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { invalidateAutoDetectCache } from '../session.js';
+import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
+/**
+ * close_document — アクティブドキュメントを閉じる
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.close(saveOptions)
+ */
 const jsxCode = `
 try {
   var verErr = checkIllustratorVersion();
@@ -32,21 +38,16 @@ export function register(server: McpServer): void {
       description:
         'Close the active Illustrator document. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
-        save: z
-          .boolean()
+        save: coerceBoolean
           .optional()
           .default(false)
           .describe('Whether to save before closing (default: false)'),
       },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: true,
-        idempotentHint: false,
-        openWorldHint: false,
-      },
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });
+      invalidateAutoDetectCache();
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

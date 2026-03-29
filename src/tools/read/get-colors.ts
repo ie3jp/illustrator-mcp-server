@@ -1,7 +1,14 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_colors — ドキュメントの色情報取得（スウォッチ・グラデーション・パターン・スポットカラー）
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/ — Swatches collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Gradient/ — Gradient, GradientStop
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Spot/ — Spot color
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Pattern/ — Pattern
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -12,6 +19,8 @@ if (preflight) {
     var doc = app.activeDocument;
     var includeSwatches = (params && typeof params.include_swatches === "boolean") ? params.include_swatches : true;
     var includeUsedColors = (params && typeof params.include_used_colors === "boolean") ? params.include_used_colors : true;
+    var includeDiagnostics = (params && typeof params.include_diagnostics === "boolean") ? params.include_diagnostics : false;
+    var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
 
     var result = {};
 
@@ -60,6 +69,24 @@ if (preflight) {
     }
     result.gradients = gradients;
 
+    // グラデーション色空間診断
+    if (includeDiagnostics && isCMYKDoc) {
+      var gradientWarnings = [];
+      for (var gwi = 0; gwi < gradients.length; gwi++) {
+        var gw = gradients[gwi];
+        for (var gwsi = 0; gwsi < gw.stops.length; gwsi++) {
+          if (gw.stops[gwsi].color && gw.stops[gwsi].color.type === "rgb") {
+            gradientWarnings.push({
+              gradientName: gw.name,
+              stopIndex: gwsi,
+              message: "RGB color stop in CMYK document gradient"
+            });
+          }
+        }
+      }
+      result.gradientWarnings = gradientWarnings;
+    }
+
     // パターン一覧
     var patterns = [];
     for (var pi = 0; pi < doc.patterns.length; pi++) {
@@ -79,29 +106,37 @@ if (preflight) {
       try { spotInfo.color = colorToObject(spot.color); } catch (e) { spotInfo.color = { type: "unknown" }; }
       try {
         var st = spot.spotKind;
-        if (st === SpotColorKind.SPOTCMYK) spotInfo.spotKind = "CMYK";
-        else if (st === SpotColorKind.SPOTRGB) spotInfo.spotKind = "RGB";
-        else if (st === SpotColorKind.SPOTLAB) spotInfo.spotKind = "LAB";
+        if (st === SpotColorKind.SpotCMYK) spotInfo.spotKind = "CMYK";
+        else if (st === SpotColorKind.SpotRGB) spotInfo.spotKind = "RGB";
+        else if (st === SpotColorKind.SpotLAB) spotInfo.spotKind = "LAB";
         else spotInfo.spotKind = st.toString();
       } catch (e) { spotInfo.spotKind = "unknown"; }
       spots.push(spotInfo);
     }
     result.spots = spots;
 
-    // 使用色の収集とメッシュ検出
+    // 使用色の収集とメッシュ検出（1パスで diagnostics も同時集計）
     if (includeUsedColors) {
       var usedFills = [];
       var usedStrokes = [];
       var meshItems = [];
       var spotUsageCount = {};
+      var rgbInCmyk = 0;
+      var cmykInRgb = 0;
 
-      // doc.pathItems is document-wide (all layers), unlike doc.pageItems which only returns active layer
       for (var ii = 0; ii < doc.pathItems.length; ii++) {
         var item = doc.pathItems[ii];
 
         try {
           if (item.filled) {
             var fc = colorToObject(item.fillColor);
+            if (includeDiagnostics && fc.type === "cmyk") {
+              fc.inkCoverage = fc.c + fc.m + fc.y + fc.k;
+            }
+            if (includeDiagnostics) {
+              if (isCMYKDoc && fc.type === "rgb") rgbInCmyk++;
+              if (!isCMYKDoc && fc.type === "cmyk") cmykInRgb++;
+            }
             usedFills.push(fc);
             if (fc.type === "spot") {
               var spName = fc.name;
@@ -113,6 +148,13 @@ if (preflight) {
         try {
           if (item.stroked) {
             var sc = colorToObject(item.strokeColor);
+            if (includeDiagnostics && sc.type === "cmyk") {
+              sc.inkCoverage = sc.c + sc.m + sc.y + sc.k;
+            }
+            if (includeDiagnostics) {
+              if (isCMYKDoc && sc.type === "rgb") rgbInCmyk++;
+              if (!isCMYKDoc && sc.type === "cmyk") cmykInRgb++;
+            }
             usedStrokes.push(sc);
             if (sc.type === "spot") {
               var spName2 = sc.name;
@@ -121,6 +163,38 @@ if (preflight) {
             }
           }
         } catch (e) {}
+      }
+
+      // テキストフレームの文字色を収集
+      for (var ti = 0; ti < doc.textFrames.length; ti++) {
+        try {
+          var tfItem = doc.textFrames[ti];
+          for (var ci = 0; ci < tfItem.textRanges.length; ci++) {
+            var ca = tfItem.textRanges[ci].characterAttributes;
+            try {
+              var tfc = colorToObject(ca.fillColor);
+              if (includeDiagnostics && tfc.type === "cmyk") {
+                tfc.inkCoverage = tfc.c + tfc.m + tfc.y + tfc.k;
+              }
+              if (includeDiagnostics) {
+                if (isCMYKDoc && tfc.type === "rgb") rgbInCmyk++;
+                if (!isCMYKDoc && tfc.type === "cmyk") cmykInRgb++;
+              }
+              usedFills.push(tfc);
+              if (tfc.type === "spot") {
+                var tSpName = tfc.name;
+                if (spotUsageCount[tSpName] === undefined) spotUsageCount[tSpName] = 0;
+                spotUsageCount[tSpName] = spotUsageCount[tSpName] + 1;
+              }
+            } catch (e3) {}
+            try {
+              if (ca.strokeWeight > 0) {
+                var tsc = colorToObject(ca.strokeColor);
+                usedStrokes.push(tsc);
+              }
+            } catch (e4) {}
+          }
+        } catch (e5) {}
       }
 
       // メッシュアイテム検出 (document-wide)
@@ -132,6 +206,14 @@ if (preflight) {
       for (var sci = 0; sci < spots.length; sci++) {
         var count = spotUsageCount[spots[sci].name];
         spots[sci].usageCount = (count !== undefined) ? count : 0;
+      }
+
+      if (includeDiagnostics) {
+        result.colorModelWarnings = {
+          documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
+          rgbColorsInCmykDoc: rgbInCmyk,
+          cmykColorsInRgbDoc: cmykInRgb
+        };
       }
 
       result.usedFillColors = usedFills;
@@ -166,13 +248,13 @@ export function register(server: McpServer): void {
           .optional()
           .default(true)
           .describe('Include used color collection'),
+        include_diagnostics: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Include print diagnostics: gradient color space validation, ink coverage per color, color model mismatch warnings'),
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);

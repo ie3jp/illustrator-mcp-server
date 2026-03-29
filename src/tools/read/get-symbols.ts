@@ -1,13 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_symbols — シンボル定義・インスタンスの取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Symbols/ — Symbols collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/SymbolItem/ — symbol, position
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var doc = app.activeDocument;
@@ -45,10 +54,7 @@ try {
       var uuid = ensureUUID(sItem);
       var zIdx = getZIndex(sItem);
       var abIndex = getArtboardIndexForItem(sItem);
-      var artboardRect = null;
-      if (abIndex >= 0) {
-        artboardRect = doc.artboards[abIndex].artboardRect;
-      }
+      var artboardRect = getArtboardRectByIndex(abIndex);
       var bounds = getBounds(sItem, coordSystem, artboardRect);
 
       var instInfo = {
@@ -72,9 +78,9 @@ try {
       definitions: definitions,
       instances: instances
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -85,20 +91,13 @@ export function register(server: McpServer): void {
       title: 'Get Symbols',
       description: 'Get symbol definitions and instances',
       inputSchema: {
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

@@ -1,7 +1,16 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
-
+import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * export — SVG/PNG/JPG/WebP 書き出し
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — exportFile()
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsPNG24/
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsSVG/
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/
+ *
+ * 注意: SVGIdType / idType はリファレンスに記載がないが try/catch で安全に処理。
+ */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -41,27 +50,7 @@ if (preflight) {
     } else {
       // UUID target — find and select (UUID は item.note に格納)
       targetType = "uuid";
-      function findByUUID(items, uuid) {
-        for (var i = 0; i < items.length; i++) {
-          var item = items[i];
-          try {
-            if (item.note === uuid) return item;
-          } catch(ex) {}
-          if (item.typename === "GroupItem") {
-            try {
-              var child = findByUUID(item.pageItems, uuid);
-              if (child) return child;
-            } catch(ex2) {}
-          }
-        }
-        return null;
-      }
-      // 全レイヤーを走査
-      var targetItem = null;
-      for (var li = 0; li < doc.layers.length; li++) {
-        targetItem = findByUUID(doc.layers[li].pageItems, target);
-        if (targetItem) break;
-      }
+      var targetItem = findItemByUUID(target);
       if (!targetItem) {
         writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + target });
         targetType = "error";
@@ -72,8 +61,9 @@ if (preflight) {
       }
     }
 
+    var outFile = null;
     if (targetType !== "error") {
-      var outFile = new File(outputPath);
+      outFile = new File(outputPath);
       var parentFolder = outFile.parent;
       if (!parentFolder.exists) {
         writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
@@ -82,10 +72,9 @@ if (preflight) {
     }
 
     if (targetType !== "error") {
-      var outFile = new File(outputPath);
-
       // UUID指定かつラスタ形式の場合、一時ドキュメントにコピーして書き出す
-      var useIsolatedExport = (targetType === "selection" && typeof targetItem !== "undefined" && targetItem !== null && (format === "png" || format === "jpg"));
+      var isUUIDTarget = (targetType === "selection" && target !== "selection");
+      var useIsolatedExport = (isUUIDTarget && (format === "png" || format === "jpg"));
 
       if (useIsolatedExport) {
         // 選択オブジェクトをコピー
@@ -98,6 +87,7 @@ if (preflight) {
 
         // 一時ドキュメントを作成
         var tempDoc = app.documents.add(doc.documentColorSpace, objW, objH);
+        try {
         tempDoc.artboards[0].artboardRect = [0, objH, objW, 0];
 
         // ペースト
@@ -144,8 +134,10 @@ if (preflight) {
           tempDoc.exportFile(outFile, ExportType.JPEG, jpgOpts);
         }
 
-        // 一時ドキュメントを閉じる（保存しない）
+        } finally {
+        // 一時ドキュメントを閉じる（エクスポート失敗時もリーク防止）
         tempDoc.close(SaveOptions.DONOTSAVECHANGES);
+        }
 
       } else {
         // 従来の書き出しロジック（artboard / selection / SVG）
@@ -164,13 +156,15 @@ if (preflight) {
           if (typeof svgOpts.embed_images !== "undefined") {
             opts.embedRasterImages = svgOpts.embed_images;
           }
-          if (svgOpts.id_naming === "layer") {
-            opts.idType = SVGIdType.SVGIDMINIMAL;
-          } else if (svgOpts.id_naming === "object") {
-            opts.idType = SVGIdType.SVGIDUNIQUE;
-          } else {
-            opts.idType = SVGIdType.SVGIDREGULAR;
-          }
+          try {
+            if (svgOpts.id_naming === "layer") {
+              opts.idType = SVGIdType.SVGIDMINIMAL;
+            } else if (svgOpts.id_naming === "object") {
+              opts.idType = SVGIdType.SVGIDUNIQUE;
+            } else {
+              opts.idType = SVGIdType.SVGIDREGULAR;
+            }
+          } catch (_) { /* SVGIdType may not exist in some ExtendScript versions */ }
           if (typeof svgOpts.decimal_places === "number") {
             opts.coordinatePrecision = svgOpts.decimal_places;
           }
@@ -201,8 +195,6 @@ if (preflight) {
           if (targetType === "artboard") {
             doc.artboards.setActiveArtboardIndex(artboardIndex);
             pngOpts.artBoardClipping = true;
-            pngOpts.saveMultipleArtboards = true;
-            pngOpts.artboardRange = String(artboardIndex + 1);
           } else if (targetType === "selection") {
             pngOpts.artBoardClipping = false;
           }
@@ -220,8 +212,6 @@ if (preflight) {
           if (targetType === "artboard") {
             doc.artboards.setActiveArtboardIndex(artboardIndex);
             jpgOpts.artBoardClipping = true;
-            jpgOpts.saveMultipleArtboards = true;
-            jpgOpts.artboardRange = String(artboardIndex + 1);
           } else if (targetType === "selection") {
             jpgOpts.artBoardClipping = false;
           }
@@ -236,7 +226,13 @@ if (preflight) {
         if (!verifyFile.exists) {
           writeResultFile(RESULT_PATH, { error: true, message: "Export completed but output file was not created. The path may not be writable: " + outputPath });
         } else {
-          writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+          var resultInfo = { success: true, output_path: outputPath, format: format };
+          if (format === "png" || format === "jpg") {
+            var effectiveDpi = (rasterOpts.dpi || 72) * scale;
+            resultInfo.dpi = effectiveDpi;
+            resultInfo.scale = scale;
+          }
+          writeResultFile(RESULT_PATH, resultInfo);
         }
       }
 
@@ -256,7 +252,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         target: z
           .string()
-          .describe('UUID, "artboard:<index>", or "selection"'),
+          .describe('UUID, "artboard:<index>", or "selection". When exporting a UUID target as PNG/JPG, a temporary document is created internally (selection state may change).'),
         // WebP is not supported by ExtendScript API
         // format: z.enum(['svg', 'png', 'webp', 'jpg']).describe('Export format'),
         format: z.enum(['svg', 'png', 'jpg']).describe('Export format'),
@@ -264,9 +260,9 @@ export function register(server: McpServer): void {
         scale: z.number().optional().default(1).describe('Scale factor'),
         svg_options: z
           .object({
-            text_outline: z.boolean().optional().describe('Convert text to outlines'),
-            css_properties: z.boolean().optional().describe('Export as CSS properties'),
-            embed_images: z.boolean().optional().describe('Embed raster images'),
+            text_outline: coerceBoolean.optional().describe('Convert text to outlines'),
+            css_properties: coerceBoolean.optional().describe('Export as CSS properties'),
+            embed_images: coerceBoolean.optional().describe('Embed raster images'),
              id_naming: z
                .enum(['layer', 'object', 'auto'])
                .optional()
@@ -282,17 +278,12 @@ export function register(server: McpServer): void {
               .string()
               .optional()
               .describe('"transparent", "white", or color code'),
-             antialiasing: z.boolean().optional().describe('Anti-aliasing'),
+             antialiasing: coerceBoolean.optional().describe('Anti-aliasing'),
            })
            .optional()
            .describe('Raster export options'),
        },
-       annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsxHeavy(jsxCode, params);

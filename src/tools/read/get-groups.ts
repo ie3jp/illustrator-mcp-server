@@ -1,13 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_groups — グループアイテム情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/ — GroupItems collection
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/ — clipped, pageItems
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var maxDepth = (params && params.depth !== undefined) ? params.depth : 10;
@@ -22,8 +31,7 @@ try {
         var childUuid = ensureUUID(child);
         var childType = getItemType(child);
         var abIdx = getArtboardIndexForItem(child);
-        var abRect = null;
-        if (abIdx >= 0) { abRect = doc.artboards[abIdx].artboardRect; }
+        var abRect = getArtboardRectByIndex(abIdx);
         var childBounds = getBounds(child, coordSys, abRect);
         var childInfo = {
           uuid: childUuid,
@@ -71,8 +79,7 @@ try {
       var uuid = ensureUUID(group);
       var zIdx = getZIndex(group);
       var abIndex = getArtboardIndexForItem(group);
-      var artboardRect = null;
-      if (abIndex >= 0) { artboardRect = doc.artboards[abIndex].artboardRect; }
+      var artboardRect = getArtboardRectByIndex(abIndex);
       var bounds = getBounds(group, coordSystem, artboardRect);
 
       var groupType = "group";
@@ -104,8 +111,7 @@ try {
       var cpUuid = ensureUUID(cp);
       var cpZIdx = getZIndex(cp);
       var cpAbIndex = getArtboardIndexForItem(cp);
-      var cpAbRect = null;
-      if (cpAbIndex >= 0) { cpAbRect = doc.artboards[cpAbIndex].artboardRect; }
+      var cpAbRect = getArtboardRectByIndex(cpAbIndex);
       var cpBounds = getBounds(cp, coordSystem, cpAbRect);
 
       var cpInfo = {
@@ -122,8 +128,7 @@ try {
           var pathChild = cp.pathItems[pi];
           var pcUuid = ensureUUID(pathChild);
           var pcAbIdx = getArtboardIndexForItem(pathChild);
-          var pcAbRect = null;
-          if (pcAbIdx >= 0) { pcAbRect = doc.artboards[pcAbIdx].artboardRect; }
+          var pcAbRect = getArtboardRectByIndex(pcAbIdx);
           var pcBounds = getBounds(pathChild, coordSystem, pcAbRect);
           cpInfo.children.push({
             uuid: pcUuid,
@@ -143,9 +148,9 @@ try {
     });
 
     } // end of layerName && !sourceLayer guard
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -158,20 +163,13 @@ export function register(server: McpServer): void {
       inputSchema: {
         layer_name: z.string().optional().describe('Filter by layer name (all layers if omitted)'),
         depth: z.number().optional().default(10).describe('Maximum traversal depth'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

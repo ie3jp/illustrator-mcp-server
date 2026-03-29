@@ -1,13 +1,21 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+/**
+ * get_effects — オブジェクトに適用されたエフェクト情報の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, geometricBounds, visibleBounds
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var params = readParamsFile(PARAMS_PATH);
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var targetUuid = (params && params.target) ? params.target : null;
@@ -28,7 +36,7 @@ try {
       if (mode === BlendModes.DIFFERENCE) return "difference";
       if (mode === BlendModes.EXCLUSION) return "exclusion";
       if (mode === BlendModes.HUE) return "hue";
-      if (mode === BlendModes.SATURATION) return "saturationBlend";
+      if (mode === BlendModes.SATURATIONBLEND) return "saturationBlend";
       if (mode === BlendModes.COLOR) return "colorBlend";
       if (mode === BlendModes.LUMINOSITY) return "luminosity";
       return "unknown";
@@ -39,8 +47,7 @@ try {
       var zIdx = getZIndex(item);
       var itemType = getItemType(item);
       var abIndex = getArtboardIndexForItem(item);
-      var abRect = null;
-      if (abIndex >= 0) { abRect = doc.artboards[abIndex].artboardRect; }
+      var abRect = getArtboardRectByIndex(abIndex);
       var bounds = getBounds(item, coordSys, abRect);
 
       var info = {
@@ -108,27 +115,9 @@ try {
 
     var items = [];
 
-    function findByNote(items, uuid) {
-      for (var i = 0; i < items.length; i++) {
-        var item = items[i];
-        try { if (item.note === uuid) return item; } catch(e) {}
-        if (item.typename === "GroupItem") {
-          try {
-            var child = findByNote(item.pageItems, uuid);
-            if (child) return child;
-          } catch(e2) {}
-        }
-      }
-      return null;
-    }
-
     if (targetUuid) {
       // Find specific item by UUID
-      var targetItem = null;
-      for (var li = 0; li < doc.layers.length; li++) {
-        targetItem = findByNote(doc.layers[li].pageItems, targetUuid);
-        if (targetItem) break;
-      }
+      var targetItem = findItemByUUID(targetUuid);
       if (targetItem) {
         items.push(getEffectInfo(targetItem, coordSystem));
       } else {
@@ -142,8 +131,17 @@ try {
         }
       }
     } else {
-      for (var j = 0; j < doc.pageItems.length; j++) {
-        items.push(getEffectInfo(doc.pageItems[j], coordSystem));
+      function collectEffectItems(container) {
+        for (var j = 0; j < container.pageItems.length; j++) {
+          var pi = container.pageItems[j];
+          items.push(getEffectInfo(pi, coordSystem));
+          if (pi.typename === "GroupItem") {
+            try { collectEffectItems(pi); } catch (e) {}
+          }
+        }
+      }
+      for (var li = 0; li < doc.layers.length; li++) {
+        collectEffectItems(doc.layers[li]);
       }
     }
 
@@ -154,9 +152,9 @@ try {
         items: items
       });
     }
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -168,21 +166,14 @@ export function register(server: McpServer): void {
       description: 'Get effect and appearance information',
       inputSchema: {
         target: z.string().optional().describe('Filter by UUID for a specific object'),
-        selection_only: z.boolean().optional().default(false).describe('Selected objects only'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web'),
+        selection_only: coerceBoolean.optional().default(false).describe('Selected objects only'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

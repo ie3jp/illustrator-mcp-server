@@ -1,11 +1,21 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import {
+  coordinateSystemSchema,
+  resolveCoordinateSystem,
+} from '../session.js';
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_document_structure — レイヤー・グループ・オブジェクトのツリー構造取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — layers
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Layer/ — pageItems, layers (sublayers)
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, name, geometricBounds
+ */
 const jsxCode = `
-var err = preflightChecks();
-if (err) {
-  writeResultFile(RESULT_PATH, err);
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
@@ -13,14 +23,6 @@ if (err) {
     var filterArtboard = (params.artboard_index !== undefined) ? params.artboard_index : -1;
     var coordSystem = params.coordinate_system || "artboard-web";
     var doc = app.activeDocument;
-
-    function getArtboardRect(item) {
-      var abIdx = getArtboardIndexForItem(item);
-      if (abIdx >= 0) {
-        return doc.artboards[abIdx].artboardRect;
-      }
-      return null;
-    }
 
     function shouldIncludeItem(item) {
       if (filterArtboard < 0) { return true; }
@@ -35,7 +37,7 @@ if (err) {
         var item = container.pageItems[i];
         if (!shouldIncludeItem(item)) { continue; }
         var itemType = getItemType(item);
-        var abRect = getArtboardRect(item);
+        var abRect = getArtboardRectByIndex(getArtboardIndexForItem(item));
         var child = {
           uuid: ensureUUID(item),
           name: "",
@@ -108,23 +110,15 @@ export function register(server: McpServer): void {
           .number()
           .optional()
           .describe('Filter by artboard index (0-based integer)'),
-        coordinate_system: z
-          .enum(['artboard-web', 'document'])
-          .optional()
-          .default('artboard-web')
-          .describe('Coordinate system (artboard-web: artboard-relative Y-down, document: native Illustrator coordinates)'),
+        coordinate_system: coordinateSystemSchema,
       },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params);
+      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
-        content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }],
+        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };
     },
   );

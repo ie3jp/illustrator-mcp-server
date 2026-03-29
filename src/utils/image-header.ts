@@ -296,7 +296,11 @@ export function readImageDimensions(filePath: string): ImageDimensions | null {
       return readHeicDimensions(header);
 
     return null;
-  } catch {
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT' || code === 'EACCES' || code === 'EISDIR') {
+      throw err;
+    }
     return null;
   }
 }

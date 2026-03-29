@@ -1,21 +1,74 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { executeJsx } from '../../executor/jsx-runner.js';
-
+import { READ_ANNOTATIONS } from '../modify/shared.js';
+/**
+ * get_overprint_info — オーバープリント設定の取得
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — overprintFill, overprintStroke
+ */
 const jsxCode = `
-try {
-  var err = preflightChecks();
-  if (err) {
-    writeResultFile(RESULT_PATH, err);
-  } else {
+var preflight = preflightChecks();
+if (preflight) {
+  writeResultFile(RESULT_PATH, preflight);
+} else {
+  try {
     var doc = app.activeDocument;
 
-    function getParentLayerName(item) {
-      var current = item.parent;
-      while (current) {
-        if (current.typename === "Layer") return current.name;
-        current = current.parent;
+    function analyzeOverprintPath(pathItem, results) {
+      var fillOP = false;
+      var strokeOP = false;
+      try { fillOP = pathItem.fillOverprint; } catch(e) {}
+      try { strokeOP = pathItem.strokeOverprint; } catch(e) {}
+      if (!fillOP && !strokeOP) return;
+
+      var uuid = ensureUUID(pathItem);
+      var objName = "";
+      try { objName = pathItem.name || ""; } catch(e) {}
+      var fillColorObj = null;
+      var strokeColorObj = null;
+      var isK100 = false;
+      var isRichBlack = false;
+      var inkCoverage = 0;
+      var intent = "unknown";
+      try {
+        if (pathItem.filled) {
+          fillColorObj = colorToObject(pathItem.fillColor);
+          if (pathItem.fillColor.typename === "CMYKColor") {
+            var fc = pathItem.fillColor;
+            inkCoverage = fc.cyan + fc.magenta + fc.yellow + fc.black;
+            if (fc.black === 100 && fc.cyan === 0 && fc.magenta === 0 && fc.yellow === 0) {
+              isK100 = true;
+            }
+            if (fc.black >= 90 && (fc.cyan > 0 || fc.magenta > 0 || fc.yellow > 0)) {
+              isRichBlack = true;
+            }
+          }
+        }
+      } catch(e) {}
+      try {
+        if (pathItem.stroked) {
+          strokeColorObj = colorToObject(pathItem.strokeColor);
+        }
+      } catch(e) {}
+      if (fillOP && isK100) {
+        intent = "intentional_k100";
+      } else if (fillOP && isRichBlack) {
+        intent = "rich_black_overprint";
+      } else if (fillOP || strokeOP) {
+        intent = "likely_accidental";
       }
-      return "";
+      results.push({
+        uuid: uuid,
+        objectName: objName,
+        fillOverprint: fillOP,
+        strokeOverprint: strokeOP,
+        layerName: getParentLayerName(pathItem),
+        fillColor: fillColorObj,
+        strokeColor: strokeColorObj,
+        isK100: isK100,
+        isRichBlack: isRichBlack,
+        inkCoverage: inkCoverage,
+        intent: intent
+      });
     }
 
     function collectOverprintItems(container, results) {
@@ -25,41 +78,10 @@ try {
           if (item.typename === "GroupItem") {
             collectOverprintItems(item, results);
           } else if (item.typename === "PathItem") {
-            var fillOP = false;
-            var strokeOP = false;
-            try { fillOP = item.fillOverprint; } catch(e2) {}
-            try { strokeOP = item.strokeOverprint; } catch(e2) {}
-            if (fillOP || strokeOP) {
-              var uuid = ensureUUID(item);
-              var objName = "";
-              try { objName = item.name || ""; } catch(e2) {}
-              results.push({
-                uuid: uuid,
-                objectName: objName,
-                fillOverprint: fillOP,
-                strokeOverprint: strokeOP,
-                layerName: getParentLayerName(item)
-              });
-            }
+            analyzeOverprintPath(item, results);
           } else if (item.typename === "CompoundPathItem") {
             for (var j = 0; j < item.pathItems.length; j++) {
-              var pathItem = item.pathItems[j];
-              var fillOP2 = false;
-              var strokeOP2 = false;
-              try { fillOP2 = pathItem.fillOverprint; } catch(e2) {}
-              try { strokeOP2 = pathItem.strokeOverprint; } catch(e2) {}
-              if (fillOP2 || strokeOP2) {
-                var uuid2 = ensureUUID(pathItem);
-                var objName2 = "";
-                try { objName2 = pathItem.name || ""; } catch(e2) {}
-                results.push({
-                  uuid: uuid2,
-                  objectName: objName2,
-                  fillOverprint: fillOP2,
-                  strokeOverprint: strokeOP2,
-                  layerName: getParentLayerName(item)
-                });
-              }
+              analyzeOverprintPath(item.pathItems[j], results);
             }
           }
         } catch(e) {}
@@ -76,9 +98,9 @@ try {
       overprintCount: results.length,
       items: results
     });
+  } catch (e) {
+    writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
-} catch (e) {
-  writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
 }
 `;
 
@@ -87,14 +109,9 @@ export function register(server: McpServer): void {
     'get_overprint_info',
     {
       title: 'Get Overprint Info',
-      description: 'Get overprint settings',
+      description: 'Get overprint settings with K100/rich black detection and intent classification',
       inputSchema: {},
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-        idempotentHint: true,
-        openWorldHint: false,
-      },
+      annotations: READ_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);
