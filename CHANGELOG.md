@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.2.6] - 2026-03-30
+
+### Added
+- **place_style_guide** tool — Place a visual style guide outside the artboard (color chips, font samples, spacing annotations with on-artboard colored bars, artboard margins, guide gaps). Same-value spacings are grouped and color-coded for easy identification.
+- **select_objects** tool — Select objects by UUID (multi-select supported)
+- **extract_design_tokens: `output_path` parameter** — Save tokens directly to a file (CSS/JSON/Tailwind)
+- **manage_datasets: `import_csv` artboard duplication** — CSV import now creates physical artboard copies instead of dataset switching
+
+### Fixed
+- **extract_design_tokens** — Now skips "Style Guide" and "Color Chips" layers to avoid polluting token extraction with annotation artifacts
+- **extract_design_tokens** — `output_path` file write errors now return a structured error message instead of crashing
+- **All modify tools** — Post-operation verification added to all modify tools (`verified` field in results)
+- **place_style_guide** — ES3-compliant function declarations moved to top-level scope
+- **select_objects** — Correct `WRITE_IDEMPOTENT_ANNOTATIONS` annotation (selection is idempotent)
+
+### Changed
+- Tool count: 63 tools + 2 prompts (21 read / 37 modify / 2 export / 3 utility)
+
 ## [1.2.5] - 2026-03-30
 
 ### Added

@@ -499,7 +499,7 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 
 ## Features
 
-- **61 tools + 2 prompts** — 21 read / 35 modify / 2 export / 3 utility
+- **63 tools + 2 prompts** — 21 read / 37 modify / 2 export / 3 utility
 - **Web coordinate system** — Y-axis down, artboard-relative (same as CSS/SVG)
 - **UUID tracking** — Stable object identification across tool calls
 
@@ -538,7 +538,7 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 
 </details>
 
-### Modify Tools (35)
+### Modify Tools (37)
 
 <details>
 <summary>Click to expand</summary>
@@ -579,6 +579,8 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 | `create_gradient` | Create gradients and apply to objects |
 | `create_path_text` | Create text along a path |
 | `place_symbol` | Place or replace symbol instances |
+| `select_objects` | Select objects by UUID (multi-select supported) |
+| `place_style_guide` | Place a visual style guide outside the artboard (colors, fonts, spacing, margins, guide gaps) |
 | `undo` | Undo/redo operations (multi-step) |
 
 </details>

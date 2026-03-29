@@ -38,6 +38,8 @@ try {
         doc = app.open(openFile);
       }
 
+      $.sleep(500);
+
       var docName = doc.name;
       var fullPath = "";
       try { fullPath = doc.fullName.fsName; } catch(e) {}
