@@ -23,19 +23,22 @@ export function register(server: McpServer): void {
             role: 'user' as const,
             content: {
               type: 'text' as const,
-              text: `以下のテキスト原稿をアクティブな Illustrator ドキュメントに配置してください。
+              text: `Place the following text content onto the active Illustrator artboard with automatic layout.
 
-## ルール
-1. まず get_document_info でアートボードサイズとカラーモードを確認
-2. テキストを意味的なブロックに分割（見出し、本文、キャプション等を推測）
-3. 各ブロックを create_text_frame でアートボード内に配置:
-   - 見出しは大きく (18-32pt)、本文は読みやすく (10-14pt)
-   - 上から下へ、適切なマージンを取って配置
-   - スタイル: ${style}
-4. 配置後に list_text_frames で結果を確認し、全体のバランスを報告
+## Rules
+1. First, use get_document_info to check the artboard size and color mode.
+2. Split the text into semantic blocks (infer headings, body text, captions, etc.).
+3. Place each block using create_text_frame within the artboard:
+   - Headings: large (18-32pt), body text: readable (10-14pt)
+   - Arrange top to bottom with appropriate margins
+   - Style: ${style}
+4. After placement, use list_text_frames to verify the result and report the overall balance.
 
-## テキスト原稿
-${args.text_content}`,
+## Text Content
+${args.text_content}
+
+## Language
+Always respond in the user's language.`,
             },
           },
         ],
