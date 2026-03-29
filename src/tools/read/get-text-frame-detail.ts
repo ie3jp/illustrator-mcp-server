@@ -227,7 +227,7 @@ export function register(server: McpServer): void {
     {
       title: 'Get Text Frame Detail',
       description:
-        'Get detailed text frame attributes including per-character runs (font, tracking, akiLeft/akiRight, tsume, proportionalMetrics), kerning pairs with manual kerning values (1/1000 em), and paragraph attributes. Returns cssHints for web/CSS reproduction.',
+        'Get detailed text frame attributes including per-character runs (font, tracking, akiLeft/akiRight, tsume, proportionalMetrics), kerning pairs with manual kerning values (1/1000 em), and paragraph attributes. Returns cssHints for web/CSS reproduction. Note: paragraph leading/autoLeading may return 0 in some ExtendScript versions due to missing API support.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target text frame'),
         coordinate_system: coordinateSystemSchema,

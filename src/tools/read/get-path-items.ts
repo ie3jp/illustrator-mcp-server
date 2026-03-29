@@ -236,7 +236,7 @@ export function register(server: McpServer): void {
     'get_path_items',
     {
       title: 'Get Path Items',
-      description: 'Get path and shape data',
+      description: 'Get path and shape data. Note: fill/stroke do not include per-attribute opacity; use the item-level opacity field for transparency.',
       inputSchema: {
         layer_name: z
           .string()

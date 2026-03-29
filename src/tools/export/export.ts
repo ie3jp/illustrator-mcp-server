@@ -252,7 +252,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         target: z
           .string()
-          .describe('UUID, "artboard:<index>", or "selection"'),
+          .describe('UUID, "artboard:<index>", or "selection". When exporting a UUID target as PNG/JPG, a temporary document is created internally (selection state may change).'),
         // WebP is not supported by ExtendScript API
         // format: z.enum(['svg', 'png', 'webp', 'jpg']).describe('Export format'),
         format: z.enum(['svg', 'png', 'jpg']).describe('Export format'),

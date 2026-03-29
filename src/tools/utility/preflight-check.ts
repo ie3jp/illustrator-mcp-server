@@ -386,7 +386,7 @@ export function register(server: McpServer): void {
     'preflight_check',
     {
       title: 'Preflight Check',
-      description: 'Run pre-press quality checks',
+      description: 'Run pre-press quality checks. Note: GrayColor uses ink-quantity interpretation (0=white/no ink, 100=black/full ink), which differs from the API reference.',
       inputSchema: {
         coordinate_system: coordinateSystemSchema,
         min_dpi: z

@@ -62,6 +62,8 @@ if (preflight) {
     }
 
     var rawContents = params.contents || "";
+    // Handle literal \\n (backslash + n) from MCP parameter passing
+    rawContents = rawContents.replace(/\\\\n/g, String.fromCharCode(10));
     tf.contents = rawContents.split(String.fromCharCode(10)).join(String.fromCharCode(13));
 
     if (params.name) {
@@ -104,7 +106,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         x: z.number().describe('X coordinate'),
         y: z.number().describe('Y coordinate'),
-        contents: z.string().describe('Text contents'),
+        contents: z.string().describe('Text contents. Use \\n for line breaks (automatically converted to CR for Illustrator).'),
         kind: z
           .enum(['point', 'area'])
           .optional()

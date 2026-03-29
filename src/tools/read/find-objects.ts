@@ -182,8 +182,8 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Object type'),
         layer_name: z.string().optional().describe('Layer name'),
-        fill_color: colorSchema.describe('Search by fill color (default tolerance: 5)'),
-        stroke_color: colorSchema.describe('Search by stroke color (default tolerance: 5)'),
+        fill_color: colorSchema.describe('Search by fill color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
+        stroke_color: colorSchema.describe('Search by stroke color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
         font_name: z.string().optional().describe('Font name (partial match)'),
         font_size: z
           .object({

@@ -111,7 +111,7 @@ export function register(server: McpServer): void {
     'replace_color',
     {
       title: 'Replace Color',
-      description: 'Find and replace colors across the document or within a specific layer',
+      description: 'Find and replace colors across the document or within a specific layer. Limitations: SpotColor and GrayColor matching not supported. Cross-colorspace matching (e.g. RGB→CMYK) not possible — from_color and to_color must use the same color type as the target objects.',
       inputSchema: {
         from_color: colorSchema.unwrap().describe('Color to find (required)'),
         to_color: colorSchema.unwrap().describe('Replacement color (required)'),

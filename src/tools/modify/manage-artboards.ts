@@ -116,7 +116,7 @@ export function register(server: McpServer): void {
           .int()
           .min(0)
           .optional()
-          .describe('Target artboard index (0-based). Required for remove/resize/rename/fit_to_art'),
+          .describe('Target artboard index (0-based). Required for remove/resize/rename/fit_to_art. Note: the last remaining artboard cannot be removed.'),
         rect: z
           .object({
             x: z.number(),

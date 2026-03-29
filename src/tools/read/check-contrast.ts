@@ -146,7 +146,7 @@ export function register(server: McpServer): void {
     {
       title: 'Check Contrast',
       description:
-        'Check WCAG color contrast ratios. Manual mode: provide two colors. Auto mode: detect overlapping foreground/background pairs in the document.',
+        'Check WCAG color contrast ratios. Manual mode: provide two colors. Auto mode: detect overlapping foreground/background pairs in the document. Note: GrayColor uses ink-quantity interpretation (0=white, 100=black), which differs from the API reference.',
       inputSchema: {
         color1: z
           .object({

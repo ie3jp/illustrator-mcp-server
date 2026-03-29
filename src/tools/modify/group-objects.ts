@@ -35,8 +35,8 @@ if (preflight) {
       var parentLayer = items[0].layer;
       var group = parentLayer.groupItems.add();
 
-      // 順方向で PLACEATEND → items[0] がグループ最上位 (top)、最後が最下位
-      // クリッピングマスクでは最上位アイテムがクリップパスになる
+      // 順方向で PLACEATEND → items[0] がグループ最下位 (bottom)、最後が最上位 (top)
+      // クリッピングマスクでは最上位アイテム（＝配列末尾）がクリップパスになる
       for (var j = 0; j < items.length; j++) {
         items[j].move(group, ElementPlacement.PLACEATEND);
       }
@@ -67,14 +67,14 @@ export function register(server: McpServer): void {
     {
       title: 'Group Objects',
       description:
-        'Group multiple objects into a single group. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
-        uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group'),
+        uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group. Order matters: first=bottom, last=top in layer panel.'),
         name: z.string().optional().describe('Name for the new group'),
         clipped: coerceBoolean
           .optional()
           .default(false)
-          .describe('Create as clipping group (first item becomes clip path)'),
+          .describe('Create as clipping group. The last UUID becomes the clip path (topmost). Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
       },
       annotations: WRITE_ANNOTATIONS,
     },
