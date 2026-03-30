@@ -6,9 +6,10 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
+
 /**
  * find_objects — 条件によるオブジェクト検索
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — typename, name, geometricBounds
+ * Search by name, type, layer, page_index. Use doc.allPageItems.
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -17,35 +18,12 @@ if (preflight) {
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
-    var coordSystem = params.coordinate_system || "artboard-web";
+    var coordSystem = params.coordinate_system || "page-relative";
     var doc = app.activeDocument;
     var results = [];
 
-    function colorsMatch(actual, expected) {
-      var tol = (expected.tolerance !== undefined) ? expected.tolerance : 5;
-      if (expected.type === "cmyk") {
-        try {
-          if (actual.typename !== "CMYKColor") { return false; }
-          if (Math.abs(actual.cyan - expected.c) > tol) { return false; }
-          if (Math.abs(actual.magenta - expected.m) > tol) { return false; }
-          if (Math.abs(actual.yellow - expected.y) > tol) { return false; }
-          if (Math.abs(actual.black - expected.k) > tol) { return false; }
-          return true;
-        } catch (e) { return false; }
-      } else if (expected.type === "rgb") {
-        try {
-          if (actual.typename !== "RGBColor") { return false; }
-          if (Math.abs(actual.red - expected.r) > tol) { return false; }
-          if (Math.abs(actual.green - expected.g) > tol) { return false; }
-          if (Math.abs(actual.blue - expected.b) > tol) { return false; }
-          return true;
-        } catch (e) { return false; }
-      }
-      return false;
-    }
-
     function matchesFilters(item) {
-      // name filter
+      // name filter（部分一致）
       if (params.name) {
         var itemName = "";
         try { itemName = item.name || ""; } catch (e) {}
@@ -64,86 +42,83 @@ if (preflight) {
         if (layerName !== params.layer_name) { return false; }
       }
 
-      // artboard_index filter
-      if (params.artboard_index !== undefined) {
-        var abIdx = getArtboardIndexForItem(item);
-        if (abIdx !== params.artboard_index) { return false; }
+      // page_index filter
+      if (params.page_index !== undefined) {
+        var pageIdx = -1;
+        try {
+          var pp = item.parentPage;
+          if (pp) pageIdx = pp.index;
+        } catch (e) {}
+        if (pageIdx !== params.page_index) { return false; }
       }
 
-      // fill_color filter
-      if (params.fill_color) {
+      // paragraph_style filter（テキストフレームのみ）
+      if (params.paragraph_style) {
+        if (itemType !== "TextFrame") { return false; }
         try {
-          if (item.typename !== "PathItem" && item.typename !== "CompoundPathItem") { return false; }
-          if (!item.filled) { return false; }
-          if (!colorsMatch(item.fillColor, params.fill_color)) { return false; }
-        } catch (e) { return false; }
-      }
-
-      // stroke_color filter
-      if (params.stroke_color) {
-        try {
-          if (item.typename !== "PathItem" && item.typename !== "CompoundPathItem") { return false; }
-          if (!item.stroked) { return false; }
-          if (!colorsMatch(item.strokeColor, params.stroke_color)) { return false; }
-        } catch (e) { return false; }
-      }
-
-      // font_name filter
-      if (params.font_name) {
-        if (item.typename !== "TextFrame") { return false; }
-        try {
-          var fontFound = false;
-          for (var t = 0; t < item.textRanges.length; t++) {
-            var tf = item.textRanges[t].characterAttributes.textFont;
-            var familyName = tf.family || "";
-            var fontName = tf.name || "";
-            if (familyName.indexOf(params.font_name) >= 0 || fontName.indexOf(params.font_name) >= 0) {
-              fontFound = true;
-              break;
-            }
+          var tf = item;
+          if (tf.paragraphs.length === 0) { return false; }
+          var styleName = "";
+          if (tf.paragraphs[0].appliedParagraphStyle) {
+            styleName = tf.paragraphs[0].appliedParagraphStyle.name || "";
           }
-          if (!fontFound) { return false; }
+          if (styleName.indexOf(params.paragraph_style) < 0) { return false; }
         } catch (e) { return false; }
       }
 
-      // font_size filter
-      if (params.font_size) {
-        if (item.typename !== "TextFrame") { return false; }
+      // has_overflow filter
+      if (params.has_overflow === true) {
+        if (itemType !== "TextFrame") { return false; }
         try {
-          var size = item.textRanges[0].characterAttributes.size;
-          if (params.font_size.min !== undefined && size < params.font_size.min) { return false; }
-          if (params.font_size.max !== undefined && size > params.font_size.max) { return false; }
+          if (!item.overflows) { return false; }
         } catch (e) { return false; }
       }
 
       return true;
     }
 
-    function collectItems(container) {
-      for (var i = 0; i < container.pageItems.length; i++) {
-        var item = container.pageItems[i];
-        if (matchesFilters(item)) {
-          var abRect = getArtboardRectByIndex(getArtboardIndexForItem(item));
-          var info = {
-            uuid: ensureUUID(item),
-            zIndex: getZIndex(item),
-            name: "",
-            type: getItemType(item),
-            bounds: getBounds(item, coordSystem, abRect),
-            layerName: getParentLayerName(item)
-          };
-          try { info.name = item.name || ""; } catch (e) {}
-          results.push(info);
-        }
-        // Recurse into groups
-        if (item.typename === "GroupItem") {
-          try { collectItems(item); } catch (e) {}
-        }
-      }
-    }
+    var allItems = doc.allPageItems;
+    for (var i = 0; i < allItems.length; i++) {
+      var item = allItems[i];
+      if (!matchesFilters(item)) { continue; }
 
-    for (var i = 0; i < doc.layers.length; i++) {
-      collectItems(doc.layers[i]);
+      var pageIndex = -1;
+      try {
+        var pp = item.parentPage;
+        if (pp) pageIndex = pp.index;
+      } catch (e) {}
+
+      var boundsObj = null;
+      try {
+        boundsObj = getBoundsOnPage(item, pageIndex);
+      } catch (e) {
+        try {
+          var gb = item.geometricBounds;
+          boundsObj = { top: gb[0], left: gb[1], bottom: gb[2], right: gb[3],
+                        width: gb[3] - gb[1], height: gb[2] - gb[0] };
+        } catch (e2) {}
+      }
+
+      var info = {
+        uuid: ensureUUID(item),
+        name: "",
+        type: getItemType(item),
+        pageIndex: pageIndex,
+        bounds: boundsObj,
+        layerName: getParentLayerName(item)
+      };
+      try { info.name = item.name || ""; } catch (e) {}
+
+      // テキストフレームの追加情報
+      if (info.type === "TextFrame") {
+        try {
+          var preview = item.contents || "";
+          info.contentsPreview = preview.length > 80 ? preview.substring(0, 80) + "..." : preview;
+        } catch (e) {}
+        try { info.overflows = item.overflows; } catch (e) {}
+      }
+
+      results.push(info);
     }
 
     writeResultFile(RESULT_PATH, {
@@ -157,48 +132,31 @@ if (preflight) {
 }
 `;
 
-const colorSchema = z.object({
-  type: z.enum(['cmyk', 'rgb']),
-  c: z.number().optional(),
-  m: z.number().optional(),
-  y: z.number().optional(),
-  k: z.number().optional(),
-  r: z.number().optional(),
-  g: z.number().optional(),
-  b: z.number().optional(),
-  tolerance: z.number().optional(),
-}).optional();
-
 export function register(server: McpServer): void {
   server.registerTool(
     'find_objects',
     {
       title: 'Find Objects',
-      description: 'Search for objects by specified criteria',
+      description: 'Search InDesign page items by name (partial match), type, layer name, page index, paragraph style, or overflow status.',
       inputSchema: {
         name: z.string().optional().describe('Object name (partial match)'),
         type: z
-          .enum(['text', 'path', 'image', 'group', 'compound-path', 'symbol'])
+          .enum(['Rectangle', 'Oval', 'Polygon', 'GraphicLine', 'TextFrame', 'Group', 'Image', 'EPS'])
           .optional()
           .describe('Object type'),
-        layer_name: z.string().optional().describe('Layer name'),
-        fill_color: colorSchema.describe('Search by fill color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
-        stroke_color: colorSchema.describe('Search by stroke color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
-        font_name: z.string().optional().describe('Font name (partial match)'),
-        font_size: z
-          .object({
-            min: z.number().optional(),
-            max: z.number().optional(),
-          })
-          .optional()
-          .describe('Font size range'),
-        artboard_index: z.number().int().min(0).optional().describe('Artboard index (0-based integer)'),
+        layer_name: z.string().optional().describe('Layer name (exact match)'),
+        page_index: z.number().int().min(0).optional().describe('Page index (0-based)'),
+        paragraph_style: z.string().optional().describe('Paragraph style name of first paragraph (partial match, TextFrame only)'),
+        has_overflow: z.boolean().optional().describe('Filter to only overflowing text frames'),
         coordinate_system: coordinateSystemSchema,
       },
       annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = {
+        ...params,
+        coordinate_system: await resolveCoordinateSystem(params.coordinate_system),
+      };
       const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

@@ -22,9 +22,9 @@ if (preflight) {
         name: pg.name || String(i + 1)
       };
 
-      // サイズ
+      // サイズ (bounds = [top, left, bottom, right])
       try {
-        var b = pg.bounds; // [top, left, bottom, right]
+        var b = pg.bounds;
         pgInfo.width = b[3] - b[1];
         pgInfo.height = b[2] - b[0];
         pgInfo.bounds = { top: b[0], left: b[1], bottom: b[2], right: b[3] };
@@ -47,7 +47,9 @@ if (preflight) {
           top: mp.top,
           bottom: mp.bottom,
           left: mp.left,
-          right: mp.right
+          right: mp.right,
+          inside: mp.left,
+          outside: mp.right
         };
       } catch (e) { pgInfo.margins = null; }
 
@@ -65,10 +67,37 @@ if (preflight) {
         pgInfo.itemCount = pg.allPageItems.length;
       } catch (e) { pgInfo.itemCount = 0; }
 
-      // セクション番号ラベル
+      // セクション
       try {
-        pgInfo.sectionLabel = pg.appliedSection ? pg.appliedSection.name : "";
-      } catch (e) { pgInfo.sectionLabel = ""; }
+        var sec = pg.appliedSection;
+        if (sec) {
+          pgInfo.sectionName = sec.name || "";
+          pgInfo.sectionMarker = sec.marker || "";
+          pgInfo.pageNumberStyle = "";
+          try {
+            var ns = sec.pageNumberStyle;
+            if (ns === PageNumberStyle.ARABIC) pgInfo.pageNumberStyle = "arabic";
+            else if (ns === PageNumberStyle.UPPER_ROMAN) pgInfo.pageNumberStyle = "upper-roman";
+            else if (ns === PageNumberStyle.LOWER_ROMAN) pgInfo.pageNumberStyle = "lower-roman";
+            else if (ns === PageNumberStyle.UPPER_LETTERS) pgInfo.pageNumberStyle = "upper-letters";
+            else if (ns === PageNumberStyle.LOWER_LETTERS) pgInfo.pageNumberStyle = "lower-letters";
+          } catch (e2) {}
+        } else {
+          pgInfo.sectionName = "";
+          pgInfo.sectionMarker = "";
+        }
+      } catch (e) {
+        pgInfo.sectionName = "";
+        pgInfo.sectionMarker = "";
+      }
+
+      // ページサイドの判定（見開きの左右）
+      try {
+        var side = pg.side;
+        if (side === PageSideOptions.LEFT_HAND) pgInfo.side = "left";
+        else if (side === PageSideOptions.RIGHT_HAND) pgInfo.side = "right";
+        else pgInfo.side = "single";
+      } catch (e) { pgInfo.side = "single"; }
 
       pages.push(pgInfo);
     }
@@ -89,7 +118,7 @@ export function register(server: McpServer): void {
     'get_pages',
     {
       title: 'Get Pages',
-      description: 'List all pages with index, name, size, applied master, margins, and column settings.',
+      description: 'List all pages with index, name, size, applied master, margins, column settings, section info, and page side (left/right for facing pages).',
       inputSchema: {},
       annotations: READ_ANNOTATIONS,
     },

@@ -2,11 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
+
 /**
- * check_contrast — WCAG コントラスト比チェック
- *
- * 既知の問題: GrayColor の gray プロパティの解釈がリファレンス（0=黒, 100=白）と
- * インク量解釈（0=白, 100=黒）で矛盾あり。現在のコードはインク量解釈を使用。
+ * check_contrast — WCAG コントラスト比チェック（InDesign版）
+ * Same concept, adapted for InDesign colors (swatches, colorToObject).
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -19,53 +18,63 @@ if (preflight) {
     var autoDetect = (params && params.auto_detect === true);
 
     if (autoDetect) {
-      // Collect all objects with colors and bounds for overlap analysis
       var colorItems = [];
 
-      // Path items
-      for (var i = 0; i < doc.pathItems.length; i++) {
-        var item = doc.pathItems[i];
-        try {
-          var b = item.geometricBounds;
-          var info = {
-            uuid: ensureUUID(item),
-            name: item.name || "",
-            type: getItemType(item),
-            bounds: { left: b[0], top: b[1], right: b[2], bottom: b[3] },
-            fillColor: null,
-            strokeColor: null
-          };
-          try { if (item.filled) info.fillColor = colorToObject(item.fillColor); } catch(e2) {}
-          try { if (item.stroked) info.strokeColor = colorToObject(item.strokeColor); } catch(e2) {}
-          if (info.fillColor || info.strokeColor) colorItems.push(info);
-        } catch(e) {}
-      }
+      // 全ページアイテムを走査
+      var allItems = doc.allPageItems;
+      for (var i = 0; i < allItems.length; i++) {
+        var item = allItems[i];
+        var itemType = getItemType(item);
 
-      // Text frames (foreground text)
-      for (var ti = 0; ti < doc.textFrames.length; ti++) {
-        var tf = doc.textFrames[ti];
-        try {
-          var tb = tf.geometricBounds;
-          var tInfo = {
-            uuid: ensureUUID(tf),
-            name: tf.name || tf.contents.substring(0, 30),
-            type: "text",
-            bounds: { left: tb[0], top: tb[1], right: tb[2], bottom: tb[3] },
-            fillColor: null,
-            strokeColor: null
-          };
+        // テキストフレーム
+        if (itemType === "TextFrame") {
           try {
-            if (tf.textRanges.length > 0) {
-              tInfo.fillColor = colorToObject(tf.textRanges[0].characterAttributes.fillColor);
+            var b = item.geometricBounds; // [top, left, bottom, right]
+            var tInfo = {
+              uuid: ensureUUID(item),
+              name: "",
+              type: "TextFrame",
+              bounds: { top: b[0], left: b[1], bottom: b[2], right: b[3] },
+              fillColor: null
+            };
+            try { tInfo.name = item.name || item.contents.substring(0, 30); } catch (e2) {}
+
+            // テキストフレームの先頭文字の色
+            try {
+              if (item.characters.length > 0) {
+                tInfo.fillColor = colorToObject(item.characters[0].fillColor);
+              }
+            } catch (e2) {}
+
+            if (tInfo.fillColor && tInfo.fillColor.type !== "none") {
+              colorItems.push(tInfo);
             }
-          } catch(e2) {}
-          if (tInfo.fillColor) colorItems.push(tInfo);
-        } catch(e) {}
+          } catch (e) {}
+          continue;
+        }
+
+        // 矩形・楕円など（背景として機能する可能性）
+        if (itemType === "Rectangle" || itemType === "Oval" || itemType === "Polygon") {
+          try {
+            var sb = item.geometricBounds;
+            var sInfo = {
+              uuid: ensureUUID(item),
+              name: "",
+              type: itemType,
+              bounds: { top: sb[0], left: sb[1], bottom: sb[2], right: sb[3] },
+              fillColor: null
+            };
+            try { sInfo.name = item.name || ""; } catch (e2) {}
+            try { sInfo.fillColor = colorToObject(item.fillColor); } catch (e2) {}
+            if (sInfo.fillColor && sInfo.fillColor.type !== "none") {
+              colorItems.push(sInfo);
+            }
+          } catch (e) {}
+        }
       }
 
       writeResultFile(RESULT_PATH, { colorItems: colorItems });
     } else {
-      // Manual mode: just return success, calculation done in Node.js
       writeResultFile(RESULT_PATH, { colorItems: [] });
     }
   } catch (e) {
@@ -85,6 +94,7 @@ interface ColorValue {
   m?: number;
   y?: number;
   k?: number;
+  value?: number;
   [key: string]: unknown;
 }
 
@@ -92,9 +102,8 @@ interface ColorItem {
   uuid: string;
   name: string;
   type: string;
-  bounds: { left: number; top: number; right: number; bottom: number };
+  bounds: { top: number; left: number; bottom: number; right: number };
   fillColor: ColorValue | null;
-  strokeColor: ColorValue | null;
 }
 
 function colorToRGB(color: ColorValue): { r: number; g: number; b: number } | null {
@@ -102,7 +111,6 @@ function colorToRGB(color: ColorValue): { r: number; g: number; b: number } | nu
     return { r: color.r, g: color.g!, b: color.b! };
   }
   if (color.type === 'cmyk' && color.c !== undefined) {
-    // Simple CMYK to RGB conversion (no ICC profile)
     const c = color.c! / 100;
     const m = color.m! / 100;
     const y = color.y! / 100;
@@ -114,7 +122,7 @@ function colorToRGB(color: ColorValue): { r: number; g: number; b: number } | nu
     };
   }
   if (color.type === 'gray') {
-    const v = Math.round(255 * (1 - (color.value as number ?? 0) / 100));
+    const v = Math.round(255 * (1 - ((color.value as number) ?? 0) / 100));
     return { r: v, g: v, b: v };
   }
   return null;
@@ -134,10 +142,16 @@ function contrastRatio(l1: number, l2: number): number {
 }
 
 function boundsOverlap(
-  a: { left: number; top: number; right: number; bottom: number },
-  b: { left: number; top: number; right: number; bottom: number },
+  a: { top: number; left: number; bottom: number; right: number },
+  b: { top: number; left: number; bottom: number; right: number },
 ): boolean {
-  return a.left < b.right && a.right > b.left && a.top > b.bottom && a.bottom < b.top;
+  // InDesign: Y is down, so top < bottom
+  return (
+    a.left < b.right &&
+    a.right > b.left &&
+    a.top < b.bottom &&
+    a.bottom > b.top
+  );
 }
 
 export function register(server: McpServer): void {
@@ -146,7 +160,7 @@ export function register(server: McpServer): void {
     {
       title: 'Check Contrast',
       description:
-        'Check WCAG color contrast ratios. Manual mode: provide two colors. Auto mode: detect overlapping foreground/background pairs in the document. Note: GrayColor uses ink-quantity interpretation (0=white, 100=black), which differs from the API reference.',
+        'Check WCAG color contrast ratios for InDesign. Manual mode: provide two colors. Auto mode: detect overlapping foreground/background pairs in the document. Colors can be CMYK, RGB, or gray.',
       inputSchema: {
         color1: z
           .object({
@@ -190,7 +204,14 @@ export function register(server: McpServer): void {
         const rgb1 = colorToRGB(params.color1 as ColorValue);
         const rgb2 = colorToRGB(params.color2 as ColorValue);
         if (!rgb1 || !rgb2) {
-          return { content: [{ type: 'text', text: JSON.stringify({ error: true, message: 'Could not convert colors to RGB' }) }] };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: true, message: 'Could not convert colors to RGB' }),
+              },
+            ],
+          };
         }
         const l1 = relativeLuminance(rgb1.r, rgb1.g, rgb1.b);
         const l2 = relativeLuminance(rgb2.r, rgb2.g, rgb2.b);
@@ -244,16 +265,14 @@ export function register(server: McpServer): void {
           const fg = items[i];
           const bg = items[j];
 
-          // Foreground should be text or smaller
-          if (fg.type !== 'text' && fg.type !== 'path') continue;
+          if (fg.type !== 'TextFrame' && fg.type !== 'Rectangle' && fg.type !== 'Oval') continue;
           if (!fg.fillColor || !bg.fillColor) continue;
           if (!boundsOverlap(fg.bounds, bg.bounds)) continue;
 
-          // Background should be larger (area comparison)
           const fgArea =
-            (fg.bounds.right - fg.bounds.left) * (fg.bounds.top - fg.bounds.bottom);
+            (fg.bounds.right - fg.bounds.left) * (fg.bounds.bottom - fg.bounds.top);
           const bgArea =
-            (bg.bounds.right - bg.bounds.left) * (bg.bounds.top - bg.bounds.bottom);
+            (bg.bounds.right - bg.bounds.left) * (bg.bounds.bottom - bg.bounds.top);
           if (fgArea >= bgArea) continue;
 
           const fgRgb = colorToRGB(fg.fillColor);

@@ -2,7 +2,7 @@
  * transport.test.ts
  *
  * Windows トランスポートのモックテスト。
- * 実際の Illustrator・PowerShell は不要。
+ * 実際の InDesign・PowerShell は不要。
  */
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -27,11 +27,11 @@ describe('resolveTransport', () => {
     expect(() => resolveTransport('linux', undefined)).toThrow('Unsupported platform');
   });
 
-  it('ILLUSTRATOR_MCP_TRANSPORT=osascript は win32 でも osascript を返す', () => {
+  it('INDESIGN_MCP_TRANSPORT=osascript は win32 でも osascript を返す', () => {
     expect(resolveTransport('win32', 'osascript')).toBe('osascript');
   });
 
-  it('ILLUSTRATOR_MCP_TRANSPORT=powershell は darwin でも powershell を返す', () => {
+  it('INDESIGN_MCP_TRANSPORT=powershell は darwin でも powershell を返す', () => {
     expect(resolveTransport('darwin', 'powershell')).toBe('powershell');
   });
 });
@@ -54,9 +54,9 @@ describe('writePowerShellScript', () => {
     await writePowerShellScript(ps1, '/tmp/script.jsx');
     const content = await fs.readFile(ps1, 'utf-8');
 
-    expect(content).toContain('New-Object -ComObject "Illustrator.Application"');
-    expect(content).toContain('DoJavaScript');
-    expect(content).toContain('$.evalFile');
+    expect(content).toContain('New-Object -ComObject "InDesign.Application"');
+    expect(content).toContain('DoScript');
+    expect(content).toContain('1246973031');
     // エラー時に exit 1 する
     expect(content).toContain('exit 1');
   });
@@ -72,10 +72,10 @@ describe('writePowerShellScript', () => {
 
   it('既にスラッシュのパスはそのまま', async () => {
     const ps1 = path.join(tmpDir, 'run.ps1');
-    await writePowerShellScript(ps1, '/tmp/illustrator-mcp/script.jsx');
+    await writePowerShellScript(ps1, '/tmp/indesign-mcp/script.jsx');
     const content = await fs.readFile(ps1, 'utf-8');
 
-    expect(content).toContain('/tmp/illustrator-mcp/script.jsx');
+    expect(content).toContain('/tmp/indesign-mcp/script.jsx');
   });
 });
 
@@ -85,7 +85,7 @@ describe('getExecFailureMessage powershell transport', () => {
   const makeError = (overrides: Partial<ExecFileException>): ExecFileException =>
     Object.assign(new Error('failed'), overrides) as ExecFileException;
 
-  it('COM コンポーネント生成失敗を Illustrator 未起動エラーに変換する', () => {
+  it('COM コンポーネント生成失敗を InDesign 未起動エラーに変換する', () => {
     const msg = getExecFailureMessage(
       makeError({ code: 1 }),
       'Cannot create ActiveX component',
@@ -93,10 +93,10 @@ describe('getExecFailureMessage powershell transport', () => {
       'powershell',
     );
     expect(msg).toContain('not running');
-    expect(msg).toContain('Adobe Illustrator');
+    expect(msg).toContain('Adobe InDesign');
   });
 
-  it('CLSID エラー (80040154) を Illustrator 未起動エラーに変換する', () => {
+  it('CLSID エラー (80040154) を InDesign 未起動エラーに変換する', () => {
     const msg = getExecFailureMessage(
       makeError({ code: 1 }),
       'Error 80040154',
@@ -133,14 +133,14 @@ describe('getExecFailureMessage osascript transport', () => {
   const makeError = (overrides: Partial<ExecFileException>): ExecFileException =>
     Object.assign(new Error('failed'), overrides) as ExecFileException;
 
-  it('Connection is invalid → Illustrator 未起動メッセージ', () => {
+  it('Connection is invalid → InDesign 未起動メッセージ', () => {
     const msg = getExecFailureMessage(
       makeError({ code: 1 }),
       'Connection is invalid',
       30_000,
       'osascript',
     );
-    expect(msg).toBe('Illustrator is not running. Please launch Adobe Illustrator.');
+    expect(msg).toBe('InDesign is not running. Please launch Adobe InDesign.');
   });
 
   it('not allowed to send keystrokes → Automation permission denied', () => {

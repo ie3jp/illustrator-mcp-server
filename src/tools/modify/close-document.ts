@@ -2,28 +2,27 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { invalidateAutoDetectCache } from '../session.js';
-import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
-/**
- * close_document — アクティブドキュメントを閉じる
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.close(saveOptions)
- */
 const jsxCode = `
 try {
-  var verErr = checkIllustratorVersion();
-  if (verErr) {
-    writeResultFile(RESULT_PATH, verErr);
-  } else {
-    var params = readParamsFile(PARAMS_PATH);
-    var save = params.save === true;
+  var params = readParamsFile(PARAMS_PATH);
+  var save = params.save || "no";
 
-    if (app.documents.length === 0) {
-      writeResultFile(RESULT_PATH, { error: true, message: "No document is open" });
+  if (app.documents.length === 0) {
+    writeResultFile(RESULT_PATH, { error: true, message: "No document is open" });
+  } else {
+    var saveOpt;
+    if (save === "yes") {
+      saveOpt = SaveOptions.YES;
+    } else if (save === "ask") {
+      saveOpt = SaveOptions.ASK;
     } else {
-      var saveOpt = save ? SaveOptions.SAVECHANGES : SaveOptions.DONOTSAVECHANGES;
-      app.activeDocument.close(saveOpt);
-      writeResultFile(RESULT_PATH, { success: true });
+      saveOpt = SaveOptions.NO;
     }
+    var docName = app.activeDocument.name;
+    app.activeDocument.close(saveOpt);
+    writeResultFile(RESULT_PATH, { success: true, closedDocument: docName });
   }
 } catch (e) {
   writeResultFile(RESULT_PATH, { error: true, message: "Failed to close document: " + e.message, line: e.line });
@@ -35,13 +34,13 @@ export function register(server: McpServer): void {
     'close_document',
     {
       title: 'Close Document',
-      description:
-        'Close the active Illustrator document. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Close the active InDesign document.',
       inputSchema: {
-        save: coerceBoolean
+        save: z
+          .enum(['yes', 'no', 'ask'])
           .optional()
-          .default(false)
-          .describe('Whether to save before closing (default: false)'),
+          .default('no')
+          .describe('Save behavior: yes=save before closing, no=discard changes, ask=show dialog'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },

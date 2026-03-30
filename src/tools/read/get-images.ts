@@ -5,12 +5,11 @@ import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
 } from '../session.js';
-import { readImageDimensions } from '../../utils/image-header.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
+
 /**
  * get_images — 配置画像（リンク/埋め込み）の情報取得
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, matrix, contentVariable
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/RasterItem/ — colorSpace, transparent, imageColorSpace
+ * doc.allGraphics + graphic.itemLink for link info. Show status, filePath, dimensions.
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -19,146 +18,108 @@ if (preflight) {
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
-    var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
-    var includePrintInfo = (params && typeof params.include_print_info === "boolean") ? params.include_print_info : false;
+    var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "page-relative";
+    var filterPage = (params && typeof params.page_index === "number") ? params.page_index : null;
     var doc = app.activeDocument;
-    var docColorSpace = doc.documentColorSpace;
-    var isCMYKDoc = (docColorSpace === DocumentColorSpace.CMYK);
     var images = [];
 
-    // Linked images (PlacedItems)
-    for (var i = 0; i < doc.placedItems.length; i++) {
-      var item = doc.placedItems[i];
-      var uuid = ensureUUID(item);
-      var zIdx = getZIndex(item);
-      var abIndex = getArtboardIndexForItem(item);
-      var artboardRect = getArtboardRectByIndex(abIndex);
-      var bounds = getBounds(item, coordSystem, artboardRect);
+    // doc.allGraphics: Image, EPS, PDF, WMF, PICT, などのグラフィックアイテム
+    var graphics = doc.allGraphics;
+
+    for (var i = 0; i < graphics.length; i++) {
+      var gfx = graphics[i];
+
+      // 親フレーム（コンテナ）
+      var container = null;
+      try { container = gfx.parent; } catch (e) {}
+      if (!container) continue;
+
+      // ページフィルタ
+      var pageIndex = -1;
+      try {
+        var pp = container.parentPage;
+        if (pp) pageIndex = pp.index;
+      } catch (e) {}
+
+      if (filterPage !== null && pageIndex !== filterPage) continue;
+
+      var uuid = ensureUUID(container);
 
       var info = {
         uuid: uuid,
-        zIndex: zIdx,
-        type: "linked",
+        containerType: getItemType(container),
+        pageIndex: pageIndex,
+        linkStatus: "embedded",
+        linkName: "",
         filePath: "",
         linkBroken: false,
+        colorSpace: "",
         resolution: null,
-        colorSpace: null,
-        pixelWidth: null,
-        pixelHeight: null,
-        artboardIndex: abIndex,
-        bounds: bounds,
-        widthPt: null,
-        heightPt: null
+        actualWidth: null,
+        actualHeight: null,
+        effectiveWidth: null,
+        effectiveHeight: null,
+        bounds: null,
+        layerName: getParentLayerName(container)
       };
 
+      try { info.name = container.name || ""; } catch (e) {}
+
+      // リンク情報
       try {
-        info.filePath = item.file.fsName;
+        var lnk = gfx.itemLink;
+        if (lnk) {
+          info.linkName = lnk.name || "";
+          try { info.filePath = lnk.filePath || ""; } catch (e2) {}
+
+          var ls = lnk.status;
+          if (ls === LinkStatus.NORMAL) info.linkStatus = "normal";
+          else if (ls === LinkStatus.LINK_MISSING) { info.linkStatus = "missing"; info.linkBroken = true; }
+          else if (ls === LinkStatus.LINK_OUT_OF_DATE) info.linkStatus = "out-of-date";
+          else if (ls === LinkStatus.LINK_INACCESSIBLE) { info.linkStatus = "inaccessible"; info.linkBroken = true; }
+          else info.linkStatus = "unknown";
+        }
+      } catch (e) {}
+
+      // 画像のカラースペース
+      try {
+        var imgCS = gfx.imageTypeName || "";
+        info.colorSpace = imgCS;
+      } catch (e) {}
+
+      // 実際の解像度とサイズ（リンク情報から）
+      try {
+        var lnk2 = gfx.itemLink;
+        if (lnk2) {
+          try { info.actualWidth = lnk2.width || null; } catch (e2) {}
+          try { info.actualHeight = lnk2.height || null; } catch (e2) {}
+          try { info.resolution = lnk2.horizontalResolution || null; } catch (e2) {}
+        }
+      } catch (e) {}
+
+      // コンテナのバウンズ（ページ相対）
+      try {
+        var cb = getBoundsOnPage(container, pageIndex);
+        info.bounds = cb;
+        info.effectiveWidth = cb.width;
+        info.effectiveHeight = cb.height;
       } catch (e) {
-        info.linkBroken = true;
+        try {
+          var cgb = container.geometricBounds;
+          info.bounds = { top: cgb[0], left: cgb[1], bottom: cgb[2], right: cgb[3],
+                          width: cgb[3] - cgb[1], height: cgb[2] - cgb[0] };
+          info.effectiveWidth = info.bounds.width;
+          info.effectiveHeight = info.bounds.height;
+        } catch (e2) {}
       }
 
-      try { info.name = item.name || ""; } catch(e) {}
-
-      // Store placed dimensions in points for Node.js-side DPI calculation
+      // スケール率
       try {
-        var pBounds = item.geometricBounds;
-        var pWidthPt = pBounds[2] - pBounds[0];
-        var pHeightPt = -(pBounds[3] - pBounds[1]);
-        if (pWidthPt < 0) pWidthPt = -pWidthPt;
-        if (pHeightPt < 0) pHeightPt = -pHeightPt;
-        info.widthPt = pWidthPt;
-        info.heightPt = pHeightPt;
-      } catch(e) {}
+        info.scaleX = gfx.horizontalScale || 100;
+        info.scaleY = gfx.verticalScale || 100;
+      } catch (e) {}
 
       images.push(info);
-    }
-
-    // Embedded / raster images (RasterItems)
-    for (var j = 0; j < doc.rasterItems.length; j++) {
-      var rItem = doc.rasterItems[j];
-      var rUuid = ensureUUID(rItem);
-      var rZIdx = getZIndex(rItem);
-      var rAbIndex = getArtboardIndexForItem(rItem);
-      var rArtboardRect = getArtboardRectByIndex(rAbIndex);
-      var rBounds = getBounds(rItem, coordSystem, rArtboardRect);
-
-      var rInfo = {
-        uuid: rUuid,
-        zIndex: rZIdx,
-        type: rItem.embedded ? "embedded" : "linked",
-        filePath: "",
-        linkBroken: false,
-        resolution: null,
-        colorSpace: null,
-        pixelWidth: null,
-        pixelHeight: null,
-        artboardIndex: rAbIndex,
-        bounds: rBounds
-      };
-
-      try { rInfo.name = rItem.name || ""; } catch(e) {}
-
-      // colorSpace detection
-      try {
-        var cs = rItem.imageColorSpace;
-        if (cs === ImageColorSpace.RGB) {
-          rInfo.colorSpace = "RGB";
-        } else if (cs === ImageColorSpace.CMYK) {
-          rInfo.colorSpace = "CMYK";
-        } else if (cs === ImageColorSpace.Grayscale) {
-          rInfo.colorSpace = "grayscale";
-        } else {
-          rInfo.colorSpace = "other";
-        }
-      } catch (e) {}
-
-      // pixel dimensions and resolution
-      try {
-        // geometricBounds: [left, top, right, bottom] in points
-        var gb = rItem.geometricBounds;
-        var placedWidthPt = gb[2] - gb[0];
-        var placedHeightPt = -(gb[3] - gb[1]); // top > bottom in AI coords
-
-        // RasterItem exposes matrix; columns/rows not directly available
-        // but we can try to access them
-        try {
-          // Some versions expose these
-          var pw = rItem.artworkKnockout; // dummy access to keep try block
-        } catch(e2) {}
-
-        // Attempt to get pixel size from the item's internal properties
-        try {
-          var m = rItem.matrix;
-          if (m && placedWidthPt > 0 && placedHeightPt > 0) {
-            // Use vector magnitude to handle rotation correctly
-            // mValueA/mValueB form horizontal basis vector, mValueC/mValueD form vertical
-            var scaleX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
-            var scaleY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
-            if (scaleX > 0 && scaleY > 0) {
-              rInfo.pixelWidth = Math.round(placedWidthPt / scaleX);
-              rInfo.pixelHeight = Math.round(placedHeightPt / scaleY);
-              // PPI = pixels / (points / 72); use minimum of H and V
-              var ppiH = Math.round(rInfo.pixelWidth / (placedWidthPt / 72));
-              var ppiV = Math.round(rInfo.pixelHeight / (placedHeightPt / 72));
-              rInfo.resolution = Math.min(ppiH, ppiV);
-            }
-          }
-        } catch(e3) {}
-      } catch (e) {}
-
-      // Print diagnostics
-      if (includePrintInfo) {
-        rInfo.colorSpaceMismatch = false;
-        if (rInfo.colorSpace) {
-          if (isCMYKDoc && rInfo.colorSpace === "RGB") rInfo.colorSpaceMismatch = true;
-          if (!isCMYKDoc && rInfo.colorSpace === "CMYK") rInfo.colorSpaceMismatch = true;
-        }
-        if (rInfo.pixelWidth && rInfo.pixelHeight && placedWidthPt > 0) {
-          rInfo.scaleFactor = Math.round((placedWidthPt / rInfo.pixelWidth) * 100);
-        }
-      }
-
-      images.push(rInfo);
     }
 
     writeResultFile(RESULT_PATH, {
@@ -177,65 +138,19 @@ export function register(server: McpServer): void {
     'get_images',
     {
       title: 'Get Images',
-      description: 'Get embedded and linked image information',
+      description: 'Get all placed graphics in InDesign document via doc.allGraphics. Shows link status, file path, color space, resolution, dimensions, and scale.',
       inputSchema: {
+        page_index: z.number().int().min(0).optional().describe('Filter by page index (0-based)'),
         coordinate_system: coordinateSystemSchema,
-        include_print_info: z
-          .boolean()
-          .optional()
-          .default(false)
-          .describe('Include print diagnostics: color space mismatch flag, scale factor (%). Only available for embedded raster images.'),
       },
       annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = (await executeJsx(jsxCode, resolvedParams)) as {
-        imageCount: number;
-        coordinateSystem: string;
-        images: Array<{
-          type: string;
-          filePath: string;
-          linkBroken: boolean;
-          pixelWidth: number | null;
-          pixelHeight: number | null;
-          resolution: number | null;
-          widthPt?: number | null;
-          heightPt?: number | null;
-          [key: string]: unknown;
-        }>;
-        [key: string]: unknown;
+      const resolvedParams = {
+        ...params,
+        coordinate_system: await resolveCoordinateSystem(params.coordinate_system),
       };
-
-      // Post-process: compute pixel dimensions and DPI for linked images
-      if (result?.images) {
-        for (const img of result.images) {
-          if (img.type === 'linked' && img.filePath && !img.linkBroken) {
-            try {
-              const dims = readImageDimensions(img.filePath);
-              if (dims && img.widthPt && img.heightPt) {
-                img.pixelWidth = dims.width;
-                img.pixelHeight = dims.height;
-                const widthInches = img.widthPt / 72;
-                const heightInches = img.heightPt / 72;
-                const ppiH = Math.round(dims.width / widthInches);
-                const ppiV = Math.round(dims.height / heightInches);
-                img.resolution = Math.min(ppiH, ppiV);
-                // Print diagnostics for linked images
-                if (resolvedParams.include_print_info) {
-                  img.scaleFactor = Math.round((img.widthPt / dims.width) * 100);
-                }
-              }
-            } catch {
-              // Skip unreadable files
-            }
-          }
-          // Clean up internal fields
-          delete img.widthPt;
-          delete img.heightPt;
-        }
-      }
-
+      const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

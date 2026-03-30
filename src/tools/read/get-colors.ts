@@ -2,12 +2,10 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
+
 /**
- * get_colors — ドキュメントの色情報取得（スウォッチ・グラデーション・パターン・スポットカラー）
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/ — Swatches collection
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Gradient/ — Gradient, GradientStop
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Spot/ — Spot color
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Pattern/ — Pattern
+ * get_colors — ドキュメントの色情報取得
+ * doc.swatches, doc.colors with color space info. No gradients/patterns collection like Illustrator.
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -18,211 +16,150 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var includeSwatches = (params && typeof params.include_swatches === "boolean") ? params.include_swatches : true;
-    var includeUsedColors = (params && typeof params.include_used_colors === "boolean") ? params.include_used_colors : true;
-    var includeDiagnostics = (params && typeof params.include_diagnostics === "boolean") ? params.include_diagnostics : false;
-    var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
+    var includeColors = (params && typeof params.include_colors === "boolean") ? params.include_colors : true;
+    var includeTints = (params && typeof params.include_tints === "boolean") ? params.include_tints : true;
+    var includeGradients = (params && typeof params.include_gradients === "boolean") ? params.include_gradients : true;
 
     var result = {};
 
-    // スウォッチ一覧
+    // スウォッチ一覧（全スウォッチ：色、グラデーション、ティント、なし、ペーパーを含む）
     if (includeSwatches) {
       var swatches = [];
       for (var si = 0; si < doc.swatches.length; si++) {
         var sw = doc.swatches[si];
         var swInfo = {
           name: sw.name,
-          color: colorToObject(sw.color)
+          swatchType: sw.constructor.name || "Swatch"
         };
+        try { swInfo.color = colorToObject(sw.color); } catch (e2) {}
+        try {
+          swInfo.colorSpace = "";
+          var cs = sw.space;
+          if (cs === ColorSpace.CMYK) swInfo.colorSpace = "CMYK";
+          else if (cs === ColorSpace.RGB) swInfo.colorSpace = "RGB";
+          else if (cs === ColorSpace.LAB) swInfo.colorSpace = "LAB";
+          else swInfo.colorSpace = String(cs);
+        } catch (e2) {}
+        try {
+          var cm = sw.model;
+          if (cm === ColorModel.PROCESS) swInfo.colorModel = "process";
+          else if (cm === ColorModel.SPOT) swInfo.colorModel = "spot";
+          else if (cm === ColorModel.REGISTRATION) swInfo.colorModel = "registration";
+          else if (cm === ColorModel.MIXED) swInfo.colorModel = "mixed";
+          else swInfo.colorModel = "unknown";
+        } catch (e2) { swInfo.colorModel = "unknown"; }
         swatches.push(swInfo);
       }
       result.swatches = swatches;
+      result.swatchCount = swatches.length;
     }
 
-    // グラデーション一覧
-    var gradients = [];
-    for (var gi = 0; gi < doc.gradients.length; gi++) {
-      var grad = doc.gradients[gi];
-      var gradType = "unknown";
+    // プロセスカラー一覧（doc.colors）
+    if (includeColors) {
+      var colors = [];
       try {
-        if (grad.type === GradientType.LINEAR) gradType = "linear";
-        else if (grad.type === GradientType.RADIAL) gradType = "radial";
-        else gradType = grad.type.toString();
-      } catch (e) {}
-
-      var stops = [];
-      for (var gsi = 0; gsi < grad.gradientStops.length; gsi++) {
-        var gs = grad.gradientStops[gsi];
-        var stopInfo = {
-          rampPoint: gs.rampPoint,
-          midPoint: gs.midPoint,
-          color: colorToObject(gs.color)
-        };
-        try { stopInfo.opacity = gs.opacity; } catch (e) { stopInfo.opacity = 100; }
-        stops.push(stopInfo);
-      }
-
-      gradients.push({
-        name: grad.name,
-        type: gradType,
-        stops: stops
-      });
-    }
-    result.gradients = gradients;
-
-    // グラデーション色空間診断
-    if (includeDiagnostics && isCMYKDoc) {
-      var gradientWarnings = [];
-      for (var gwi = 0; gwi < gradients.length; gwi++) {
-        var gw = gradients[gwi];
-        for (var gwsi = 0; gwsi < gw.stops.length; gwsi++) {
-          if (gw.stops[gwsi].color && gw.stops[gwsi].color.type === "rgb") {
-            gradientWarnings.push({
-              gradientName: gw.name,
-              stopIndex: gwsi,
-              message: "RGB color stop in CMYK document gradient"
-            });
-          }
+        for (var ci = 0; ci < doc.colors.length; ci++) {
+          var col = doc.colors[ci];
+          var colInfo = {
+            name: col.name,
+            colorModel: "process",
+            colorSpace: ""
+          };
+          try {
+            var ccm = col.model;
+            if (ccm === ColorModel.PROCESS) colInfo.colorModel = "process";
+            else if (ccm === ColorModel.SPOT) colInfo.colorModel = "spot";
+            else if (ccm === ColorModel.REGISTRATION) colInfo.colorModel = "registration";
+          } catch (e2) {}
+          try {
+            var ccs = col.space;
+            if (ccs === ColorSpace.CMYK) colInfo.colorSpace = "CMYK";
+            else if (ccs === ColorSpace.RGB) colInfo.colorSpace = "RGB";
+            else if (ccs === ColorSpace.LAB) colInfo.colorSpace = "LAB";
+          } catch (e2) {}
+          try { colInfo.colorValue = col.colorValue; } catch (e2) {}
+          colors.push(colInfo);
         }
-      }
-      result.gradientWarnings = gradientWarnings;
+      } catch (e) {}
+      result.colors = colors;
+      result.colorCount = colors.length;
     }
 
-    // パターン一覧
-    var patterns = [];
-    for (var pi = 0; pi < doc.patterns.length; pi++) {
-      patterns.push({
-        name: doc.patterns[pi].name
-      });
-    }
-    result.patterns = patterns;
-
-    // 特色（スポットカラー）一覧
-    var spots = [];
-    for (var spi = 0; spi < doc.spots.length; spi++) {
-      var spot = doc.spots[spi];
-      var spotInfo = {
-        name: spot.name
-      };
-      try { spotInfo.color = colorToObject(spot.color); } catch (e) { spotInfo.color = { type: "unknown" }; }
+    // ティント一覧（doc.tints）
+    if (includeTints) {
+      var tints = [];
       try {
-        var st = spot.spotKind;
-        if (st === SpotColorKind.SpotCMYK) spotInfo.spotKind = "CMYK";
-        else if (st === SpotColorKind.SpotRGB) spotInfo.spotKind = "RGB";
-        else if (st === SpotColorKind.SpotLAB) spotInfo.spotKind = "LAB";
-        else spotInfo.spotKind = st.toString();
-      } catch (e) { spotInfo.spotKind = "unknown"; }
-      spots.push(spotInfo);
+        for (var ti = 0; ti < doc.tints.length; ti++) {
+          var tint = doc.tints[ti];
+          var tintInfo = {
+            name: tint.name,
+            tintValue: 0,
+            baseSwatch: ""
+          };
+          try { tintInfo.tintValue = tint.tintValue || 0; } catch (e2) {}
+          try {
+            if (tint.baseColor) {
+              tintInfo.baseSwatch = tint.baseColor.name || "";
+            }
+          } catch (e2) {}
+          tints.push(tintInfo);
+        }
+      } catch (e) {}
+      result.tints = tints;
+      result.tintCount = tints.length;
     }
-    result.spots = spots;
 
-    // 使用色の収集とメッシュ検出（1パスで diagnostics も同時集計）
-    if (includeUsedColors) {
-      var usedFills = [];
-      var usedStrokes = [];
-      var meshItems = [];
-      var spotUsageCount = {};
-      var rgbInCmyk = 0;
-      var cmykInRgb = 0;
-
-      for (var ii = 0; ii < doc.pathItems.length; ii++) {
-        var item = doc.pathItems[ii];
-
-        try {
-          if (item.filled) {
-            var fc = colorToObject(item.fillColor);
-            if (includeDiagnostics && fc.type === "cmyk") {
-              fc.inkCoverage = fc.c + fc.m + fc.y + fc.k;
+    // グラデーション一覧（doc.gradients）
+    if (includeGradients) {
+      var gradients = [];
+      try {
+        for (var gi = 0; gi < doc.gradients.length; gi++) {
+          var grad = doc.gradients[gi];
+          var gradInfo = {
+            name: grad.name,
+            type: "linear"
+          };
+          try {
+            var gt = grad.type;
+            if (gt === GradientType.LINEAR) gradInfo.type = "linear";
+            else if (gt === GradientType.RADIAL) gradInfo.type = "radial";
+          } catch (e2) {}
+          try {
+            var gradStops = [];
+            for (var gsi = 0; gsi < grad.gradientStops.length; gsi++) {
+              var gs = grad.gradientStops[gsi];
+              var stopInfo = {
+                location: 0,
+                midpoint: 50,
+                opacity: 100,
+                swatchName: ""
+              };
+              try { stopInfo.location = gs.location || 0; } catch (e2) {}
+              try { stopInfo.midpoint = gs.midpoint || 50; } catch (e2) {}
+              try { stopInfo.opacity = gs.opacity || 100; } catch (e2) {}
+              try {
+                if (gs.stopColor) stopInfo.swatchName = gs.stopColor.name || "";
+              } catch (e2) {}
+              gradStops.push(stopInfo);
             }
-            if (includeDiagnostics) {
-              if (isCMYKDoc && fc.type === "rgb") rgbInCmyk++;
-              if (!isCMYKDoc && fc.type === "cmyk") cmykInRgb++;
-            }
-            usedFills.push(fc);
-            if (fc.type === "spot") {
-              var spName = fc.name;
-              if (spotUsageCount[spName] === undefined) spotUsageCount[spName] = 0;
-              spotUsageCount[spName] = spotUsageCount[spName] + 1;
-            }
-          }
-        } catch (e) {}
-        try {
-          if (item.stroked) {
-            var sc = colorToObject(item.strokeColor);
-            if (includeDiagnostics && sc.type === "cmyk") {
-              sc.inkCoverage = sc.c + sc.m + sc.y + sc.k;
-            }
-            if (includeDiagnostics) {
-              if (isCMYKDoc && sc.type === "rgb") rgbInCmyk++;
-              if (!isCMYKDoc && sc.type === "cmyk") cmykInRgb++;
-            }
-            usedStrokes.push(sc);
-            if (sc.type === "spot") {
-              var spName2 = sc.name;
-              if (spotUsageCount[spName2] === undefined) spotUsageCount[spName2] = 0;
-              spotUsageCount[spName2] = spotUsageCount[spName2] + 1;
-            }
-          }
-        } catch (e) {}
-      }
-
-      // テキストフレームの文字色を収集
-      for (var ti = 0; ti < doc.textFrames.length; ti++) {
-        try {
-          var tfItem = doc.textFrames[ti];
-          for (var ci = 0; ci < tfItem.textRanges.length; ci++) {
-            var ca = tfItem.textRanges[ci].characterAttributes;
-            try {
-              var tfc = colorToObject(ca.fillColor);
-              if (includeDiagnostics && tfc.type === "cmyk") {
-                tfc.inkCoverage = tfc.c + tfc.m + tfc.y + tfc.k;
-              }
-              if (includeDiagnostics) {
-                if (isCMYKDoc && tfc.type === "rgb") rgbInCmyk++;
-                if (!isCMYKDoc && tfc.type === "cmyk") cmykInRgb++;
-              }
-              usedFills.push(tfc);
-              if (tfc.type === "spot") {
-                var tSpName = tfc.name;
-                if (spotUsageCount[tSpName] === undefined) spotUsageCount[tSpName] = 0;
-                spotUsageCount[tSpName] = spotUsageCount[tSpName] + 1;
-              }
-            } catch (e3) {}
-            try {
-              if (ca.strokeWeight > 0) {
-                var tsc = colorToObject(ca.strokeColor);
-                usedStrokes.push(tsc);
-              }
-            } catch (e4) {}
-          }
-        } catch (e5) {}
-      }
-
-      // メッシュアイテム検出 (document-wide)
-      for (var mi = 0; mi < doc.meshItems.length; mi++) {
-        meshItems.push(ensureUUID(doc.meshItems[mi]));
-      }
-
-      // 特色使用箇所数を spots に追加
-      for (var sci = 0; sci < spots.length; sci++) {
-        var count = spotUsageCount[spots[sci].name];
-        spots[sci].usageCount = (count !== undefined) ? count : 0;
-      }
-
-      if (includeDiagnostics) {
-        result.colorModelWarnings = {
-          documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
-          rgbColorsInCmykDoc: rgbInCmyk,
-          cmykColorsInRgbDoc: cmykInRgb
-        };
-      }
-
-      result.usedFillColors = usedFills;
-      result.usedStrokeColors = usedStrokes;
-      result.meshGradient = {
-        hasMesh: meshItems.length > 0,
-        meshItemUUIDs: meshItems
-      };
+            gradInfo.stops = gradStops;
+          } catch (e2) {}
+          gradients.push(gradInfo);
+        }
+      } catch (e) {}
+      result.gradients = gradients;
+      result.gradientCount = gradients.length;
     }
+
+    // 混合インク一覧（doc.mixedInks）
+    var mixedInks = [];
+    try {
+      for (var mi = 0; mi < doc.mixedInks.length; mi++) {
+        var mk = doc.mixedInks[mi];
+        mixedInks.push({ name: mk.name });
+      }
+    } catch (e) {}
+    result.mixedInks = mixedInks;
 
     writeResultFile(RESULT_PATH, result);
   } catch (e) {
@@ -236,23 +173,28 @@ export function register(server: McpServer): void {
     'get_colors',
     {
       title: 'Get Colors',
-      description: 'Get all color information used in the document',
+      description: 'Get all color information from InDesign document: swatches, process colors, tints, gradients, and mixed inks with color space and model details.',
       inputSchema: {
         include_swatches: z
           .boolean()
           .optional()
           .default(true)
-          .describe('Include swatch list'),
-        include_used_colors: z
+          .describe('Include swatch list (default: true)'),
+        include_colors: z
           .boolean()
           .optional()
           .default(true)
-          .describe('Include used color collection'),
-        include_diagnostics: z
+          .describe('Include doc.colors (process/spot colors) list (default: true)'),
+        include_tints: z
           .boolean()
           .optional()
-          .default(false)
-          .describe('Include print diagnostics: gradient color space validation, ink coverage per color, color model mismatch warnings'),
+          .default(true)
+          .describe('Include tint list (default: true)'),
+        include_gradients: z
+          .boolean()
+          .optional()
+          .default(true)
+          .describe('Include gradient list (default: true)'),
       },
       annotations: READ_ANNOTATIONS,
     },

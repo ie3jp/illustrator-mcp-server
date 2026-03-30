@@ -49,7 +49,9 @@ export function register(server: McpServer): void {
     {
       title: 'Export IDML',
       description:
-        'Export the active InDesign document as an IDML (InDesign Markup Language) interchange file. Useful for sharing documents with users on older InDesign versions or third-party applications. Note: InDesign will be activated (brought to foreground) during execution.',
+        'Export the active InDesign document as an IDML (InDesign Markup Language) interchange file. ' +
+        'Useful for sharing documents with users on older InDesign versions or third-party applications. ' +
+        'Note: InDesign will be activated (brought to foreground) during execution.',
       inputSchema: {
         output_path: z.string().describe('Output file path (.idml)'),
       },

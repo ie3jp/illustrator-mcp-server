@@ -3,17 +3,6 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS, WRITE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
-/**
- * apply_text_style / list_text_styles
- *
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterStyle/ — CharacterStyle, ParagraphStyle
- *
- * JSX API:
- *   Document.characterStyles → CharacterStyles
- *   Document.paragraphStyles → ParagraphStyles
- *   CharacterStyle.applyTo(textItem, clearingOverrides?: Boolean) → void
- *   ParagraphStyle.applyTo(textItem, clearingOverrides?: Boolean) → void
- */
 const applyJsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -29,35 +18,41 @@ if (preflight) {
     } else if (item.typename !== "TextFrame") {
       writeResultFile(RESULT_PATH, { error: true, message: "Object is not a text frame (type: " + item.typename + ")" });
     } else {
-      var style = null;
-      try {
-        if (params.style_type === "character") {
-          style = doc.characterStyles.getByName(params.style_name);
-        } else {
-          style = doc.paragraphStyles.getByName(params.style_name);
-        }
-      } catch(e) {
-        writeResultFile(RESULT_PATH, {
-          error: true,
-          message: params.style_type + " style not found: " + params.style_name
-        });
-      }
+      var clearOverrides = params.clear_overrides === true;
 
-      if (style) {
-        var clearOverrides = params.clear_overrides === true;
-        if (params.style_type === "character") {
-          style.applyTo(item.textRange, clearOverrides);
-        } else {
-          for (var pi = 0; pi < item.paragraphs.length; pi++) {
-            style.applyTo(item.paragraphs[pi], clearOverrides);
-          }
+      if (params.style_type === "paragraph") {
+        var paraStyle = null;
+        try {
+          paraStyle = doc.paragraphStyles.itemByName(params.style_name);
+          if (!paraStyle || !paraStyle.isValid) throw new Error("Not found");
+        } catch(e) {
+          writeResultFile(RESULT_PATH, { error: true, message: "Paragraph style not found: " + params.style_name });
+          paraStyle = null;
         }
-        writeResultFile(RESULT_PATH, {
-          success: true,
-          styleType: params.style_type,
-          styleName: params.style_name,
-          verified: verifyItem(item)
-        });
+        if (paraStyle) {
+          var paras = item.paragraphs;
+          for (var pi = 0; pi < paras.length; pi++) {
+            paras[pi].applyParagraphStyle(paraStyle, clearOverrides);
+          }
+          writeResultFile(RESULT_PATH, { success: true, styleType: "paragraph", styleName: params.style_name, verified: verifyItem(item) });
+        }
+
+      } else if (params.style_type === "character") {
+        var charStyle = null;
+        try {
+          charStyle = doc.characterStyles.itemByName(params.style_name);
+          if (!charStyle || !charStyle.isValid) throw new Error("Not found");
+        } catch(e) {
+          writeResultFile(RESULT_PATH, { error: true, message: "Character style not found: " + params.style_name });
+          charStyle = null;
+        }
+        if (charStyle) {
+          item.texts[0].applyCharacterStyle(charStyle, clearOverrides);
+          writeResultFile(RESULT_PATH, { success: true, styleType: "character", styleName: params.style_name, verified: verifyItem(item) });
+        }
+
+      } else {
+        writeResultFile(RESULT_PATH, { error: true, message: "style_type must be 'paragraph' or 'character'" });
       }
     }
   } catch (e) {
@@ -75,15 +70,20 @@ if (preflight) {
     var doc = app.activeDocument;
     var charStyles = [];
     for (var i = 0; i < doc.characterStyles.length; i++) {
-      charStyles.push({ name: doc.characterStyles[i].name });
+      charStyles.push({ name: doc.characterStyles.item(i).name });
     }
     var paraStyles = [];
     for (var j = 0; j < doc.paragraphStyles.length; j++) {
-      paraStyles.push({ name: doc.paragraphStyles[j].name });
+      paraStyles.push({ name: doc.paragraphStyles.item(j).name });
+    }
+    var objStyles = [];
+    for (var k = 0; k < doc.objectStyles.length; k++) {
+      objStyles.push({ name: doc.objectStyles.item(k).name });
     }
     writeResultFile(RESULT_PATH, {
       characterStyles: charStyles,
-      paragraphStyles: paraStyles
+      paragraphStyles: paraStyles,
+      objectStyles: objStyles
     });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "list_text_styles failed: " + e.message, line: e.line });
@@ -96,11 +96,10 @@ export function register(server: McpServer): void {
     'apply_text_style',
     {
       title: 'Apply Text Style',
-      description:
-        'Apply a character or paragraph style to a text frame. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Apply a paragraph or character style to a text frame in InDesign.',
       inputSchema: {
         uuid: z.string().describe('UUID of the text frame'),
-        style_type: z.enum(['character', 'paragraph']).describe('Type of style to apply'),
+        style_type: z.enum(['paragraph', 'character']).describe('Type of style to apply'),
         style_name: z.string().describe('Name of the style'),
         clear_overrides: coerceBoolean
           .optional()
@@ -119,7 +118,7 @@ export function register(server: McpServer): void {
     'list_text_styles',
     {
       title: 'List Text Styles',
-      description: 'List all character and paragraph styles in the active document.',
+      description: 'List all paragraph, character, and object styles in the active InDesign document.',
       inputSchema: {},
       annotations: READ_ANNOTATIONS,
     },

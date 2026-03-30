@@ -4,13 +4,10 @@ import { executeJsx } from '../../executor/jsx-runner.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 /**
- * convert_coordinate — 座標系間の座標変換
- *
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.convertCoordinate()
- *
- * JSX API:
- *   Document.convertCoordinate(coordinate: Point, source: CoordinateSystem, destination: CoordinateSystem)
- *   CoordinateSystem: ARTBOARDCOORDINATESYSTEM | DOCUMENTCOORDINATESYSTEM
+ * convert_coordinate — 座標系間の座標変換（InDesign版）
+ * Convert between page-relative and spread coordinates.
+ * InDesign Y-axis is DOWN (no flip needed).
+ * geometricBounds = [top, left, bottom, right]
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -20,29 +17,56 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
+    var fromSys = params.from;
+    var toSys = params.to;
+    var x = params.point.x;
+    var y = params.point.y;
+    var pageIndex = (typeof params.page_index === "number") ? params.page_index : 0;
 
-    var fromMap = {
-      "artboard": CoordinateSystem.ARTBOARDCOORDINATESYSTEM,
-      "document": CoordinateSystem.DOCUMENTCOORDINATESYSTEM
-    };
-    var toMap = {
-      "artboard": CoordinateSystem.ARTBOARDCOORDINATESYSTEM,
-      "document": CoordinateSystem.DOCUMENTCOORDINATESYSTEM
-    };
-
-    var fromSys = fromMap[params.from];
-    var toSys = toMap[params.to];
-
-    if (fromSys == null || toSys == null) {
-      writeResultFile(RESULT_PATH, { error: true, message: "Invalid coordinate system. Use 'artboard' or 'document'." });
-    } else {
-      var result = doc.convertCoordinate([params.point.x, params.point.y], fromSys, toSys);
+    if (pageIndex < 0 || pageIndex >= doc.pages.length) {
       writeResultFile(RESULT_PATH, {
-        x: result[0],
-        y: result[1],
-        from: params.from,
-        to: params.to
+        error: true,
+        message: "page_index " + pageIndex + " out of range (0-" + (doc.pages.length - 1) + ")"
       });
+    } else {
+      var pg = doc.pages[pageIndex];
+      var pgBounds = pg.bounds; // [top, left, bottom, right]
+      var pgTop = pgBounds[0];
+      var pgLeft = pgBounds[1];
+
+      var resultX = x;
+      var resultY = y;
+
+      if (fromSys === "page-relative" && toSys === "spread") {
+        // ページ相対 → スプレッド: ページ原点オフセットを加算
+        resultX = x + pgLeft;
+        resultY = y + pgTop;
+      } else if (fromSys === "spread" && toSys === "page-relative") {
+        // スプレッド → ページ相対: ページ原点オフセットを減算
+        resultX = x - pgLeft;
+        resultY = y - pgTop;
+      } else if (fromSys === toSys) {
+        // 同一座標系なら変換なし
+        resultX = x;
+        resultY = y;
+      } else {
+        writeResultFile(RESULT_PATH, {
+          error: true,
+          message: "Invalid coordinate systems: from='" + fromSys + "', to='" + toSys + "'"
+        });
+        resultX = null;
+      }
+
+      if (resultX !== null) {
+        writeResultFile(RESULT_PATH, {
+          x: resultX,
+          y: resultY,
+          from: fromSys,
+          to: toSys,
+          pageIndex: pageIndex,
+          pageOriginInSpread: { x: pgLeft, y: pgTop }
+        });
+      }
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "convert_coordinate failed: " + e.message, line: e.line });
@@ -56,7 +80,7 @@ export function register(server: McpServer): void {
     {
       title: 'Convert Coordinate',
       description:
-        'Convert a point between artboard and document coordinate systems in the active document.',
+        'Convert a point between page-relative and spread coordinate systems in InDesign. InDesign Y-axis is DOWN (top=0 increases downward). page-relative: origin at page top-left. spread: pasteboard/spread origin.',
       inputSchema: {
         point: z
           .object({
@@ -65,11 +89,18 @@ export function register(server: McpServer): void {
           })
           .describe('Point to convert'),
         from: z
-          .enum(['artboard', 'document'])
+          .enum(['page-relative', 'spread'])
           .describe('Source coordinate system'),
         to: z
-          .enum(['artboard', 'document'])
+          .enum(['page-relative', 'spread'])
           .describe('Destination coordinate system'),
+        page_index: z
+          .number()
+          .int()
+          .min(0)
+          .optional()
+          .default(0)
+          .describe('Page index (0-based) used for the page origin offset (default: 0)'),
       },
       annotations: READ_ANNOTATIONS,
     },

@@ -28,7 +28,7 @@ describe('cleanupTempFiles', () => {
 
     expect(warn).not.toHaveBeenCalled();
 
-    tempRoot = mkdtempSync(path.join(tmpdir(), 'illustrator-mcp-test-'));
+    tempRoot = mkdtempSync(path.join(tmpdir(), 'indesign-mcp-test-'));
     const failingPaths = ['params', 'script', 'runner', 'result'].map((name) => {
       const dirPath = path.join(tempRoot!, name);
       mkdirSync(dirPath);

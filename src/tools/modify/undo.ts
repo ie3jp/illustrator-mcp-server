@@ -3,41 +3,25 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
-/**
- * undo — Illustrator の操作を取り消し/やり直し
- *
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Application/ — Application.undo(), Application.redo()
- *
- * JSX API:
- *   Application.undo() → void
- *   Application.redo() → void
- *
- * ドキュメント不要。checkIllustratorVersion() のみ使用。
- */
 const jsxCode = `
 try {
-  var verErr = checkIllustratorVersion();
-  if (verErr) {
-    writeResultFile(RESULT_PATH, verErr);
-  } else {
-    var params = readParamsFile(PARAMS_PATH);
-    var action = params.action || "undo";
-    var count = params.count || 1;
+  var params = readParamsFile(PARAMS_PATH);
+  var action = params.action || "undo";
+  var count = params.count || 1;
 
-    for (var i = 0; i < count; i++) {
-      if (action === "undo") {
-        app.undo();
-      } else {
-        app.redo();
-      }
+  for (var i = 0; i < count; i++) {
+    if (action === "undo") {
+      app.undo();
+    } else {
+      app.redo();
     }
-
-    writeResultFile(RESULT_PATH, {
-      success: true,
-      action: action,
-      count: count
-    });
   }
+
+  writeResultFile(RESULT_PATH, {
+    success: true,
+    action: action,
+    count: count
+  });
 } catch (e) {
   writeResultFile(RESULT_PATH, { error: true, message: "undo failed: " + e.message, line: e.line });
 }
@@ -48,18 +32,10 @@ export function register(server: McpServer): void {
     'undo',
     {
       title: 'Undo / Redo',
-      description:
-        'Undo or redo actions in Illustrator. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Undo or redo actions in InDesign.',
       inputSchema: {
-        action: z.enum(['undo', 'redo']).optional().default('undo'),
-        count: z
-          .number()
-          .int()
-          .min(1)
-          .max(20)
-          .optional()
-          .default(1)
-          .describe('Number of times to undo/redo (max 20)'),
+        action: z.enum(['undo', 'redo']).optional().default('undo').describe('undo or redo'),
+        count: z.number().int().min(1).max(20).optional().default(1).describe('Number of times to undo/redo (max 20)'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },

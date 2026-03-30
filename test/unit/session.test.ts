@@ -24,221 +24,147 @@ describe('session state', () => {
   });
 
   it('resolveCoordinateSystem auto-detects from document when no session set', async () => {
-    // Simulate a CMYK print document
+    // Simulate a print document
     mockExecuteJsx.mockResolvedValue({
-      documentKey: '/path/to/print-doc.ai',
-      colorMode: 'CMYK',
-      rulerUnits: 'mm',
-      rasterEffectResolution: 300,
-      colorProfile: 'Japan Color 2001 Coated',
+      documentKey: '/path/to/print-doc.indd',
+      intent: 'print',
+      pageWidth: 595,
+      pageHeight: 842,
+      facingPages: true,
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
   });
 
-  it('resolveCoordinateSystem auto-detects artboard-web for RGB document', async () => {
+  it('resolveCoordinateSystem auto-detects for digital document', async () => {
     mockExecuteJsx.mockResolvedValue({
-      documentKey: '/path/to/web-doc.ai',
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 72,
-      colorProfile: 'sRGB IEC61966-2.1',
+      documentKey: '/path/to/web-doc.indd',
+      intent: 'digital',
+      pageWidth: 1024,
+      pageHeight: 768,
+      facingPages: false,
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
   });
 
   it('resolveCoordinateSystem returns session default when explicitly set', async () => {
-    setSession('print', 'document');
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    setSession('print', 'page-relative');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
     // Should not call JSX when session is explicitly set
     expect(mockExecuteJsx).not.toHaveBeenCalled();
   });
 
   it('explicit value overrides session default', async () => {
-    setSession('print', 'document');
-    expect(await resolveCoordinateSystem('artboard-web')).toBe('artboard-web');
+    setSession('print', 'page-relative');
+    expect(await resolveCoordinateSystem('spread')).toBe('spread');
   });
 
   it('clearSession resets to null', () => {
-    setSession('web', 'artboard-web');
+    setSession('digital', 'page-relative');
     clearSession();
     expect(getSessionWorkflow()).toBeNull();
     expect(getSessionCoordinateSystem()).toBeNull();
   });
 
   it('cache persists when same document, re-detects on document switch', async () => {
-    // First call: CMYK document — full detection
+    // First call: print document — full detection
     mockExecuteJsx.mockResolvedValue({
-      documentKey: '/path/to/print-doc.ai',
-      colorMode: 'CMYK',
-      rulerUnits: 'mm',
-      rasterEffectResolution: 300,
-      colorProfile: '',
+      documentKey: '/path/to/print-doc.indd',
+      intent: 'print',
+      pageWidth: 595,
+      pageHeight: 842,
+      facingPages: true,
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
 
     // Second call: cache validation returns same documentKey — cache hit
     mockExecuteJsx.mockResolvedValue({
-      documentKey: '/path/to/print-doc.ai',
+      documentKey: '/path/to/print-doc.indd',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document'); // cached
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative'); // cached
 
     // Third call: cache validation returns different documentKey — re-detects
     mockExecuteJsx.mockResolvedValueOnce({
-      documentKey: '/path/to/web-doc.ai',
+      documentKey: '/path/to/web-doc.indd',
     }).mockResolvedValueOnce({
-      documentKey: '/path/to/web-doc.ai',
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 72,
-      colorProfile: 'sRGB',
+      documentKey: '/path/to/web-doc.indd',
+      intent: 'digital',
+      pageWidth: 1024,
+      pageHeight: 768,
+      facingPages: false,
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
-
-    // After invalidation, also re-detects
-    invalidateAutoDetectCache();
-    mockExecuteJsx.mockResolvedValue({
-      documentKey: '/path/to/web-doc.ai',
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 72,
-      colorProfile: 'sRGB',
-    });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
   });
 
-  it('cache hit validates documentKey via lightweight JSX', async () => {
-    // First call: full detection (1 JSX call)
-    mockExecuteJsx.mockResolvedValueOnce({
-      documentKey: '/path/to/print-doc.ai',
-      colorMode: 'CMYK',
-      rulerUnits: 'mm',
-      rasterEffectResolution: 300,
-      colorProfile: '',
-    });
-
-    const first = await resolveCoordinateSystem(undefined); // populates cache
-    expect(mockExecuteJsx).toHaveBeenCalledTimes(1);
-
-    // Second call: cache validation (1 JSX call for documentKey check)
-    mockExecuteJsx.mockResolvedValueOnce({
-      documentKey: '/path/to/print-doc.ai',
-    });
-    const second = await resolveCoordinateSystem(undefined);
-
-    // 1 (initial detection) + 1 (cache key validation) = 2 calls
-    expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
-    expect(first).toBe('document');
-    expect(second).toBe('document');
-  });
-
-  it('invalidateAutoDetectCache forces re-detection on next call', async () => {
-    // First: CMYK doc (1 JSX call for full detection)
-    mockExecuteJsx.mockResolvedValueOnce({
-      documentKey: '/path/to/print-doc.ai',
-      colorMode: 'CMYK',
-      rulerUnits: 'mm',
-      rasterEffectResolution: 300,
-      colorProfile: '',
-    });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
-    expect(mockExecuteJsx).toHaveBeenCalledTimes(1);
-
-    // Invalidate cache (simulates create_document / close_document)
-    invalidateAutoDetectCache();
-
-    // Now return RGB doc (1 JSX call for full detection, no cache to validate)
-    mockExecuteJsx.mockResolvedValueOnce({
-      documentKey: '/path/to/web-doc.ai',
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 72,
-      colorProfile: 'sRGB',
-    });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
-    expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
-  });
-
-  it('falls back to artboard-web on JSX error', async () => {
+  it('falls back to page-relative on JSX error', async () => {
     mockExecuteJsx.mockResolvedValue({ error: true, message: 'No document' });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
   });
 
-  it('falls back to artboard-web on JSX rejection', async () => {
+  it('falls back to page-relative on JSX rejection', async () => {
     mockExecuteJsx.mockRejectedValue(new Error('connection failed'));
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('page-relative');
   });
 });
 
 describe('detectWorkflow', () => {
-  it('detects web: RGB + px + 72dpi + sRGB', () => {
+  it('detects print from intent', () => {
     const hint = detectWorkflow({
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 72,
-      colorProfile: 'sRGB IEC61966-2.1',
-    });
-    expect(hint.detectedWorkflow).toBe('web');
-    expect(hint.recommendedCoordinateSystem).toBe('artboard-web');
-  });
-
-  it('detects print: CMYK + mm + 300dpi + Japan Color', () => {
-    const hint = detectWorkflow({
-      colorMode: 'CMYK',
-      rulerUnits: 'mm',
-      rasterEffectResolution: 300,
-      colorProfile: 'Japan Color 2001 Coated',
+      intent: 'print',
+      pageWidth: 595,
+      pageHeight: 842,
+      facingPages: true,
     });
     expect(hint.detectedWorkflow).toBe('print');
-    expect(hint.recommendedCoordinateSystem).toBe('document');
+    expect(hint.recommendedCoordinateSystem).toBe('page-relative');
   });
 
-  it('detects video: RGB + px + 150dpi', () => {
+  it('detects digital from intent', () => {
     const hint = detectWorkflow({
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 150,
-      colorProfile: '',
+      intent: 'digital',
+      pageWidth: 1024,
+      pageHeight: 768,
+      facingPages: false,
     });
-    expect(hint.detectedWorkflow).toBe('video');
-    expect(hint.recommendedCoordinateSystem).toBe('artboard-web');
+    expect(hint.detectedWorkflow).toBe('digital');
+    expect(hint.recommendedCoordinateSystem).toBe('page-relative');
+  });
+
+  it('infers print from facing pages', () => {
+    const hint = detectWorkflow({
+      intent: 'unknown',
+      pageWidth: 595,
+      pageHeight: 842,
+      facingPages: true,
+    });
+    expect(hint.detectedWorkflow).toBe('print');
+  });
+
+  it('infers digital from wide landscape format', () => {
+    const hint = detectWorkflow({
+      intent: 'unknown',
+      pageWidth: 1920,
+      pageHeight: 1080,
+      facingPages: false,
+    });
+    expect(hint.detectedWorkflow).toBe('digital');
   });
 
   it('returns unknown when no signals', () => {
     const hint = detectWorkflow({
-      colorMode: 'unknown',
-      rulerUnits: 'unknown',
-      rasterEffectResolution: 0,
-      colorProfile: '',
+      intent: 'unknown',
+      pageWidth: 0,
+      pageHeight: 0,
+      facingPages: false,
     });
     expect(hint.detectedWorkflow).toBe('unknown');
   });
 
-  it('CMYK alone strongly suggests print', () => {
-    const hint = detectWorkflow({
-      colorMode: 'CMYK',
-      rulerUnits: 'pt',
-      rasterEffectResolution: 72,
-      colorProfile: '',
-    });
-    expect(hint.detectedWorkflow).toBe('print');
-  });
-
-  it('RGB + inches suggests print over web', () => {
-    const hint = detectWorkflow({
-      colorMode: 'RGB',
-      rulerUnits: 'in',
-      rasterEffectResolution: 300,
-      colorProfile: '',
-    });
-    expect(hint.detectedWorkflow).toBe('print');
-  });
-
   it('signals are included in result', () => {
     const signals = {
-      colorMode: 'RGB',
-      rulerUnits: 'px',
-      rasterEffectResolution: 72,
-      colorProfile: 'sRGB',
+      intent: 'print',
+      pageWidth: 595,
+      pageHeight: 842,
+      facingPages: true,
     };
     const hint = detectWorkflow(signals);
     expect(hint.signals).toEqual(signals);
@@ -246,10 +172,10 @@ describe('detectWorkflow', () => {
 
   it('reasoning is non-empty for detected workflows', () => {
     const hint = detectWorkflow({
-      colorMode: 'CMYK',
-      rulerUnits: 'mm',
-      rasterEffectResolution: 300,
-      colorProfile: 'Japan Color 2001 Coated',
+      intent: 'print',
+      pageWidth: 595,
+      pageHeight: 842,
+      facingPages: true,
     });
     expect(hint.reasoning.length).toBeGreaterThan(0);
   });

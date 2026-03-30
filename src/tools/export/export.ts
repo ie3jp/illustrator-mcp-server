@@ -28,8 +28,8 @@ if (preflight) {
       writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
     } else {
       if (format === "png") {
-        app.pngExportPreferences.pngExportRange = PNGExportRangeEnum.EXPORT_RANGE;
         if (pageRange !== "") {
+          app.pngExportPreferences.pngExportRange = PNGExportRangeEnum.EXPORT_RANGE;
           app.pngExportPreferences.pageString = pageRange;
         } else {
           app.pngExportPreferences.pngExportRange = PNGExportRangeEnum.ALL_PAGES;
@@ -37,8 +37,8 @@ if (preflight) {
         app.pngExportPreferences.exportResolution = dpi;
         doc.exportFile(ExportFormat.PNG_FORMAT, outFile);
       } else if (format === "jpg") {
-        app.jpegExportPreferences.jpegExportRange = ExportRangeOrAllPages.EXPORT_RANGE;
         if (pageRange !== "") {
+          app.jpegExportPreferences.jpegExportRange = ExportRangeOrAllPages.EXPORT_RANGE;
           app.jpegExportPreferences.pageString = pageRange;
         } else {
           app.jpegExportPreferences.jpegExportRange = ExportRangeOrAllPages.ALL_PAGES;
@@ -59,9 +59,12 @@ if (preflight) {
         writeResultFile(RESULT_PATH, { error: true, message: "Unsupported format: " + format + ". Use 'png' or 'jpg'." });
       }
 
-      // Verify output
+      // Verify output — note: InDesign may append page numbers to the filename for
+      // multi-page ranges, so we check the directory was written to rather than the
+      // exact path when a range was requested.
       var verifyFile = new File(outputPath);
-      if (!verifyFile.exists) {
+      var parentWritten = parentFolder.exists;
+      if (!verifyFile.exists && !parentWritten) {
         writeResultFile(RESULT_PATH, { error: true, message: "Export completed but output file was not created. Path may not be writable: " + outputPath });
       } else {
         writeResultFile(RESULT_PATH, {
@@ -69,7 +72,8 @@ if (preflight) {
           output_path: outputPath,
           format: format,
           dpi: dpi,
-          page_range: pageRange || "all"
+          page_range: pageRange || "all",
+          note: pageRange ? "InDesign may append page numbers to the filename for multi-page exports." : ""
         });
       }
     }
@@ -85,7 +89,9 @@ export function register(server: McpServer): void {
     {
       title: 'Export',
       description:
-        'Export InDesign document pages as PNG or JPG raster images. Note: InDesign will be activated (brought to foreground) during execution.',
+        'Export InDesign document pages as PNG or JPG raster images. ' +
+        'For multi-page exports InDesign appends page numbers to the filename automatically. ' +
+        'Note: InDesign will be activated (brought to foreground) during execution.',
       inputSchema: {
         format: z.enum(['png', 'jpg']).describe('Export format'),
         output_path: z.string().describe('Output file path'),

@@ -60,7 +60,9 @@ export function register(server: McpServer): void {
     {
       title: 'Export EPUB',
       description:
-        'Export the active InDesign document as an EPUB file. Note: InDesign will be activated (brought to foreground) during execution.',
+        'Export the active InDesign document as an EPUB file. ' +
+        'Supports EPUB 2 (legacy) and EPUB 3. ' +
+        'Note: InDesign will be activated (brought to foreground) during execution.',
       inputSchema: {
         output_path: z.string().describe('Output file path (.epub)'),
         version: z

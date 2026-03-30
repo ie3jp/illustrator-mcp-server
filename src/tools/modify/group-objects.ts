@@ -1,18 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import { WRITE_ANNOTATIONS, coerceBoolean } from './shared.js';
+import { WRITE_ANNOTATIONS } from './shared.js';
 
-/**
- * group_objects — 複数オブジェクトをグループ化
- *
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/ — GroupItems.add()
- *
- * JSX API:
- *   GroupItems.add() → GroupItem  (空グループ作成)
- *   PageItem.move(relativeObject, insertionLocation: ElementPlacement) → PageItem
- *   GroupItem.clipped → Boolean (writable)
- */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -32,29 +22,35 @@ if (preflight) {
     if (items.length === 0) {
       writeResultFile(RESULT_PATH, { error: true, message: "No valid objects found for the given UUIDs" });
     } else {
-      var parentLayer = items[0].layer;
-      var group = parentLayer.groupItems.add();
+      // Select all items and group using app.activeWindow.activeSpread
+      // In InDesign, group via selection
+      var spread = items[0].parentPage.parent;
+      var page = items[0].parentPage;
 
-      // 順方向で PLACEATEND → items[0] がグループ最下位 (bottom)、最後が最上位 (top)
-      // クリッピングマスクでは最上位アイテム（＝配列末尾）がクリップパスになる
-      for (var j = 0; j < items.length; j++) {
-        items[j].move(group, ElementPlacement.PLACEATEND);
+      // Use document's groupItems approach — group by moving to a new group
+      // InDesign: select items then group
+      app.select(items);
+      app.activeDocument.activeSpread.group(items);
+      var grp = null;
+      // The newly created group should be the selected item
+      var sel = app.selection;
+      if (sel && sel.length > 0) {
+        grp = sel[0];
       }
 
-      if (params.name) {
-        group.name = params.name;
+      if (!grp) {
+        writeResultFile(RESULT_PATH, { error: true, message: "Failed to create group" });
+      } else {
+        if (params.name) {
+          grp.name = params.name;
+        }
+        var uuid = ensureUUID(grp);
+        writeResultFile(RESULT_PATH, {
+          success: true,
+          uuid: uuid,
+          verified: verifyItem(grp)
+        });
       }
-      if (params.clipped === true) {
-        group.clipped = true;
-      }
-
-      var uuid = ensureUUID(group);
-      writeResultFile(RESULT_PATH, {
-        success: true,
-        uuid: uuid,
-        childCount: group.pageItems.length,
-        verified: verifyItem(group)
-      });
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "group_objects failed: " + e.message, line: e.line });
@@ -67,15 +63,10 @@ export function register(server: McpServer): void {
     'group_objects',
     {
       title: 'Group Objects',
-      description:
-        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Group multiple InDesign page items into a single group.',
       inputSchema: {
-        uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group. Order matters: first=bottom, last=top in layer panel.'),
+        uuids: z.array(z.string()).min(2).describe('UUIDs of objects to group (minimum 2)'),
         name: z.string().optional().describe('Name for the new group'),
-        clipped: coerceBoolean
-          .optional()
-          .default(false)
-          .describe('Create as clipping group. The last UUID becomes the clip path (topmost). Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
       },
       annotations: WRITE_ANNOTATIONS,
     },

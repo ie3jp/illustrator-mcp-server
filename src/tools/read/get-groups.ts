@@ -6,10 +6,10 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
+
 /**
  * get_groups — グループアイテム情報の取得
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/GroupItems/ — GroupItems collection
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/GroupItem/ — clipped, pageItems
+ * Groups from doc.allPageItems, filter by Group type. Show children.
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -18,32 +18,51 @@ if (preflight) {
 } else {
   try {
     var params = readParamsFile(PARAMS_PATH);
-    var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
+    var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "page-relative";
     var maxDepth = (params && params.depth !== undefined) ? params.depth : 10;
     var layerName = (params && params.layer_name) ? params.layer_name : null;
+    var filterPage = (params && typeof params.page_index === "number") ? params.page_index : null;
     var doc = app.activeDocument;
 
     function buildChildTree(container, currentDepth, coordSys) {
       var children = [];
       if (currentDepth >= maxDepth) { return children; }
-      for (var i = 0; i < container.pageItems.length; i++) {
-        var child = container.pageItems[i];
+      var items = null;
+      try { items = container.pageItems; } catch (e) { return children; }
+      for (var i = 0; i < items.length; i++) {
+        var child = items[i];
         var childUuid = ensureUUID(child);
         var childType = getItemType(child);
-        var abIdx = getArtboardIndexForItem(child);
-        var abRect = getArtboardRectByIndex(abIdx);
-        var childBounds = getBounds(child, coordSys, abRect);
+
+        var childPageIdx = -1;
+        try {
+          var childPP = child.parentPage;
+          if (childPP) childPageIdx = childPP.index;
+        } catch (e) {}
+
+        var childBounds = null;
+        try {
+          childBounds = getBoundsOnPage(child, childPageIdx);
+        } catch (e) {
+          try {
+            var cgb = child.geometricBounds;
+            childBounds = { top: cgh[0], left: cgh[1], bottom: cgh[2], right: cgh[3],
+                            width: cgh[3] - cgh[1], height: cgh[2] - cgh[0] };
+          } catch (e2) {}
+        }
+
         var childInfo = {
           uuid: childUuid,
           name: "",
           type: childType,
           bounds: childBounds
         };
-        try { childInfo.name = child.name || ""; } catch(e) {}
-        if (childType === "group" || childType === "compound-path") {
+        try { childInfo.name = child.name || ""; } catch (e) {}
+
+        if (childType === "Group") {
           try {
             childInfo.children = buildChildTree(child, currentDepth + 1, coordSys);
-          } catch(e) {
+          } catch (e) {
             childInfo.children = [];
           }
         }
@@ -54,91 +73,80 @@ if (preflight) {
 
     var results = [];
 
-    // Determine source container
-    var sourceLayer = null;
+    // レイヤーフィルタ検証
     if (layerName) {
+      var foundLayer = null;
       for (var li = 0; li < doc.layers.length; li++) {
         if (doc.layers[li].name === layerName) {
-          sourceLayer = doc.layers[li];
+          foundLayer = doc.layers[li];
           break;
         }
       }
-      if (!sourceLayer) {
+      if (!foundLayer) {
         writeResultFile(RESULT_PATH, { error: true, message: "Layer not found: " + layerName });
+        foundLayer = null;
       }
     }
 
-    if (layerName && !sourceLayer) {
-      // Already wrote error above; skip rest
-    } else {
+    // allPageItems を走査してGroupを収集
+    var allItems = doc.allPageItems;
+    for (var i = 0; i < allItems.length; i++) {
+      var item = allItems[i];
+      if (getItemType(item) !== "Group") continue;
 
-    // Collect groups
-    var groupSource = sourceLayer ? sourceLayer.groupItems : doc.groupItems;
-    for (var g = 0; g < groupSource.length; g++) {
-      var group = groupSource[g];
-      var uuid = ensureUUID(group);
-      var zIdx = getZIndex(group);
-      var abIndex = getArtboardIndexForItem(group);
-      var artboardRect = getArtboardRectByIndex(abIndex);
-      var bounds = getBounds(group, coordSystem, artboardRect);
+      // レイヤーフィルタ
+      if (layerName) {
+        var itemLayerName = getParentLayerName(item);
+        if (itemLayerName !== layerName) continue;
+      }
 
-      var groupType = "group";
+      // ページフィルタ
+      var groupPageIdx = -1;
       try {
-        if (group.clipped === true) { groupType = "clipping-mask"; }
-      } catch(e) {}
+        var gpp = item.parentPage;
+        if (gpp) groupPageIdx = gpp.index;
+      } catch (e) {}
+
+      if (filterPage !== null && groupPageIdx !== filterPage) continue;
+
+      // 親がGroupでない（最上位グループのみ）かどうか
+      var parentIsGroup = false;
+      try {
+        var par = item.parent;
+        if (par && getItemType(par) === "Group") parentIsGroup = true;
+      } catch (e) {}
+
+      if (parentIsGroup) continue; // サブグループはツリーで取得
+
+      var uuid = ensureUUID(item);
+
+      var groupBounds = null;
+      try {
+        groupBounds = getBoundsOnPage(item, groupPageIdx);
+      } catch (e) {
+        try {
+          var ggb = item.geometricBounds;
+          groupBounds = { top: ggb[0], left: ggb[1], bottom: ggb[2], right: ggb[3],
+                          width: ggb[3] - ggb[1], height: ggb[2] - ggb[0] };
+        } catch (e2) {}
+      }
 
       var info = {
         uuid: uuid,
-        zIndex: zIdx,
         name: "",
-        type: groupType,
-        bounds: bounds,
+        type: "Group",
+        pageIndex: groupPageIdx,
+        bounds: groupBounds,
+        layerName: getParentLayerName(item),
         children: []
       };
-      try { info.name = group.name || ""; } catch(e) {}
+      try { info.name = item.name || ""; } catch (e) {}
       try {
-        info.children = buildChildTree(group, 0, coordSystem);
-      } catch(e) {
+        info.children = buildChildTree(item, 0, coordSystem);
+      } catch (e) {
         info.children = [];
       }
       results.push(info);
-    }
-
-    // Collect compound paths
-    var cpSource = sourceLayer ? sourceLayer.compoundPathItems : doc.compoundPathItems;
-    for (var c = 0; c < cpSource.length; c++) {
-      var cp = cpSource[c];
-      var cpUuid = ensureUUID(cp);
-      var cpZIdx = getZIndex(cp);
-      var cpAbIndex = getArtboardIndexForItem(cp);
-      var cpAbRect = getArtboardRectByIndex(cpAbIndex);
-      var cpBounds = getBounds(cp, coordSystem, cpAbRect);
-
-      var cpInfo = {
-        uuid: cpUuid,
-        zIndex: cpZIdx,
-        name: "",
-        type: "compound-path",
-        bounds: cpBounds,
-        children: []
-      };
-      try { cpInfo.name = cp.name || ""; } catch(e) {}
-      try {
-        for (var pi = 0; pi < cp.pathItems.length; pi++) {
-          var pathChild = cp.pathItems[pi];
-          var pcUuid = ensureUUID(pathChild);
-          var pcAbIdx = getArtboardIndexForItem(pathChild);
-          var pcAbRect = getArtboardRectByIndex(pcAbIdx);
-          var pcBounds = getBounds(pathChild, coordSystem, pcAbRect);
-          cpInfo.children.push({
-            uuid: pcUuid,
-            name: pathChild.name || "",
-            type: "path",
-            bounds: pcBounds
-          });
-        }
-      } catch(e) {}
-      results.push(cpInfo);
     }
 
     writeResultFile(RESULT_PATH, {
@@ -146,8 +154,6 @@ if (preflight) {
       count: results.length,
       groups: results
     });
-
-    } // end of layerName && !sourceLayer guard
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
@@ -159,16 +165,20 @@ export function register(server: McpServer): void {
     'get_groups',
     {
       title: 'Get Groups',
-      description: 'Get structure of groups, clipping masks, and compound paths',
+      description: 'Get top-level groups from InDesign document with child item tree. Supports layer and page_index filters.',
       inputSchema: {
         layer_name: z.string().optional().describe('Filter by layer name (all layers if omitted)'),
-        depth: z.number().optional().default(10).describe('Maximum traversal depth'),
+        page_index: z.number().int().min(0).optional().describe('Filter by page index (0-based)'),
+        depth: z.number().optional().default(10).describe('Maximum traversal depth for children (default: 10)'),
         coordinate_system: coordinateSystemSchema,
       },
       annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
+      const resolvedParams = {
+        ...params,
+        coordinate_system: await resolveCoordinateSystem(params.coordinate_system),
+      };
       const result = await executeJsx(jsxCode, resolvedParams);
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],

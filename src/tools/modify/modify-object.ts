@@ -1,19 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import {
-  coordinateSystemSchema,
-  resolveCoordinateSystem,
-} from '../session.js';
 import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
-/**
- * modify_object — オブジェクトのプロパティ変更
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — position, width, height, opacity, locked, hidden, name
- *
- * 注意: rotation の絶対角度指定は atan2(mValueB, mValueA) で現在角度を算出するため、
- * skew/非等倍スケールされたオブジェクトでは不正確になる場合がある。
- */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -22,7 +11,6 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
-    var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
@@ -30,93 +18,91 @@ if (preflight) {
     if (!item) {
       writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + params.uuid });
     } else {
-      var props = params.properties;
       var errors = [];
 
-      if (props.position) {
-        try {
-          var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
-          var pos = webToAiPoint(props.position.x, props.position.y, coordSystem, abRect);
-          item.position = pos;
-        } catch(e) { errors.push("position: " + e.message); }
+      // Position / size via geometricBounds: [top, left, bottom, right]
+      var bounds = null;
+      try { bounds = item.geometricBounds; } catch(e) {}
+
+      if (bounds) {
+        var curTop   = bounds[0];
+        var curLeft  = bounds[1];
+        var curBot   = bounds[2];
+        var curRight = bounds[3];
+        var curW = curRight - curLeft;
+        var curH = curBot   - curTop;
+
+        var newX = (typeof params.x === "number") ? params.x : curLeft;
+        var newY = (typeof params.y === "number") ? params.y : curTop;
+        var newW = (typeof params.width  === "number") ? params.width  : curW;
+        var newH = (typeof params.height === "number") ? params.height : curH;
+
+        if (typeof params.x === "number" || typeof params.y === "number" ||
+            typeof params.width === "number" || typeof params.height === "number") {
+          try {
+            item.geometricBounds = [newY, newX, newY + newH, newX + newW];
+          } catch(e) { errors.push("bounds: " + e.message); }
+        }
       }
 
-      if (props.size) {
-        try {
-          if (typeof props.size.width === "number") {
-            item.width = props.size.width;
-          }
-          if (typeof props.size.height === "number") {
-            item.height = props.size.height;
-          }
-        } catch(e) { errors.push("size: " + e.message); }
+      if (typeof params.fill !== "undefined") {
+        try { applyFill(item, doc, params.fill); }
+        catch(e) { errors.push("fill: " + e.message); }
       }
 
-      if (typeof props.fill !== "undefined") {
-        try {
-          applyOptionalFill(item, props.fill);
-        } catch(e) { errors.push("fill: " + e.message); }
+      if (params.stroke) {
+        try { applyStroke(item, doc, params.stroke); }
+        catch(e) { errors.push("stroke: " + e.message); }
       }
 
-      if (props.stroke) {
-        try {
-          applyStroke(item, props.stroke, item.stroked);
-        } catch(e) { errors.push("stroke: " + e.message); }
-      }
-
-      if (typeof props.opacity === "number") {
-        try { item.opacity = props.opacity; }
+      if (typeof params.opacity === "number") {
+        try { item.transparencySettings.blendingSettings.opacity = params.opacity; }
         catch(e) { errors.push("opacity: " + e.message); }
       }
 
-      if (typeof props.rotation === "number") {
-        try {
-          if (props.rotation_mode === "absolute") {
-            // 現在の回転角を Matrix から算出し、差分を rotate() に渡す
-            var m = item.matrix;
-            var currentRad = Math.atan2(m.mValueB, m.mValueA);
-            var currentDeg = currentRad * 180 / Math.PI;
-            var delta = props.rotation - currentDeg;
-            item.rotate(delta);
-          } else {
-            item.rotate(props.rotation);
-          }
-        }
+      if (typeof params.rotation === "number") {
+        try { item.rotationAngle = params.rotation; }
         catch(e) { errors.push("rotation: " + e.message); }
       }
 
-      if (typeof props.name === "string") {
-        try { item.name = props.name; }
+      if (typeof params.name === "string") {
+        try { item.name = params.name; }
         catch(e) { errors.push("name: " + e.message); }
       }
 
-      if (typeof props.contents === "string") {
-        try { item.contents = props.contents.split(String.fromCharCode(10)).join(String.fromCharCode(13)); }
-        catch(e) { errors.push("contents: " + e.message); }
+      if (typeof params.visible === "boolean") {
+        try { item.visible = params.visible; }
+        catch(e) { errors.push("visible: " + e.message); }
+      }
+
+      if (typeof params.locked === "boolean") {
+        try { item.locked = params.locked; }
+        catch(e) { errors.push("locked: " + e.message); }
+      }
+
+      if (typeof params.contents === "string") {
+        try {
+          var rawContents = params.contents.replace(/\\\\n/g, "\\n");
+          item.contents = rawContents;
+        } catch(e) { errors.push("contents: " + e.message); }
       }
 
       var fontCandidates = null;
-      if (props.font_name) {
+      if (params.font_name) {
         try {
-          var resolvedFont = app.textFonts.getByName(props.font_name);
-          for (var ri = 0; ri < item.textRanges.length; ri++) {
-            item.textRanges[ri].characterAttributes.textFont = resolvedFont;
-          }
+          item.texts[0].appliedFont = app.fonts.item(params.font_name);
         } catch(e) {
-          errors.push("font_name: Font '" + props.font_name + "' not found.");
-          fontCandidates = findFontCandidates(props.font_name);
+          errors.push("font_name: Font '" + params.font_name + "' not found.");
+          fontCandidates = findFontCandidates(params.font_name);
         }
       }
 
-      if (typeof props.font_size === "number") {
-        try {
-          for (var ri2 = 0; ri2 < item.textRanges.length; ri2++) {
-            item.textRanges[ri2].characterAttributes.size = props.font_size;
-          }
-        } catch(e) { errors.push("font_size: " + e.message); }
+      if (typeof params.font_size === "number") {
+        try { item.texts[0].pointSize = params.font_size; }
+        catch(e) { errors.push("font_size: " + e.message); }
       }
 
-      var verifiedState = verifyItem(item, coordSystem, abRect);
+      var verifiedState = verifyItem(item);
       if (errors.length > 0) {
         var result = { success: false, uuid: params.uuid, errors: errors, verified: verifiedState };
         if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
@@ -136,43 +122,28 @@ export function register(server: McpServer): void {
     'modify_object',
     {
       title: 'Modify Object',
-      description: 'Modify properties of an existing object. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Modify properties of an existing InDesign page item by UUID.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target object'),
-        properties: z
-          .object({
-            position: z
-              .object({
-                x: z.number().describe('X coordinate'),
-                y: z.number().describe('Y coordinate'),
-              })
-              .optional()
-              .describe('Position'),
-            size: z
-              .object({
-                width: z.number().optional().describe('Width'),
-                height: z.number().optional().describe('Height'),
-              })
-              .optional()
-              .describe('Size'),
-            fill: colorSchema.describe('Fill color'),
-            stroke: strokeSchema.describe('Stroke settings'),
-            opacity: z.number().optional().describe('Opacity (0-100)'),
-            rotation: z.number().optional().describe('Rotation in degrees. Default mode is "delta" (additive). Use rotation_mode: "absolute" for target angle.'),
-            rotation_mode: z.enum(['delta', 'absolute']).optional().default('delta').describe('delta = add to current rotation, absolute = set to exact angle'),
-            name: z.string().optional().describe('Object name'),
-            contents: z.string().optional().describe('Text contents (for text frames)'),
-            font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),
-            font_size: z.number().optional().describe('Font size (for text frames)'),
-          })
-          .describe('Properties to modify'),
-        coordinate_system: coordinateSystemSchema,
+        x: z.number().optional().describe('Left edge X coordinate in points'),
+        y: z.number().optional().describe('Top edge Y coordinate in points'),
+        width: z.number().optional().describe('Width in points'),
+        height: z.number().optional().describe('Height in points'),
+        fill: colorSchema.describe('Fill color'),
+        stroke: strokeSchema.describe('Stroke settings'),
+        opacity: z.number().min(0).max(100).optional().describe('Opacity (0-100)'),
+        rotation: z.number().optional().describe('Absolute rotation angle in degrees'),
+        name: z.string().optional().describe('Object name'),
+        visible: z.boolean().optional().describe('Visibility'),
+        locked: z.boolean().optional().describe('Lock state'),
+        contents: z.string().optional().describe('Text contents (for text frames). Use \\n for line breaks.'),
+        font_name: z.string().optional().describe('Font name for text frames'),
+        font_size: z.number().optional().describe('Font size in points for text frames'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
+      const result = await executeJsx(jsxCode, params, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

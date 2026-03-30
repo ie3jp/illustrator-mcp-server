@@ -10,7 +10,7 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
 
 /**
  * get_document_info — InDesign ドキュメントの基本情報取得
- * Pages, intent, facingPages, margins, columns, bleed, slug
+ * Pages instead of artboards, InDesign properties (intent, facingPages, margins, columns).
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -67,13 +67,6 @@ if (preflight) {
       else if (ru === MeasurementUnits.CICEROS) rulerUnits = "cicero";
     } catch (e) {}
 
-    // カラースペース
-    var colorSpace = "unknown";
-    try {
-      var profile = doc.cmykProfile;
-      colorSpace = profile ? "CMYK" : "RGB";
-    } catch (e) {}
-
     // カラープロファイル
     var cmykProfile = "";
     var rgbProfile = "";
@@ -83,11 +76,10 @@ if (preflight) {
     // 裁ち落とし
     var bleed = { top: 0, bottom: 0, left: 0, right: 0 };
     try {
-      var bp = doc.documentPreferences;
-      bleed.top = bp.documentBleedTopOffset || 0;
-      bleed.bottom = bp.documentBleedBottomOffset || 0;
-      bleed.left = bp.documentBleedInsideOrLeftOffset || 0;
-      bleed.right = bp.documentBleedOutsideOrRightOffset || 0;
+      bleed.top = docPrefs.documentBleedTopOffset || 0;
+      bleed.bottom = docPrefs.documentBleedBottomOffset || 0;
+      bleed.left = docPrefs.documentBleedInsideOrLeftOffset || 0;
+      bleed.right = docPrefs.documentBleedOutsideOrRightOffset || 0;
     } catch (e) {}
 
     // スラッグ
@@ -107,6 +99,22 @@ if (preflight) {
     var sectionCount = 0;
     try { sectionCount = doc.sections.length; } catch (e) {}
 
+    // レイヤー数
+    var layerCount = 0;
+    try { layerCount = doc.layers.length; } catch (e) {}
+
+    // スウォッチ数
+    var swatchCount = 0;
+    try { swatchCount = doc.swatches.length; } catch (e) {}
+
+    // 段落スタイル数
+    var paragraphStyleCount = 0;
+    try { paragraphStyleCount = doc.paragraphStyles.length; } catch (e) {}
+
+    // 文字スタイル数
+    var characterStyleCount = 0;
+    try { characterStyleCount = doc.characterStyles.length; } catch (e) {}
+
     // ページ一覧（サマリー）
     var pages = [];
     for (var i = 0; i < doc.pages.length; i++) {
@@ -123,6 +131,19 @@ if (preflight) {
       try {
         pgInfo.appliedMaster = pg.appliedMaster ? pg.appliedMaster.name : "None";
       } catch (e) { pgInfo.appliedMaster = "None"; }
+      try {
+        var mp = pg.marginPreferences;
+        pgInfo.margins = {
+          top: mp.top,
+          bottom: mp.bottom,
+          left: mp.left,
+          right: mp.right
+        };
+        pgInfo.columns = {
+          count: mp.columnCount,
+          gutter: mp.columnGutter
+        };
+      } catch (e) {}
       pages.push(pgInfo);
     }
 
@@ -137,8 +158,11 @@ if (preflight) {
       spreadCount: spreadCount,
       masterSpreadCount: masterSpreadCount,
       sectionCount: sectionCount,
+      layerCount: layerCount,
+      swatchCount: swatchCount,
+      paragraphStyleCount: paragraphStyleCount,
+      characterStyleCount: characterStyleCount,
       rulerUnits: rulerUnits,
-      colorSpace: colorSpace,
       cmykProfile: cmykProfile,
       rgbProfile: rgbProfile,
       bleed: bleed,
@@ -159,7 +183,7 @@ export function register(server: McpServer): void {
     'get_document_info',
     {
       title: 'Get Document Info',
-      description: 'Get InDesign document metadata: pages, intent, facingPages, margins, columns, bleed, slug, color profiles.',
+      description: 'Get InDesign document metadata: pages, intent, facingPages, margins, columns, bleed, slug, color profiles, style counts.',
       inputSchema: {
         coordinate_system: coordinateSystemSchema,
       },

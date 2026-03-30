@@ -8,8 +8,11 @@ import {
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * check_text_consistency — テキスト一貫性チェック（ダミーテキスト検出・フォント統計）
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/ — contents, textRanges
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
+ * @see https://www.indesignjs.de/extendscriptAPI/indesign-cs6.html#TextFrame
+ * @see https://www.indesignjs.de/extendscriptAPI/indesign-cs6.html#Text
+ *
+ * Collects all text frame contents from the active InDesign document.
+ * Node.js-side post-processing detects dummy text patterns and known notation variations.
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -19,30 +22,67 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
-    var filterArtboard = (params && typeof params.artboard_index === "number") ? params.artboard_index : null;
+    var filterPage = (params && typeof params.page_index === "number") ? params.page_index : null;
 
-    if (filterArtboard !== null && (filterArtboard < 0 || filterArtboard >= doc.artboards.length)) {
+    if (filterPage !== null && (filterPage < 0 || filterPage >= doc.pages.length)) {
       writeResultFile(RESULT_PATH, {
         error: true,
-        message: "Artboard index " + filterArtboard + " is out of range (0-" + (doc.artboards.length - 1) + ")"
+        message: "Page index " + filterPage + " is out of range (0-" + (doc.pages.length - 1) + ")"
       });
     } else {
       var frames = [];
+
+      // Iterate all text frames in the document
       for (var i = 0; i < doc.textFrames.length; i++) {
         var tf = doc.textFrames[i];
         try {
           var uuid = ensureUUID(tf);
-          var abIdx = getArtboardIndexForItem(tf);
 
-          if (filterArtboard !== null && abIdx !== filterArtboard) continue;
+          // Determine which page this frame belongs to
+          var pageIdx = -1;
+          try {
+            var parentPage = tf.parentPage;
+            if (parentPage) {
+              pageIdx = parentPage.documentOffset;
+            }
+          } catch(e) {}
 
-          var layerName = getParentLayerName(tf);
+          if (filterPage !== null && pageIdx !== filterPage) continue;
+
+          // Layer name
+          var layerName = "";
+          try {
+            var item = tf;
+            while (item.parent) {
+              if (item.parent.constructor && item.parent.constructor.name === "Layer") {
+                layerName = item.parent.name;
+                break;
+              }
+              // Check typename for Layer
+              try {
+                if (item.parent.typename === "Layer") {
+                  layerName = item.parent.name;
+                  break;
+                }
+              } catch(le) {}
+              item = item.parent;
+            }
+          } catch(e) {}
+
+          // Page label (user-visible page name, e.g. "i", "1", "A-1")
+          var pageLabel = "";
+          try {
+            if (tf.parentPage) {
+              pageLabel = tf.parentPage.name;
+            }
+          } catch(e) {}
 
           frames.push({
             uuid: uuid,
             contents: tf.contents,
             layerName: layerName,
-            artboardIndex: abIdx
+            pageIndex: pageIdx,
+            pageLabel: pageLabel
           });
         } catch(e) {}
       }
@@ -64,7 +104,8 @@ interface TextFrame {
   uuid: string;
   contents: string;
   layerName: string;
-  artboardIndex: number;
+  pageIndex: number;
+  pageLabel: string;
 }
 
 interface DummyTextHit {
@@ -72,7 +113,8 @@ interface DummyTextHit {
   contents: string;
   pattern: string;
   layerName: string;
-  artboardIndex: number;
+  pageIndex: number;
+  pageLabel: string;
 }
 
 interface VariationGroup {
@@ -109,7 +151,8 @@ function detectDummyTexts(frames: TextFrame[]): DummyTextHit[] {
           contents: text.substring(0, 100),
           pattern: dp.label,
           layerName: frame.layerName,
-          artboardIndex: frame.artboardIndex,
+          pageIndex: frame.pageIndex,
+          pageLabel: frame.pageLabel,
         });
         break;
       }
@@ -122,16 +165,14 @@ function detectDummyTexts(frames: TextFrame[]): DummyTextHit[] {
  * Detect katakana long vowel variations: "サーバー" vs "サーバ"
  */
 function detectKatakanaLongVowel(frames: TextFrame[]): VariationGroup | null {
-  // Extract all katakana words from text frames
-  const katakanaWordMap = new Map<string, Map<string, string[]>>(); // base -> {variant -> uuids}
+  const katakanaWordMap = new Map<string, Map<string, string[]>>();
   const katakanaPattern = /[\u30A0-\u30FF]{2,}/g;
 
   for (const frame of frames) {
     const matches = frame.contents.match(katakanaPattern);
     if (!matches) continue;
     for (const word of matches) {
-      // Normalize: remove trailing long vowel mark
-      const base = word.replace(/ー+$/, '');
+      const base = word.replace(/\u30FC+$/, '');
       if (base.length < 2) continue;
       if (!katakanaWordMap.has(base)) {
         katakanaWordMap.set(base, new Map());
@@ -144,20 +185,6 @@ function detectKatakanaLongVowel(frames: TextFrame[]): VariationGroup | null {
     }
   }
 
-  const variationGroups: Array<{ text: string; count: number; uuids: string[] }> = [];
-  for (const [, variants] of katakanaWordMap) {
-    if (variants.size > 1) {
-      const group: Array<{ text: string; count: number; uuids: string[] }> = [];
-      for (const [text, uuids] of variants) {
-        group.push({ text, count: uuids.length, uuids: [...new Set(uuids)] });
-      }
-      variationGroups.push(...group);
-    }
-  }
-
-  if (variationGroups.length === 0) return null;
-
-  // Regroup by base word
   const result: Array<{ text: string; count: number; uuids: string[] }> = [];
   const seen = new Set<string>();
   for (const [base, variants] of katakanaWordMap) {
@@ -168,6 +195,8 @@ function detectKatakanaLongVowel(frames: TextFrame[]): VariationGroup | null {
       result.push({ text, count: uuids.length, uuids: [...new Set(uuids)] });
     }
   }
+
+  if (result.length === 0) return null;
 
   return {
     type: 'katakana_long_vowel',
@@ -299,7 +328,8 @@ function analyzeTextConsistency(frames: TextFrame[]) {
     uuid: f.uuid,
     contents: f.contents,
     layerName: f.layerName,
-    artboardIndex: f.artboardIndex,
+    pageIndex: f.pageIndex,
+    pageLabel: f.pageLabel,
   }));
 
   return { dummyTexts, knownVariations, allTexts };
@@ -311,14 +341,17 @@ export function register(server: McpServer): void {
     {
       title: 'Check Text Consistency',
       description:
-        'Analyze text frames for dummy/placeholder text and known notation variation patterns (katakana long vowel, fullwidth/halfwidth, wave dash/tilde). Returns all text contents for LLM-driven deeper analysis of inconsistencies, typos, and version mismatches. Note: AI analysis may miss errors and does not replace a human text review.',
+        'Analyze text frames for dummy/placeholder text and known notation variation patterns ' +
+        '(katakana long vowel, fullwidth/halfwidth, wave dash/tilde). ' +
+        'Returns all text contents for LLM-driven deeper analysis of inconsistencies, typos, and version mismatches. ' +
+        'Note: AI analysis may miss errors and does not replace a human text review.',
       inputSchema: {
-        artboard_index: z
+        page_index: z
           .number()
           .int()
           .min(0)
           .optional()
-          .describe('Filter by artboard index (0-based)'),
+          .describe('Filter by page index (0-based document offset). Omit to check all pages.'),
         coordinate_system: coordinateSystemSchema,
       },
       annotations: READ_ANNOTATIONS,

@@ -6,39 +6,43 @@ export function register(server: McpServer): void {
     'print-preflight-workflow',
     {
       description:
-        'Run a comprehensive pre-press preflight workflow. Checks document info, overprint, separations, image quality, color diagnostics, and text consistency in sequence.',
+        'Run a comprehensive pre-press preflight workflow for InDesign. Checks document info, built-in preflight, images, text consistency, and styles in sequence.',
       argsSchema: {
-        target_profile: z
-          .enum(['x1a', 'x4'])
+        export_pdf: z
+          .boolean()
           .optional()
-          .describe('Target PDF/X profile for compliance checks'),
+          .describe('If true, export a PDF after all checks pass (requires output_path)'),
+        output_path: z
+          .string()
+          .optional()
+          .describe('Output PDF path (required when export_pdf is true)'),
       },
     },
     (args) => {
-      const profile = args.target_profile as string | undefined;
+      const exportPdf = args.export_pdf === true || String(args.export_pdf) === 'true';
+      const outputPath = (args.output_path as string | undefined) ?? '';
       return {
         messages: [
           {
             role: 'user' as const,
             content: {
               type: 'text' as const,
-              text: `Run a comprehensive pre-press preflight check. Proceed in the following order.
+              text: `Run a comprehensive pre-press preflight check for InDesign. Proceed in the following order.
 
 ## Check Procedure
-1. **Document Info**: Use get_document_info to verify color mode, dimensions, and profile.
-2. **Preflight Check**: Run preflight_check${profile ? ` (target_pdf_profile: "${profile}")` : ''} for basic validation.
-3. **Overprint Check**: Use get_overprint_info to detect unintended overprints (other than K100).
-4. **Separation Check**: Use get_separation_info to verify plate count and spot color intent.
-5. **Image Quality Check**: Use get_images (include_print_info: true) to check resolution and color space.
-6. **Color Diagnostics**: Use get_colors (include_diagnostics: true) to check total ink coverage and color space mismatches.
-7. **Text Consistency Check**: Use check_text_consistency to detect placeholder text and inconsistencies.
+1. **Document Info**: Use get_document_info to verify page size, page count, color mode, and document intent.
+2. **Built-in Preflight**: Run preflight_check to execute InDesign's native preflight engine. Report all errors and warnings by category.
+3. **Image Quality Check**: Use get_images (include_print_info: true) to verify that all placed images are linked, have sufficient resolution, and are in an appropriate color space for print.
+4. **Text Consistency Check**: Use check_text_consistency to detect placeholder text (Lorem ipsum, Japanese placeholders) and notation inconsistencies (fullwidth/halfwidth, katakana long vowel, wave dash).
+5. **Styles Check**: Use get_styles to review paragraph styles, character styles, and object styles for consistency and completeness.${exportPdf && outputPath ? `
+6. **PDF Export**: If all preflight errors are resolved, export the document as PDF using export_pdf with output_path: "${outputPath}".` : ''}
 
 ## Report Format
 After all checks are complete, output a summary report in this format:
 - Error: must fix before submission
 - Warning: review recommended
 - OK: no issues found
-Include object name, UUID, and specific remediation steps for each item.
+Include page number, object name, UUID (if available), and specific remediation steps for each item.
 
 ## AI Limitation Awareness
 Do NOT add a disclaimer to every report. Instead, apply these rules:

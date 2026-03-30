@@ -346,9 +346,11 @@ function iterateAllItems(container, callback) {
   var items;
   try {
     items = container.allPageItems;
+    if (!items || items.length === void 0) throw new Error("no allPageItems");
   } catch(e) {
     try { items = container.pageItems; } catch(e2) { return; }
   }
+  if (!items) return;
   for (var i = 0; i < items.length; i++) {
     callback(items[i]);
   }

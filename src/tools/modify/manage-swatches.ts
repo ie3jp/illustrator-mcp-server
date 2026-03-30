@@ -3,21 +3,7 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { DESTRUCTIVE_ANNOTATIONS, COLOR_HELPERS_JSX, colorSchema } from './shared.js';
 
-/**
- * manage_swatches — スウォッチの追加・更新・削除
- *
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/ — Swatches, Swatch
- *
- * JSX API:
- *   Swatches.add() → Swatch
- *   Swatch.name → String (writable)
- *   Swatch.color → Color (writable)
- *   Swatch.remove() → void
- *   Swatches.getByName(name: String) → Swatch
- */
 const jsxCode = `
-${COLOR_HELPERS_JSX}
-
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
@@ -26,34 +12,71 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var action = params.action;
+    ${COLOR_HELPERS_JSX}
+
+    function getSwatchInfo(swatch) {
+      return { name: swatch.name };
+    }
 
     if (action === "add") {
       if (!params.color) {
         writeResultFile(RESULT_PATH, { error: true, message: "color is required for add action" });
       } else {
-        var swatch = doc.swatches.add();
-        swatch.name = params.name;
-        swatch.color = createColor(params.color);
-        writeResultFile(RESULT_PATH, { success: true, action: "add", name: params.name, verified: { swatchCount: doc.swatches.length, name: swatch.name } });
-      }
-    } else if (action === "update") {
-      try {
-        var existing = doc.swatches.getByName(params.name);
-        if (params.color) {
-          existing.color = createColor(params.color);
+        var color = createColor(doc, params.color);
+        // In InDesign, createColor already adds it to doc.colors
+        // Create a named swatch
+        var swatch = null;
+        try {
+          swatch = doc.swatches.itemByName(params.name);
+          if (!swatch || !swatch.isValid) {
+            // Add new color with the name
+            var newColor = doc.colors.add();
+            if (params.color.type === "cmyk") {
+              newColor.model = ColorModel.PROCESS;
+              newColor.space = ColorSpace.CMYK;
+              newColor.colorValue = [params.color.c, params.color.m, params.color.y, params.color.k];
+            } else if (params.color.type === "rgb") {
+              newColor.model = ColorModel.PROCESS;
+              newColor.space = ColorSpace.RGB;
+              newColor.colorValue = [params.color.r, params.color.g, params.color.b];
+            }
+            newColor.name = params.name;
+            swatch = newColor;
+          }
+        } catch(e) {
+          writeResultFile(RESULT_PATH, { error: true, message: "Failed to add swatch: " + e.message });
+          swatch = null;
         }
-        writeResultFile(RESULT_PATH, { success: true, action: "update", name: params.name, verified: { swatchCount: doc.swatches.length, name: existing.name } });
-      } catch(e) {
-        writeResultFile(RESULT_PATH, { error: true, message: "Swatch not found: " + params.name });
+        if (swatch) {
+          writeResultFile(RESULT_PATH, { success: true, action: "add", name: params.name, verified: { swatchCount: doc.swatches.length } });
+        }
       }
+
+    } else if (action === "update") {
+      var existing = doc.swatches.itemByName(params.name);
+      if (!existing || !existing.isValid) {
+        writeResultFile(RESULT_PATH, { error: true, message: "Swatch not found: " + params.name });
+      } else {
+        if (params.color && params.color.type === "cmyk") {
+          existing.colorValue = [params.color.c, params.color.m, params.color.y, params.color.k];
+        } else if (params.color && params.color.type === "rgb") {
+          existing.colorValue = [params.color.r, params.color.g, params.color.b];
+        }
+        if (params.new_name) {
+          existing.name = params.new_name;
+        }
+        writeResultFile(RESULT_PATH, { success: true, action: "update", name: params.name, verified: { swatchCount: doc.swatches.length } });
+      }
+
     } else if (action === "delete") {
-      try {
-        var toDelete = doc.swatches.getByName(params.name);
-        toDelete.remove();
-        writeResultFile(RESULT_PATH, { success: true, action: "delete", name: params.name, verified: { swatchCount: doc.swatches.length } });
-      } catch(e) {
+      var toDelete = doc.swatches.itemByName(params.name);
+      if (!toDelete || !toDelete.isValid) {
         writeResultFile(RESULT_PATH, { error: true, message: "Swatch not found: " + params.name });
+      } else {
+        toDelete.remove(doc.swatches.itemByName("None"));
+        writeResultFile(RESULT_PATH, { success: true, action: "delete", name: params.name, verified: { swatchCount: doc.swatches.length } });
       }
+
     } else {
       writeResultFile(RESULT_PATH, { error: true, message: "Unknown action: " + action });
     }
@@ -68,11 +91,11 @@ export function register(server: McpServer): void {
     'manage_swatches',
     {
       title: 'Manage Swatches',
-      description:
-        'Add, update, or delete swatches in the active document. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Add, update, or delete color swatches in the active InDesign document.',
       inputSchema: {
         action: z.enum(['add', 'update', 'delete']).describe('Action to perform'),
         name: z.string().describe('Swatch name'),
+        new_name: z.string().optional().describe('New swatch name (for update action)'),
         color: colorSchema.describe('Color for add/update (required for add)'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,

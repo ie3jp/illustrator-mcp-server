@@ -29,12 +29,12 @@ if (preflight) {
       // Apply PDF export preset if specified
       if (preset !== "") {
         try {
-          app.pdfExportPreferences.appliedFlattenerPreset = preset;
+          var pdfPreset = app.pdfExportPresets.item(preset);
+          pdfPreset.loadSettings();
         } catch(e) {
-          // Preset may refer to a PDF export preset name — try loading it
+          // Preset not found or loadSettings not supported — try appliedFlattenerPreset
           try {
-            var pdfPreset = app.pdfExportPresets.item(preset);
-            pdfPreset.loadSettings();
+            app.pdfExportPreferences.appliedFlattenerPreset = preset;
           } catch(e2) {
             // Ignore preset errors and continue with current settings
           }
@@ -104,13 +104,16 @@ export function register(server: McpServer): void {
     {
       title: 'Export PDF',
       description:
-        'Export the active InDesign document as a PDF file. Note: InDesign will be activated (brought to foreground) during execution. The exported PDF should be verified by a human before final print submission.',
+        'Export the active InDesign document as a PDF file. ' +
+        'Supports PDF export presets, page range selection, bleed, and printer\'s marks. ' +
+        'Note: InDesign will be activated (brought to foreground) during execution. ' +
+        'The exported PDF should be verified by a human before final print submission.',
       inputSchema: {
         output_path: z.string().describe('Output file path'),
         preset: z
           .string()
           .optional()
-          .describe('PDF export preset name (e.g. "[PDF/X-4:2008]", "[Press Quality]")'),
+          .describe('PDF export preset name (e.g. "[PDF/X-4:2008]", "[Press Quality]", "[Smallest File Size]")'),
         page_range: z
           .string()
           .optional()

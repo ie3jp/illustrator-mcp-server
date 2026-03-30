@@ -4,36 +4,67 @@ import { executeJsx } from '../../executor/jsx-runner.js';
 import { invalidateAutoDetectCache } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
-/**
- * create_document — 新規ドキュメントの作成
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Documents/ — Documents.add(colorSpace, width, height)
- */
 const jsxCode = `
 try {
-  var verErr = checkIllustratorVersion();
-  if (verErr) {
-    writeResultFile(RESULT_PATH, verErr);
-  } else {
-    var params = readParamsFile(PARAMS_PATH);
-    var w = params.width || 595.28;
-    var h = params.height || 841.89;
-    var colorMode = (params.color_mode === "cmyk")
-      ? DocumentColorSpace.CMYK
-      : DocumentColorSpace.RGB;
+  var params = readParamsFile(PARAMS_PATH);
 
-    var doc = app.documents.add(colorMode, w, h);
+  var docPrefs = {
+    documentBleedBottomOffset: 0,
+    documentBleedTopOffset: 0,
+    documentBleedInsideOrLeftOffset: 0,
+    documentBleedOutsideOrRightOffset: 0
+  };
 
-    // Set artboard to match requested size
-    doc.artboards[0].artboardRect = [0, h, w, 0];
+  var w = params.width || "210mm";
+  var h = params.height || "297mm";
+  var facingPages = (params.facing_pages === true);
+  var pageCount = (typeof params.page_count === "number") ? params.page_count : 1;
 
-    writeResultFile(RESULT_PATH, {
-      success: true,
-      fileName: doc.name,
-      width: w,
-      height: h,
-      colorMode: (colorMode === DocumentColorSpace.CMYK) ? "CMYK" : "RGB"
-    });
+  var intentVal = DocumentIntentOptions.PRINT_INTENT;
+  if (params.intent === "digital") {
+    intentVal = DocumentIntentOptions.WEB_INTENT;
   }
+
+  var doc = app.documents.add(facingPages, PageSize.CUSTOM, pageCount, DocumentColorSpace.CMYK, intentVal);
+
+  // Set page size
+  doc.documentPreferences.pageWidth = w;
+  doc.documentPreferences.pageHeight = h;
+
+  // Set margins if provided
+  if (params.margins) {
+    var m = params.margins;
+    doc.documentPreferences.facingPages = facingPages;
+    try {
+      doc.marginPreferences.top    = (typeof m.top    === "number") ? m.top    : 0;
+      doc.marginPreferences.bottom = (typeof m.bottom === "number") ? m.bottom : 0;
+      doc.marginPreferences.left   = (typeof m.left   === "number") ? m.left   : 0;
+      doc.marginPreferences.right  = (typeof m.right  === "number") ? m.right  : 0;
+    } catch(em) {}
+  }
+
+  // Set columns if provided
+  if (typeof params.columns === "number" && params.columns > 1) {
+    try {
+      doc.textPreferences.baselineGridRelativeOption = BaselineGridRelativeOption.TOP_OF_PAGE;
+      doc.textFramePreferences.textColumnCount = params.columns;
+    } catch(ec) {}
+  }
+
+  var docName = doc.name;
+  var fullPath = "";
+  try { fullPath = doc.fullName.fsName; } catch(e) {}
+
+  writeResultFile(RESULT_PATH, {
+    success: true,
+    name: docName,
+    path: fullPath,
+    width: w,
+    height: h,
+    facingPages: facingPages,
+    pageCount: pageCount,
+    intent: params.intent || "print"
+  });
 } catch (e) {
   writeResultFile(RESULT_PATH, { error: true, message: "Failed to create document: " + e.message, line: e.line });
 }
@@ -44,24 +75,20 @@ export function register(server: McpServer): void {
     'create_document',
     {
       title: 'Create Document',
-      description:
-        'Create a new Illustrator document. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Create a new InDesign document with specified size, pages, margins and intent.',
       inputSchema: {
-        width: z
-          .number()
-          .optional()
-          .default(595.28)
-          .describe('Document width in points (default: A4 width 595.28pt)'),
-        height: z
-          .number()
-          .optional()
-          .default(841.89)
-          .describe('Document height in points (default: A4 height 841.89pt)'),
-        color_mode: z
-          .enum(['rgb', 'cmyk'])
-          .optional()
-          .default('rgb')
-          .describe('Color mode (default: rgb)'),
+        width: z.string().optional().default('210mm').describe('Page width as string with unit (e.g. "210mm", "8.5in", "595pt"). Default: A4 width.'),
+        height: z.string().optional().default('297mm').describe('Page height as string with unit. Default: A4 height.'),
+        facing_pages: z.boolean().optional().default(false).describe('Enable facing pages (spreads) for print layouts'),
+        page_count: z.number().int().min(1).optional().default(1).describe('Initial number of pages'),
+        margins: z.object({
+          top: z.number().optional().describe('Top margin in points'),
+          bottom: z.number().optional().describe('Bottom margin in points'),
+          left: z.number().optional().describe('Left/inside margin in points'),
+          right: z.number().optional().describe('Right/outside margin in points'),
+        }).optional().describe('Page margins in points'),
+        columns: z.number().int().min(1).optional().describe('Number of text columns'),
+        intent: z.enum(['print', 'digital']).optional().default('print').describe('Document intent: print or digital/web'),
       },
       annotations: WRITE_ANNOTATIONS,
     },

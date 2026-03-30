@@ -1,17 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import {
-  coordinateSystemSchema,
-  resolveCoordinateSystem,
-} from '../session.js';
 import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
-/**
- * create_text_frame — テキストフレームの作成（ポイント/エリア）
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/ — TextFrameItems.pointText(), areaText()
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
- */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -20,72 +11,51 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
-    var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
-    var inputX = params.x;
-    var inputY = params.y;
-    var kind = params.kind || "point";
+    var x = params.x;
+    var y = params.y;
+    var w = params.width || 100;
+    var h = params.height || 50;
 
-    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
-    var aiCoords = webToAiPoint(inputX, inputY, coordSystem, abRect);
-    var aiX = aiCoords[0];
-    var aiY = aiCoords[1];
-
-    var resolvedFont = null;
-    var fontCandidates = null;
-    if (params.font_name) {
-      try {
-        resolvedFont = app.textFonts.getByName(params.font_name);
-      } catch (e) {
-        fontCandidates = findFontCandidates(params.font_name);
-      }
-    }
-
+    var page = resolveTargetPage(doc, params.page_index);
     var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
-    var tf;
-    var rectPath = null;
-    if (kind === "area") {
-      var w = params.width || 100;
-      var h = params.height || 100;
-      rectPath = targetLayer.pathItems.rectangle(aiY, aiX, w, h);
-      try {
-        tf = targetLayer.textFrames.areaText(rectPath);
-      } catch (eArea) {
-        try { rectPath.remove(); } catch (_) {}
-        throw eArea;
-      }
-    } else {
-      tf = targetLayer.textFrames.pointText([aiX, aiY]);
-    }
+    var tf = page.textFrames.add(targetLayer, LocationOptions.UNKNOWN, {
+      geometricBounds: [y, x, y + h, x + w]
+    });
 
+    // Handle \\n in contents
     var rawContents = params.contents || "";
-    // Handle literal \\n (backslash + n) from MCP parameter passing
-    rawContents = rawContents.replace(/\\\\n/g, String.fromCharCode(10));
-    tf.contents = rawContents.split(String.fromCharCode(10)).join(String.fromCharCode(13));
+    rawContents = rawContents.replace(/\\\\n/g, "\\n");
+    tf.contents = rawContents;
 
     if (params.name) {
       tf.name = params.name;
     }
 
-    var charAttrs = tf.textRange.characterAttributes;
+    if (params.fill) {
+      applyFill(tf, doc, params.fill);
+    }
 
-    if (resolvedFont) {
-      charAttrs.textFont = resolvedFont;
+    var fontCandidates = null;
+    if (params.font_name) {
+      try {
+        tf.texts[0].appliedFont = app.fonts.item(params.font_name);
+      } catch(e) {
+        fontCandidates = findFontCandidates(params.font_name);
+      }
     }
 
     if (typeof params.font_size === "number") {
-      charAttrs.size = params.font_size;
-    }
-
-    if (typeof params.fill !== "undefined") {
-      charAttrs.fillColor = createColor(params.fill);
+      try {
+        tf.texts[0].pointSize = params.font_size;
+      } catch(e) {}
     }
 
     var uuid = ensureUUID(tf);
-    var resultData = { uuid: uuid, verified: verifyItem(tf, coordSystem, abRect) };
+    var resultData = { uuid: uuid, verified: verifyItem(tf) };
     if (fontCandidates !== null) {
       resultData.font_warning = "Font '" + params.font_name + "' not found. Text frame created with default font.";
       resultData.font_candidates = fontCandidates;
@@ -102,30 +72,24 @@ export function register(server: McpServer): void {
     'create_text_frame',
     {
       title: 'Create Text Frame',
-      description: 'Create a text frame. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Create an area text frame on the active InDesign document page.',
       inputSchema: {
-        x: z.number().describe('X coordinate'),
-        y: z.number().describe('Y coordinate'),
-        contents: z.string().describe('Text contents. Use \\n for line breaks (automatically converted to CR for Illustrator).'),
-        kind: z
-          .enum(['point', 'area'])
-          .optional()
-          .default('point')
-          .describe('Text frame type (point or area)'),
-        width: z.number().optional().describe('Area text width'),
-        height: z.number().optional().describe('Area text height'),
-        font_name: z.string().optional().describe('Font name (partial match, e.g. "Arial", "Helvetica"). Use list_fonts to find exact PostScript names.'),
-        font_size: z.number().optional().describe('Font size (pt)'),
-        fill: colorSchema.describe('Text color'),
-        layer_name: z.string().optional().describe('Target layer name'),
+        x: z.number().describe('Left edge X coordinate (points from page left)'),
+        y: z.number().describe('Top edge Y coordinate (points from page top)'),
+        width: z.number().optional().default(100).describe('Width in points'),
+        height: z.number().optional().default(50).describe('Height in points'),
+        contents: z.string().optional().describe('Text contents. Use \\n for line breaks.'),
+        font_name: z.string().optional().describe('Font name (e.g. "Arial", "Helvetica-Bold"). Use list_fonts to find names.'),
+        font_size: z.number().optional().describe('Font size in points'),
+        fill: colorSchema.describe('Fill color of the frame'),
+        layer_name: z.string().optional().describe('Target layer name (created if not exists)'),
         name: z.string().optional().describe('Object name'),
-        coordinate_system: coordinateSystemSchema,
+        page_index: z.number().int().min(0).optional().describe('Zero-based page index (default: active page)'),
       },
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
+      const result = await executeJsx(jsxCode, params, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

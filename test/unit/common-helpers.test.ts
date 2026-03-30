@@ -8,96 +8,105 @@ import * as path from 'path';
 const jsxPath = path.resolve(__dirname, '../../src/jsx/helpers/common.jsx');
 const jsxCode = fs.readFileSync(jsxPath, 'utf-8');
 
-// ExtendScript のグローバルオブジェクトをモック
+// ExtendScript のグローバルオブジェクトをモック（InDesign 版）
 const wrappedCode = `
-  // Mock ExtendScript globals
-  var TextType = { POINTTEXT: 1, AREATEXT: 2, PATHTEXT: 3 };
+  // Mock InDesign ExtendScript globals
+  var ColorSpace = { CMYK: 'cmyk', RGB: 'rgb', LAB: 'lab' };
 
   ${jsxCode}
 
   return {
     resolveTargetLayer: resolveTargetLayer,
-    webToAiPoint: webToAiPoint,
     getParentLayerName: getParentLayerName,
-    getTextKind: getTextKind,
+    getBounds: getBounds,
+    getBoundsOnPage: getBoundsOnPage,
+    getItemType: getItemType,
     iterateAllItems: iterateAllItems,
+    resolveTargetPage: resolveTargetPage,
   };
 `;
 
-// eslint-disable-next-line no-new-func -- test-only: evaluating ES3 ExtendScript helpers in Node.js (same pattern as json-stringify.test.ts)
+// eslint-disable-next-line no-new-func -- test-only: evaluating ES3 ExtendScript helpers in Node.js
 const factory = new Function(wrappedCode); // NOSONAR
 const helpers = factory() as {
   resolveTargetLayer: (doc: unknown, layerName: string | null) => unknown;
-  webToAiPoint: (x: number, y: number, coordSystem: string, artboardRect: number[] | null) => number[];
   getParentLayerName: (item: unknown) => string;
-  getTextKind: (tf: unknown) => string;
+  getBounds: (item: unknown) => { x: number; y: number; width: number; height: number };
+  getBoundsOnPage: (item: unknown, page: unknown) => { x: number; y: number; width: number; height: number };
+  getItemType: (item: unknown) => string;
   iterateAllItems: (container: unknown, callback: (item: unknown) => void) => void;
+  resolveTargetPage: (doc: unknown, pageIndex: number | undefined) => unknown;
 };
 
-describe('webToAiPoint', () => {
-  it('returns original coords for document coordinate system', () => {
-    const result = helpers.webToAiPoint(100, 200, 'document', null);
-    expect(result).toEqual([100, 200]);
+describe('getBounds (InDesign)', () => {
+  it('converts geometricBounds [top, left, bottom, right] to x, y, width, height', () => {
+    const item = { geometricBounds: [10, 20, 110, 220] }; // top=10, left=20, bottom=110, right=220
+    const result = helpers.getBounds(item);
+    expect(result).toEqual({ x: 20, y: 10, width: 200, height: 100 });
   });
 
-  it('converts artboard-web coords with artboard rect', () => {
-    const abRect = [50, 800, 650, 0]; // [left, top, right, bottom]
-    const result = helpers.webToAiPoint(10, 20, 'artboard-web', abRect);
-    expect(result).toEqual([60, 780]); // [50+10, 800+(-20)]
-  });
-
-  it('returns original coords when artboard-web but no rect', () => {
-    const result = helpers.webToAiPoint(100, 200, 'artboard-web', null);
-    expect(result).toEqual([100, 200]);
+  it('handles zero-origin bounds', () => {
+    const item = { geometricBounds: [0, 0, 50, 100] };
+    const result = helpers.getBounds(item);
+    expect(result).toEqual({ x: 0, y: 0, width: 100, height: 50 });
   });
 });
 
-describe('getParentLayerName', () => {
-  it('returns layer name when parent is a Layer', () => {
-    const item = { parent: { typename: 'Layer', name: 'Background' } };
+describe('getBoundsOnPage', () => {
+  it('returns page-relative coordinates', () => {
+    const item = { geometricBounds: [110, 120, 210, 320] };
+    const page = { bounds: [100, 100, 900, 700] }; // page starts at [100, 100]
+    const result = helpers.getBoundsOnPage(item, page);
+    expect(result).toEqual({ x: 20, y: 10, width: 200, height: 100 });
+  });
+});
+
+describe('getParentLayerName (InDesign)', () => {
+  it('returns itemLayer name', () => {
+    const item = { itemLayer: { name: 'Background' } };
     expect(helpers.getParentLayerName(item)).toBe('Background');
   });
 
-  it('walks up to find Layer through groups', () => {
-    const item = {
-      parent: {
-        typename: 'GroupItem',
-        parent: { typename: 'Layer', name: 'Icons' },
-      },
-    };
-    expect(helpers.getParentLayerName(item)).toBe('Icons');
-  });
-
-  it('returns empty string when no Layer found', () => {
-    const item = { parent: null };
+  it('returns empty string when no itemLayer', () => {
+    const item = {};
     expect(helpers.getParentLayerName(item)).toBe('');
   });
 });
 
-describe('getTextKind', () => {
-  it('returns "point" for POINTTEXT', () => {
-    expect(helpers.getTextKind({ kind: 1 })).toBe('point');
+describe('getItemType (InDesign)', () => {
+  it('returns "text" for TextFrame', () => {
+    const item = { constructor: { name: 'TextFrame' } };
+    expect(helpers.getItemType(item)).toBe('text');
   });
 
-  it('returns "area" for AREATEXT', () => {
-    expect(helpers.getTextKind({ kind: 2 })).toBe('area');
+  it('returns "rectangle" for Rectangle', () => {
+    const item = { constructor: { name: 'Rectangle' } };
+    expect(helpers.getItemType(item)).toBe('rectangle');
   });
 
-  it('returns "path" for PATHTEXT', () => {
-    expect(helpers.getTextKind({ kind: 3 })).toBe('path');
+  it('returns "oval" for Oval', () => {
+    const item = { constructor: { name: 'Oval' } };
+    expect(helpers.getItemType(item)).toBe('oval');
   });
 
-  it('returns "unknown" for unrecognized kind', () => {
-    expect(helpers.getTextKind({ kind: 99 })).toBe('unknown');
+  it('returns "line" for GraphicLine', () => {
+    const item = { constructor: { name: 'GraphicLine' } };
+    expect(helpers.getItemType(item)).toBe('line');
   });
 
-  it('returns "unknown" when kind throws', () => {
-    const tf = {
-      get kind() {
-        throw new Error('no kind');
-      },
-    };
-    expect(helpers.getTextKind(tf)).toBe('unknown');
+  it('returns "group" for Group', () => {
+    const item = { constructor: { name: 'Group' } };
+    expect(helpers.getItemType(item)).toBe('group');
+  });
+
+  it('returns "table" for Table', () => {
+    const item = { constructor: { name: 'Table' } };
+    expect(helpers.getItemType(item)).toBe('table');
+  });
+
+  it('returns "other" for unknown type', () => {
+    const item = { constructor: { name: 'SomeUnknownType' } };
+    expect(helpers.getItemType(item)).toBe('other');
   });
 });
 
@@ -112,7 +121,7 @@ describe('resolveTargetLayer', () => {
     const doc = {
       activeLayer: { name: 'Layer 1' },
       layers: {
-        getByName: (name: string) => {
+        itemByName: (name: string) => {
           if (name === 'Icons') return existingLayer;
           throw new Error('not found');
         },
@@ -126,7 +135,7 @@ describe('resolveTargetLayer', () => {
     const doc = {
       activeLayer: { name: 'Layer 1' },
       layers: {
-        getByName: () => {
+        itemByName: () => {
           throw new Error('not found');
         },
         add: () => newLayer,
@@ -138,16 +147,31 @@ describe('resolveTargetLayer', () => {
   });
 });
 
-describe('iterateAllItems', () => {
-  it('iterates flat items', () => {
+describe('resolveTargetPage', () => {
+  it('returns page by index', () => {
+    const page0 = { name: '1' };
+    const page1 = { name: '2' };
+    const doc = { pages: { length: 2, 0: page0, 1: page1 } };
+    expect(helpers.resolveTargetPage(doc, 1)).toBe(page1);
+  });
+
+  it('returns first page when index is undefined and no app context', () => {
+    const page0 = { name: '1' };
+    const doc = { pages: { length: 1, 0: page0 } };
+    // No global app, so it falls back to doc.pages[0]
+    expect(helpers.resolveTargetPage(doc, undefined)).toBe(page0);
+  });
+});
+
+describe('iterateAllItems (InDesign)', () => {
+  it('iterates allPageItems when available', () => {
     const items: string[] = [];
     const container = {
-      pageItems: {
-        length: 3,
-        0: { typename: 'PathItem', name: 'a' },
-        1: { typename: 'PathItem', name: 'b' },
-        2: { typename: 'PathItem', name: 'c' },
-      },
+      allPageItems: [
+        { name: 'a' },
+        { name: 'b' },
+        { name: 'c' },
+      ],
     };
     helpers.iterateAllItems(container, (item: unknown) => {
       items.push((item as { name: string }).name);
@@ -155,25 +179,17 @@ describe('iterateAllItems', () => {
     expect(items).toEqual(['a', 'b', 'c']);
   });
 
-  it('recurses into GroupItems', () => {
+  it('falls back to pageItems', () => {
     const items: string[] = [];
     const container = {
-      pageItems: {
-        length: 2,
-        0: { typename: 'PathItem', name: 'top' },
-        1: {
-          typename: 'GroupItem',
-          name: 'group',
-          pageItems: {
-            length: 1,
-            0: { typename: 'PathItem', name: 'nested' },
-          },
-        },
-      },
+      pageItems: [
+        { name: 'x' },
+        { name: 'y' },
+      ],
     };
     helpers.iterateAllItems(container, (item: unknown) => {
       items.push((item as { name: string }).name);
     });
-    expect(items).toEqual(['top', 'group', 'nested']);
+    expect(items).toEqual(['x', 'y']);
   });
 });

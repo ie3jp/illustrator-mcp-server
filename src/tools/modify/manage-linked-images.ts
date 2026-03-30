@@ -3,17 +3,6 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
-/**
- * manage_linked_images — リンク画像の差し替え・埋め込み
- *
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — PlacedItem.relink(), PlacedItem.embed()
- *
- * JSX API:
- *   PlacedItem.relink(linkFile: File) → void
- *   PlacedItem.embed() → void  (PlacedItem → RasterItem に変換)
- *
- * embed() 後は PlacedItem が無効化されるため、name タグで RasterItem を追跡する。
- */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -26,8 +15,6 @@ if (preflight) {
     var item = findItemByUUID(params.uuid);
     if (!item) {
       writeResultFile(RESULT_PATH, { error: true, message: "Object not found: " + params.uuid });
-    } else if (item.typename !== "PlacedItem") {
-      writeResultFile(RESULT_PATH, { error: true, message: "Object is not a linked image (type: " + item.typename + ")" });
     } else {
       if (params.action === "relink") {
         if (!params.new_path) {
@@ -37,49 +24,63 @@ if (preflight) {
           if (!newFile.exists) {
             writeResultFile(RESULT_PATH, { error: true, message: "File not found: " + params.new_path });
           } else {
-            item.relink(newFile);
-            writeResultFile(RESULT_PATH, {
-              success: true,
-              action: "relink",
-              uuid: params.uuid,
-              newPath: params.new_path,
-              verified: verifyItem(item)
-            });
-          }
-        }
-      } else if (params.action === "embed") {
-        var tag = "__embed_" + (new Date()).getTime();
-        item.name = tag;
-        item.embed();
-        var resultUuid = null;
-        for (var ri = 0; ri < doc.rasterItems.length; ri++) {
-          if (doc.rasterItems[ri].name === tag) {
-            doc.rasterItems[ri].name = "";
-            resultUuid = ensureUUID(doc.rasterItems[ri]);
-            break;
-          }
-        }
-        if (resultUuid) {
-          var embeddedItem = null;
-          for (var ei = 0; ei < doc.rasterItems.length; ei++) {
-            if (ensureUUID(doc.rasterItems[ei]) === resultUuid) {
-              embeddedItem = doc.rasterItems[ei];
-              break;
+            // In InDesign, relink via the link object
+            var links = item.allLinks;
+            if (!links || links.length === 0) {
+              writeResultFile(RESULT_PATH, { error: true, message: "No links found on the item" });
+            } else {
+              links[0].relink(newFile);
+              links[0].update();
+              writeResultFile(RESULT_PATH, {
+                success: true,
+                action: "relink",
+                uuid: params.uuid,
+                newPath: params.new_path,
+                verified: verifyItem(item)
+              });
             }
+          }
+        }
+
+      } else if (params.action === "update") {
+        // Update out-of-date link
+        var links2 = item.allLinks;
+        if (!links2 || links2.length === 0) {
+          writeResultFile(RESULT_PATH, { error: true, message: "No links found on the item" });
+        } else {
+          var updated = 0;
+          for (var li = 0; li < links2.length; li++) {
+            try {
+              if (links2[li].status === LinkStatus.LINK_OUT_OF_DATE) {
+                links2[li].update();
+                updated++;
+              }
+            } catch(e) {}
           }
           writeResultFile(RESULT_PATH, {
             success: true,
-            action: "embed",
-            previousUuid: params.uuid,
-            newUuid: resultUuid,
-            verified: embeddedItem ? verifyItem(embeddedItem) : null
-          });
-        } else {
-          writeResultFile(RESULT_PATH, {
-            error: true,
-            message: "embed() succeeded but resulting RasterItem could not be found"
+            action: "update",
+            uuid: params.uuid,
+            linksUpdated: updated,
+            verified: verifyItem(item)
           });
         }
+
+      } else if (params.action === "embed") {
+        // Embed the link
+        var links3 = item.allLinks;
+        if (!links3 || links3.length === 0) {
+          writeResultFile(RESULT_PATH, { error: true, message: "No links found on the item" });
+        } else {
+          links3[0].unlink();
+          writeResultFile(RESULT_PATH, {
+            success: true,
+            action: "embed",
+            uuid: params.uuid,
+            verified: verifyItem(item)
+          });
+        }
+
       } else {
         writeResultFile(RESULT_PATH, { error: true, message: "Unknown action: " + params.action });
       }
@@ -95,11 +96,10 @@ export function register(server: McpServer): void {
     'manage_linked_images',
     {
       title: 'Manage Linked Images',
-      description:
-        'Relink or embed a placed (linked) image. embed converts PlacedItem to RasterItem — the original UUID becomes invalid and a new UUID for the RasterItem is returned. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Relink, update, or embed linked images in an InDesign document.',
       inputSchema: {
-        uuid: z.string().describe('UUID of the placed (linked) image'),
-        action: z.enum(['relink', 'embed']).describe('Action to perform'),
+        uuid: z.string().describe('UUID of the image frame containing the link'),
+        action: z.enum(['relink', 'update', 'embed']).describe('Action: relink=change source, update=refresh out-of-date link, embed=embed the file'),
         new_path: z.string().optional().describe('New file path (required for relink)'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,

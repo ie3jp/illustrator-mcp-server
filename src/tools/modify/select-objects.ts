@@ -3,15 +3,6 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS } from './shared.js';
 
-/**
- * select_objects — UUID指定でオブジェクトを選択する
- *
- * JSX API:
- *   Document.selection = [PageItem, ...]
- *
- * UUIDリストで指定したオブジェクトをIllustratorの選択状態にする。
- * 空配列を渡すと選択解除になる。
- */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -23,7 +14,7 @@ if (preflight) {
     var uuids = params.uuids;
 
     if (!uuids || uuids.length === 0) {
-      doc.selection = null;
+      app.select(null);
       writeResultFile(RESULT_PATH, { success: true, selected: [], deselected: true });
     } else {
       var notFound = [];
@@ -38,23 +29,22 @@ if (preflight) {
         }
       }
 
-      doc.selection = items;
+      app.select(items);
 
-      // Post-operation verification: 実際の選択状態を読み返す
-      var actualSel = doc.selection;
+      var actualSel = app.selection;
       var verified = [];
       for (var k = 0; k < actualSel.length; k++) {
         var sel = actualSel[k];
         var selUuid = "";
-        try { selUuid = sel.note || ""; } catch(e2) {}
-        verified.push({ uuid: selUuid, name: sel.name || "", type: getItemType(sel) });
+        try { selUuid = extractLabel(sel); } catch(e2) {}
+        verified.push({ uuid: selUuid, name: sel.name || "", type: sel.typename || "" });
       }
 
       var result = {
         success: true,
         verified: { selectionCount: verified.length, selection: verified }
       };
-      if (notFound.length > 0) result.notFound = notFound;
+      if (notFound.length > 0) { result.notFound = notFound; }
       writeResultFile(RESULT_PATH, result);
     }
   } catch (e) {
@@ -68,14 +58,9 @@ export function register(server: McpServer): void {
     'select_objects',
     {
       title: 'Select Objects',
-      description:
-        'Select objects by UUID. Pass an empty array to deselect all. Selected objects can then be manipulated interactively in Illustrator.',
+      description: 'Select InDesign page items by UUID. Pass an empty array to deselect all.',
       inputSchema: {
-        uuids: z
-          .array(z.string())
-          .describe(
-            'Array of object UUIDs to select. Pass empty array [] to deselect all.',
-          ),
+        uuids: z.array(z.string()).describe('Array of object UUIDs to select. Pass empty array [] to deselect all.'),
       },
       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
