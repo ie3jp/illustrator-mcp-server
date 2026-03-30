@@ -14,38 +14,54 @@ if (preflight) {
 
     var item = findItemByUUID(params.uuid);
     if (!item) {
-      writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + params.uuid });
+      writeResultFile(RESULT_PATH, { error: true, message: "Object not found: " + params.uuid });
     } else {
-      var mode = params.mode || "none";
-      var twp = item.textWrapPreferences;
+      var wrapMode = params.wrap_mode || "none";
 
-      if (mode === "none") {
-        twp.textWrapMode = TextWrapModes.NONE;
-      } else if (mode === "bounding_box") {
-        twp.textWrapMode = TextWrapModes.BOUNDING_BOX_TEXT_WRAP;
-      } else if (mode === "contour") {
-        twp.textWrapMode = TextWrapModes.CONTOUR;
-      } else if (mode === "jump_object") {
-        twp.textWrapMode = TextWrapModes.JUMP_OBJECT_TEXT_WRAP;
-      } else if (mode === "jump_to_next_column") {
-        twp.textWrapMode = TextWrapModes.NEXT_COLUMN_TEXT_WRAP;
+      // Map wrap mode string to InDesign enum
+      var wrapType = TextWrapModes.NONE;
+      if (wrapMode === "bounding_box") {
+        wrapType = TextWrapModes.BOUNDING_BOX_TEXT_WRAP;
+      } else if (wrapMode === "contour") {
+        wrapType = TextWrapModes.CONTOUR;
+      } else if (wrapMode === "jump_object") {
+        wrapType = TextWrapModes.JUMP_OBJECT_TEXT_WRAP;
+      } else if (wrapMode === "jump_to_next_column") {
+        wrapType = TextWrapModes.NEXT_COLUMN_TEXT_WRAP;
+      } else if (wrapMode === "none") {
+        wrapType = TextWrapModes.NONE;
       }
 
-      if (params.offset) {
-        var off = params.offset;
-        twp.textWrapOffset = [
-          off.top || 0,
-          off.left || 0,
-          off.bottom || 0,
-          off.right || 0
-        ];
+      var wrapPrefs = item.textWrapPreferences;
+      wrapPrefs.textWrapMode = wrapType;
+
+      // Set offsets if provided
+      if (params.offsets) {
+        var off = params.offsets;
+        if (typeof off.top    === "number") wrapPrefs.textWrapOffset.top    = off.top;
+        if (typeof off.bottom === "number") wrapPrefs.textWrapOffset.bottom = off.bottom;
+        if (typeof off.left   === "number") wrapPrefs.textWrapOffset.left   = off.left;
+        if (typeof off.right  === "number") wrapPrefs.textWrapOffset.right  = off.right;
+      }
+
+      // Wrap side
+      if (params.wrap_side) {
+        var sideMap = {
+          "both": WrapSideOptions.BOTH_SIDES,
+          "left": WrapSideOptions.LEFT_SIDE,
+          "right": WrapSideOptions.RIGHT_SIDE,
+          "largest": WrapSideOptions.LARGEST_AREA,
+          "right_side": WrapSideOptions.RIGHT_SIDE
+        };
+        if (sideMap[params.wrap_side]) {
+          wrapPrefs.textWrapSide = sideMap[params.wrap_side];
+        }
       }
 
       writeResultFile(RESULT_PATH, {
         success: true,
         uuid: params.uuid,
-        textWrapMode: twp.textWrapMode.toString(),
-        textWrapOffset: [twp.textWrapOffset[0], twp.textWrapOffset[1], twp.textWrapOffset[2], twp.textWrapOffset[3]],
+        wrapMode: wrapMode,
         verified: verifyItem(item)
       });
     }
@@ -60,17 +76,25 @@ export function register(server: McpServer): void {
     'apply_text_wrap',
     {
       title: 'Apply Text Wrap',
-      description: 'Set text wrap mode and offset on an object.',
+      description: 'Set text wrap settings for an InDesign page item so surrounding text flows around it.',
       inputSchema: {
-        uuid: z.string().describe('UUID of the object'),
-        mode: z.enum(['none', 'bounding_box', 'contour', 'jump_object', 'jump_to_next_column'])
-          .describe('Text wrap mode'),
-        offset: z.object({
-          top: z.number().optional().describe('Top offset (pt)'),
-          left: z.number().optional().describe('Left offset (pt)'),
-          bottom: z.number().optional().describe('Bottom offset (pt)'),
-          right: z.number().optional().describe('Right offset (pt)'),
-        }).optional().describe('Text wrap offset in points'),
+        uuid: z.string().describe('UUID of the object to apply text wrap to'),
+        wrap_mode: z
+          .enum(['none', 'bounding_box', 'contour', 'jump_object', 'jump_to_next_column'])
+          .optional()
+          .default('bounding_box')
+          .describe('Text wrap mode: none=no wrap, bounding_box=wrap around bounds, contour=wrap around shape, jump_object=jump over object, jump_to_next_column=force text to next column'),
+        offsets: z.object({
+          top: z.number().optional().describe('Top offset in points'),
+          bottom: z.number().optional().describe('Bottom offset in points'),
+          left: z.number().optional().describe('Left offset in points'),
+          right: z.number().optional().describe('Right offset in points'),
+        }).optional().describe('Text wrap offset distances in points'),
+        wrap_side: z
+          .enum(['both', 'left', 'right', 'largest'])
+          .optional()
+          .default('both')
+          .describe('Which side(s) text wraps around'),
       },
       annotations: WRITE_ANNOTATIONS,
     },
