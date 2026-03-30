@@ -19,13 +19,11 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ---
 
-## Support
-
-Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee ☕](https://ko-fi.com/cyocun)
+> **☕ Support:** Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee!](https://ko-fi.com/cyocun)
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 **Requirements:** macOS or Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
 
@@ -107,7 +105,7 @@ From the Claude Desktop menu bar:
 
 ---
 
-## What You Can Do
+## 🎬 What You Can Do
 
 ```
 You:    Show me all the text information in this document
@@ -141,7 +139,7 @@ Claude:  → get_document_info → resize_for_variation
 
 ---
 
-## Recipes
+## 📖 Recipes
 
 ### Web Implementation
 
@@ -466,6 +464,12 @@ Claude:  → extract_design_tokens (format: "css")
 ```
 
 </details>
+
+---
+
+<br>
+
+# For Developers
 
 ## MCP Prompts
 

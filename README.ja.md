@@ -17,13 +17,11 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 ---
 
-## サポート
-
-このツールの開発・維持には費用がかかっています。役に立ったらぜひ応援お願いします — [コーヒー奢ってください ☕](https://ko-fi.com/cyocun)
+> **☕ サポート:** このツールの開発・維持には費用がかかっています。役に立ったらぜひ応援お願いします — [コーヒー奢ってください!](https://ko-fi.com/cyocun)
 
 ---
 
-## クイックスタート
+## 🚀 クイックスタート
 
 **必要なもの:** macOS または Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
 
@@ -106,7 +104,7 @@ Claude Desktop のメニューバーから:
 
 ---
 
-## こんなことができます
+## 🎬 こんなことができます
 
 ```
 あなた: このドキュメントのテキスト情報を全部教えて
@@ -141,7 +139,7 @@ Claude:  → get_document_info → resize_for_variation
 
 ---
 
-## 使い方レシピ集
+## 📖 使い方レシピ集
 
 ### Web 実装
 
@@ -478,6 +476,12 @@ Claude:  → extract_design_tokens (format: "css")
 ```
 
 </details>
+
+---
+
+<br>
+
+# 開発者向け情報
 
 ## MCP Prompts
 
