@@ -311,7 +311,7 @@ export function register(server: McpServer): void {
     {
       title: 'Check Text Consistency',
       description:
-        'Analyze text frames for dummy/placeholder text and known notation variation patterns (katakana long vowel, fullwidth/halfwidth, wave dash/tilde). Returns all text contents for LLM-driven deeper analysis of inconsistencies, typos, and version mismatches. IMPORTANT: AI analysis may miss errors — always have a human perform the final text review.',
+        'Analyze text frames for dummy/placeholder text and known notation variation patterns (katakana long vowel, fullwidth/halfwidth, wave dash/tilde). Returns all text contents for LLM-driven deeper analysis of inconsistencies, typos, and version mismatches. Note: AI analysis may miss errors and does not replace a human text review.',
       inputSchema: {
         artboard_index: z
           .number()
