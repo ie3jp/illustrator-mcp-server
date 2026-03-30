@@ -80,6 +80,12 @@ From the Claude Desktop menu bar:
 }
 ```
 
+> **Note:** If you installed Node.js via a version manager (nvm, mise, fnm, etc.), Claude Desktop may not find `npx`. In that case, use the full path:
+> ```json
+> "command": "/full/path/to/npx"
+> ```
+> Run `which npx` in your terminal to find the path.
+
 #### 3. Save and restart
 
 1. Save the file and close the text editor
