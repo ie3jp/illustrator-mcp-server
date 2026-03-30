@@ -1,3 +1,5 @@
+> **⚠️ Caution:** AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
+
 **[日本語版はこちら / Japanese version](README.ja.md)**
 
 # Illustrator MCP Server
