@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.2.8] - 2026-03-30
+
+### Added
+- **.mcpb bundle for Claude Desktop** — Drag-and-drop installation via Extensions panel. CJS bundle for compatibility with Claude Desktop's built-in Node.js
+- **Automated release pipeline** — CI builds .mcpb, creates GitHub Release, and publishes to MCP Registry on tag push
+- **manifest.json v0.3** — Full tool listing (62 tools), platform/runtime compatibility, macOS-only declaration
+
+### Changed
+- README updated: Claude Desktop install simplified to .mcpb drag-and-drop (manual config moved to collapsible section)
+
 ## [1.2.6] - 2026-03-30
 
 ### Added

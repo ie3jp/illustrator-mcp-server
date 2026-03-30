@@ -47,10 +47,17 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-設定ファイルを開いて、接続情報を書き込みます。
+1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest) から **`illustrator-mcp-server-x.x.x.mcpb`** をダウンロード
+2. Claude Desktop を開き、**設定** → **拡張機能** を開く
+3. ダウンロードした `.mcpb` ファイルを拡張機能パネルにドラッグ＆ドロップ
+4. **インストール** ボタンをクリック
+
+> **更新について:** `.mcpb` 拡張機能は自動更新されません。更新するには新しいバージョンをダウンロードして再インストールしてください。自動更新が必要な場合は、下記の npx 方式をお使いください。
 
 <details>
-<summary><strong>手順を表示</strong></summary>
+<summary><strong>別の方法: 手動設定（npx 経由で常に最新版）</strong></summary>
+
+設定ファイルを開いて、接続情報を書き込みます。
 
 #### 1. 設定ファイルを開く
 
@@ -58,12 +65,7 @@ Claude Desktop のメニューバーから:
 
 **Claude** → **設定** → 左サイドバーの **開発者** → **設定を編集** ボタンをクリック
 
-Finderに `claude_desktop_config.json` ファイルが表示されるので、
-テキストエディタで `claude_desktop_config.json` を開きます。
-
 #### 2. 設定を書き込む
-
-ファイルが空、または `{}` だけの場合は、**中身をすべて消して**以下をそのままコピー＆ペーストしてください:
 
 ```json
 {
@@ -76,25 +78,10 @@ Finderに `claude_desktop_config.json` ファイルが表示されるので、
 }
 ```
 
-> すでに他の MCP サーバーが設定されている場合は、`"mcpServers": {` の中に `"illustrator": { ... }` ブロックを追加してください。カンマの付け忘れに注意。
-
-```json
-"mcpServers": {
-  "他のサーバ": {
-    他のサーバーの設定...
-    },
-  "illustrator": {
-    "command": "npx",
-    "args": ["illustrator-mcp-server"]
-  }
-}
-```
-
 #### 3. 保存して再起動
 
 1. ファイルを保存（⌘S）してテキストエディタを閉じる
 2. Claude Desktop を **完全に終了**（⌘Q）して再度開く
-3. **Claude** → **設定** → **開発者** を開き、illustrator サーバーが表示されていれば接続成功です
 
 </details>
 

@@ -1,29 +1,95 @@
 {
-  "manifest_version": "0.2",
-  "name": "illustrator-mcp-server",
-  "version": "1.2.6",
+  "manifest_version": "0.3",
+  "name": "Illustrator MCP",
+  "version": "1.2.7",
   "description": "MCP server for reading, manipulating, and exporting Adobe Illustrator design data",
   "author": {
-    "name": "cyocun",
+    "name": "cyocun(IE3)",
     "email": "cyocun@gmail.com"
   },
+  "icon": "icon.png",
   "support": "https://github.com/ie3jp/illustrator-mcp-server",
   "server": {
     "type": "node",
-    "entry_point": "dist/index.js",
+    "entry_point": "dist/bundle.cjs",
     "mcp_config": {
       "command": "node",
       "args": [
-        "${__dirname}/dist/index.js"
+        "${__dirname}/dist/bundle.cjs"
       ],
       "env": {}
     }
   },
-  "tools": [
-    {
-      "name": "get_document_info",
-      "description": "Get Adobe Illustrator document metadata"
+  "compatibility": {
+    "platforms": ["darwin"],
+    "runtimes": {
+      "node": ">=20.0.0"
     }
+  },
+  "tools": [
+    { "name": "get_document_info", "description": "Get document metadata" },
+    { "name": "get_artboards", "description": "Get all artboard information" },
+    { "name": "get_layers", "description": "Get layer structure as a tree" },
+    { "name": "get_selection", "description": "Get detailed information about selected objects" },
+    { "name": "list_text_frames", "description": "List text frames with summary-level information" },
+    { "name": "get_text_frame_detail", "description": "Get detailed text frame attributes including per-character runs and kerning" },
+    { "name": "get_colors", "description": "Get all color information used in the document" },
+    { "name": "get_path_items", "description": "Get path and shape data" },
+    { "name": "get_guidelines", "description": "Get guide information" },
+    { "name": "get_groups", "description": "Get structure of groups, clipping masks, and compound paths" },
+    { "name": "get_effects", "description": "Get effect and appearance information" },
+    { "name": "get_images", "description": "Get embedded and linked image information" },
+    { "name": "get_symbols", "description": "Get symbol definitions and instances" },
+    { "name": "get_document_structure", "description": "Get tree structure of layers, groups, and objects" },
+    { "name": "find_objects", "description": "Search for objects by specified criteria" },
+    { "name": "check_contrast", "description": "Check WCAG color contrast ratios" },
+    { "name": "extract_design_tokens", "description": "Extract colors, typography, and spacing as design tokens" },
+    { "name": "export", "description": "Export objects, groups, artboards, or selection" },
+    { "name": "export_pdf", "description": "Export print-ready PDF" },
+    { "name": "get_overprint_info", "description": "Get overprint settings with K100/rich black detection" },
+    { "name": "get_separation_info", "description": "Get color separation information" },
+    { "name": "preflight_check", "description": "Run pre-press quality checks" },
+    { "name": "check_text_consistency", "description": "Analyze text frames for placeholder text and notation variations" },
+    { "name": "set_workflow", "description": "Set session-level workflow and default coordinate system" },
+    { "name": "create_rectangle", "description": "Create a rectangle" },
+    { "name": "create_ellipse", "description": "Create an ellipse" },
+    { "name": "create_line", "description": "Create a line" },
+    { "name": "create_text_frame", "description": "Create a text frame" },
+    { "name": "create_path", "description": "Create a custom path" },
+    { "name": "modify_object", "description": "Modify properties of an existing object" },
+    { "name": "convert_to_outlines", "description": "Convert text to outlines" },
+    { "name": "assign_color_profile", "description": "Assign a color profile to the document" },
+    { "name": "place_image", "description": "Place an image file into the document" },
+    { "name": "resize_for_variation", "description": "Create size variations from a source artboard" },
+    { "name": "align_objects", "description": "Align and/or distribute multiple objects" },
+    { "name": "replace_color", "description": "Find and replace colors across the document" },
+    { "name": "manage_layers", "description": "Add, rename, show/hide, lock/unlock, reorder, or delete layers" },
+    { "name": "place_color_chips", "description": "Place color chip swatches with labels outside the artboard" },
+    { "name": "place_style_guide", "description": "Place a visual style guide outside the artboard" },
+    { "name": "create_document", "description": "Create a new Illustrator document" },
+    { "name": "close_document", "description": "Close the active document" },
+    { "name": "save_document", "description": "Save the active document" },
+    { "name": "open_document", "description": "Open a document from a file path" },
+    { "name": "group_objects", "description": "Group multiple objects" },
+    { "name": "ungroup_objects", "description": "Ungroup a group" },
+    { "name": "duplicate_objects", "description": "Duplicate one or more objects" },
+    { "name": "list_fonts", "description": "List fonts available in Illustrator" },
+    { "name": "manage_artboards", "description": "Add, remove, resize, rename, or rearrange artboards" },
+    { "name": "set_z_order", "description": "Change the stacking order of an object" },
+    { "name": "move_to_layer", "description": "Move objects to a different layer" },
+    { "name": "apply_graphic_style", "description": "Apply a graphic style to objects" },
+    { "name": "list_graphic_styles", "description": "List all graphic styles in the document" },
+    { "name": "manage_swatches", "description": "Add, update, or delete swatches" },
+    { "name": "apply_text_style", "description": "Apply a character or paragraph style to a text frame" },
+    { "name": "list_text_styles", "description": "List all character and paragraph styles" },
+    { "name": "create_gradient", "description": "Create a gradient and optionally apply to objects" },
+    { "name": "manage_linked_images", "description": "Relink or embed a placed image" },
+    { "name": "undo", "description": "Undo or redo actions" },
+    { "name": "manage_datasets", "description": "List, apply, create datasets, bind variables, import CSV/XML" },
+    { "name": "place_symbol", "description": "Place a symbol instance or replace symbol definition" },
+    { "name": "create_path_text", "description": "Create text that flows along a path" },
+    { "name": "select_objects", "description": "Select objects by UUID" },
+    { "name": "convert_coordinate", "description": "Convert a point between coordinate systems" }
   ],
   "keywords": [
     "illustrator",
@@ -31,7 +97,11 @@
     "design",
     "mcp",
     "vector",
-    "graphics"
+    "graphics",
+    "print",
+    "prepress",
+    "export",
+    "pdf"
   ],
   "license": "MIT",
   "repository": {
