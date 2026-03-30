@@ -1,0 +1,41 @@
+{
+  "manifest_version": "0.2",
+  "name": "illustrator-mcp-server",
+  "version": "1.2.6",
+  "description": "MCP server for reading, manipulating, and exporting Adobe Illustrator design data",
+  "author": {
+    "name": "cyocun",
+    "email": "cyocun@gmail.com"
+  },
+  "support": "https://github.com/ie3jp/illustrator-mcp-server",
+  "server": {
+    "type": "node",
+    "entry_point": "dist/index.js",
+    "mcp_config": {
+      "command": "node",
+      "args": [
+        "${__dirname}/dist/index.js"
+      ],
+      "env": {}
+    }
+  },
+  "tools": [
+    {
+      "name": "get_document_info",
+      "description": "Get Adobe Illustrator document metadata"
+    }
+  ],
+  "keywords": [
+    "illustrator",
+    "adobe",
+    "design",
+    "mcp",
+    "vector",
+    "graphics"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ie3jp/illustrator-mcp-server.git"
+  }
+}

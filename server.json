@@ -6,12 +6,12 @@
     "url": "https://github.com/ie3jp/illustrator-mcp-server",
     "source": "github"
   },
-  "version": "1.0.1",
+  "version": "1.2.6",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "illustrator-mcp-server",
-      "version": "1.0.1",
+      "version": "1.2.6",
       "transport": {
         "type": "stdio"
       }
