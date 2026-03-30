@@ -1,6 +1,7 @@
 import { execFile } from 'child_process';
 import type { ExecFileException } from 'child_process';
 import * as fs from 'fs/promises';
+import { existsSync } from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import pLimit from 'p-limit';
@@ -58,10 +59,12 @@ export function waitForPendingExecutions(): Promise<void> {
   });
 }
 
-const JSX_HELPERS_PATH = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  '../jsx/helpers/common.jsx',
-);
+// ESM (dist/executor/jsx-runner.js) → ../jsx/helpers/common.jsx
+// CJS bundle (dist/bundle.cjs)     → ./jsx/helpers/common.jsx
+const __dir = path.dirname(fileURLToPath(import.meta.url));
+const _esmCandidate = path.resolve(__dir, '../jsx/helpers/common.jsx');
+const _cjsCandidate = path.resolve(__dir, 'jsx/helpers/common.jsx');
+const JSX_HELPERS_PATH = existsSync(_esmCandidate) ? _esmCandidate : _cjsCandidate;
 
 // helpers ファイルをメモリにキャッシュ（毎回のディスク読み込みを排除）
 let _helpersCache: string | null = null;
