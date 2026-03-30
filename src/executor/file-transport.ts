@@ -4,7 +4,8 @@ import { rmSync } from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 
-export const TMP_DIR = path.join(os.tmpdir(), 'illustrator-mcp');
+let tmpDir: string | null = null;
+
 const BOM = '\uFEFF';
 
 export interface TempFiles {
@@ -17,18 +18,19 @@ export interface TempFiles {
 }
 
 export async function ensureTmpDir(): Promise<void> {
-  await fs.mkdir(TMP_DIR, { recursive: true });
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'illustrator-mcp-'));
 }
 
 export function createTempFiles(): TempFiles {
+  if (!tmpDir) throw new Error('Temp directory not initialized. Call ensureTmpDir() first.');
   const id = randomUUID();
   const ext = process.platform === 'win32' ? 'ps1' : 'scpt';
   return {
     id,
-    paramsPath: path.join(TMP_DIR, `params-${id}.json`),
-    scriptPath: path.join(TMP_DIR, `script-${id}.jsx`),
-    runnerPath: path.join(TMP_DIR, `run-${id}.${ext}`),
-    resultPath: path.join(TMP_DIR, `result-${id}.json`),
+    paramsPath: path.join(tmpDir, `params-${id}.json`),
+    scriptPath: path.join(tmpDir, `script-${id}.jsx`),
+    runnerPath: path.join(tmpDir, `run-${id}.${ext}`),
+    resultPath: path.join(tmpDir, `result-${id}.json`),
   };
 }
 
@@ -97,10 +99,11 @@ export async function cleanupTempFiles(files: TempFiles): Promise<void> {
 }
 
 export function cleanupTmpDirSync(): void {
+  if (!tmpDir) return;
   try {
-    rmSync(TMP_DIR, { recursive: true, force: true });
+    rmSync(tmpDir, { recursive: true, force: true });
   } catch (e) {
-    console.warn('Failed to clean up temp directory:', TMP_DIR, e);
+    console.warn('Failed to clean up temp directory:', tmpDir, e);
   }
 }
 

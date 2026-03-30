@@ -188,7 +188,11 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       const result = await executeJsxHeavy(jsxCode, params);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      const output = {
+        ...result,
+        _note: 'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(output, null, 2) }] };
     },
   );
 }

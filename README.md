@@ -19,7 +19,11 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ---
 
-## Quick Start
+> **☕ Support:** Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee!](https://ko-fi.com/cyocun)
+
+---
+
+## 🚀 Quick Start
 
 **Requirements:** macOS or Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
 
@@ -101,7 +105,7 @@ From the Claude Desktop menu bar:
 
 ---
 
-## What You Can Do
+## 🎬 What You Can Do
 
 ```
 You:    Show me all the text information in this document
@@ -135,7 +139,7 @@ Claude:  → get_document_info → resize_for_variation
 
 ---
 
-## Recipes
+## 📖 Recipes
 
 ### Web Implementation
 
@@ -461,6 +465,12 @@ Claude:  → extract_design_tokens (format: "css")
 
 </details>
 
+---
+
+<br>
+
+# For Developers
+
 ## MCP Prompts
 
 Workflow templates that guide Claude through multi-step tasks. Available in the Claude Desktop prompt picker.
@@ -668,12 +678,6 @@ The E2E test creates a fresh document, places test objects, runs 106 test cases 
 | Japanese crop marks | `PageMarksTypes.Japanese` may not be applied correctly in PDF export |
 | Font embedding control | PDF font embedding mode (full/subset) is not exposed in the API. Use PDF presets instead |
 | Size variations | No text reflow. Proportional placement only (not smart layout) |
-
----
-
-## Support
-
-Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee ☕](https://ko-fi.com/cyocun)
 
 ---
 
