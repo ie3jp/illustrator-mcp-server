@@ -39,6 +39,7 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: 'https://registry.npmjs.org'
+      - run: npm install -g npm@latest
 
       # Update server.json version from tag
       - name: Update server.json version
