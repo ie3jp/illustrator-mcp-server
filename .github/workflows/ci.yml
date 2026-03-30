@@ -51,7 +51,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm test
-      - run: npm publish --provenance --access public
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+        continue-on-error: true
 
       # GitHub Release with .mcpb
       - run: npm ci --omit=dev
