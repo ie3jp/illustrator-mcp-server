@@ -1,6 +1,6 @@
 {
   "name": "illustrator-mcp-server",
-  "version": "1.2.7",
+  "version": "1.2.8",
   "mcpName": "io.github.ie3jp/illustrator-mcp-server",
   "description": "MCP server for reading, manipulating, and exporting Adobe Illustrator design data",
   "type": "module",
@@ -12,7 +12,7 @@
     "dist/**/*"
   ],
   "scripts": {
-    "build": "tsc && cp -r src/jsx dist/",
+    "build": "tsc && cp -r src/jsx dist/ && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/bundle.cjs --define:import.meta.url=_importMetaUrl --banner:js='const _importMetaUrl = require(\"url\").pathToFileURL(__filename).href;'",
     "dev": "cp -r src/jsx dist/ 2>/dev/null; tsc --watch",
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build",

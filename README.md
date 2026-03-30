@@ -49,10 +49,17 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-Open the config file and add the connection settings.
+1. Download **`illustrator-mcp-server-x.x.x.mcpb`** from [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
+2. Open Claude Desktop → **Settings** → **Extensions**
+3. Drag and drop the `.mcpb` file into the Extensions panel
+4. Click the **Install** button
+
+> **Updating:** The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
 
 <details>
-<summary><strong>Show step-by-step instructions</strong></summary>
+<summary><strong>Alternative: manual config (always up to date via npx)</strong></summary>
+
+Open the config file and add the connection settings.
 
 #### 1. Open the config file
 
@@ -60,12 +67,7 @@ From the Claude Desktop menu bar:
 
 **Claude** → **Settings...** → **Developer** (in the left sidebar) → Click the **Edit Config** button
 
-The `claude_desktop_config.json` file will appear in Finder (macOS) or Explorer (Windows).
-Open it with a text editor.
-
 #### 2. Add the settings
-
-If the file is empty or contains only `{}`, **replace everything** with the following (copy & paste):
 
 ```json
 {
@@ -78,25 +80,10 @@ If the file is empty or contains only `{}`, **replace everything** with the foll
 }
 ```
 
-> If you already have other MCP servers configured, add the `"illustrator": { ... }` block inside the existing `"mcpServers": {` section. Don't forget the comma between entries.
-
-```json
-"mcpServers": {
-  "other-server": {
-    ...other server settings...
-  },
-  "illustrator": {
-    "command": "npx",
-    "args": ["illustrator-mcp-server"]
-  }
-}
-```
-
 #### 3. Save and restart
 
-1. Save the file (⌘S / Ctrl+S) and close the text editor
+1. Save the file and close the text editor
 2. **Fully quit** Claude Desktop (⌘Q / Ctrl+Q) and reopen it
-3. Open **Claude** → **Settings...** → **Developer** — if the illustrator server appears, the connection is working
 
 </details>
 
