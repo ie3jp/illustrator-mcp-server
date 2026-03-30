@@ -159,7 +159,7 @@ export function register(server: McpServer): void {
     'export_pdf',
     {
       title: 'Export PDF',
-      description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) during execution. The exported PDF should be verified by a human before final submission.',
       inputSchema: {
         output_path: z.string().describe('Output file path'),
         preset: z

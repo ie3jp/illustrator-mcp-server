@@ -40,6 +40,12 @@ After all checks are complete, output a summary report in this format:
 - OK: no issues found
 Include object name, UUID, and specific remediation steps for each item.
 
+## AI Limitation Awareness
+Do NOT include a disclaimer in every report. However, you MUST proactively warn the user in these situations:
+- The user asks "Is this ready for submission?" or similar confirmation — remind them that AI checks are not exhaustive and a human must perform the final review.
+- All checks return OK — do not say "no issues found, ready to submit." Instead, say something like "no issues were detected by these checks" and note that items outside the scope of automated checks (e.g. design intent, spelling in context, regulatory requirements) still need human review.
+- The user treats the AI report as the final verification — remind them this does not replace a professional preflight check.
+
 ## Language
 Always respond in the user's language.`,
             },
