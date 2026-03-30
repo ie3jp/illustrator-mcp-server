@@ -1,6 +1,6 @@
 {
   "name": "illustrator-mcp-server",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "mcpName": "io.github.ie3jp/illustrator-mcp-server",
   "description": "MCP server for reading, manipulating, and exporting Adobe Illustrator design data",
   "type": "module",
@@ -17,7 +17,9 @@
     "start": "node dist/index.js",
     "prepublishOnly": "npm run build",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pack:mcpb": "npm run build && npm ci --omit=dev && npx @anthropic-ai/mcpb pack && npm install",
+    "release": "npm run build && npm test && git push && git push --tags"
   },
   "keywords": [
     "mcp",

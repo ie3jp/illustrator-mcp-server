@@ -1,0 +1,26 @@
+# Source (dist/ に含まれる)
+src/
+test/
+
+# Dev tooling
+.github/
+demo/
+docs/
+plugins/
+
+# Dev config
+tsconfig.json
+vitest.config.ts
+glama.json
+CLAUDE.md
+CHANGELOG*.md
+SECURITY.md
+README*.md
+
+# Secrets / tokens
+.mcpregistry_*
+.claude/
+
+# Git
+.git/
+.gitignore
