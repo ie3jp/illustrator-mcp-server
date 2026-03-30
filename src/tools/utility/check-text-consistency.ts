@@ -345,9 +345,15 @@ export function register(server: McpServer): void {
             text: JSON.stringify(
               {
                 totalFrames: result.totalFrames,
-                dummyTexts: analysis.dummyTexts,
-                knownVariations: analysis.knownVariations,
-                allTexts: analysis.allTexts,
+                mechanicalChecks: {
+                  _reliability: 'deterministic',
+                  dummyTexts: analysis.dummyTexts,
+                  knownVariations: analysis.knownVariations,
+                },
+                llmAnalysis: {
+                  _reliability: 'ai-assisted — may miss errors or produce false positives. Clearly distinguish AI-based findings from mechanical checks when reporting to the user.',
+                  allTexts: analysis.allTexts,
+                },
               },
               null,
               2,

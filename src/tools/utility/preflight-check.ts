@@ -531,6 +531,13 @@ export function register(server: McpServer): void {
       delete result.targetPdfProfile;
       delete result.pdfxSummary;
 
+      // Add scope note when no errors/warnings found
+      const hasIssues = result.results.some((r) => r.level === 'error' || r.level === 'warning');
+      if (!hasIssues) {
+        (result as Record<string, unknown>)._note =
+          'No issues detected by these automated checks. This does not mean the document is free of problems — items outside the scope of automated checks (design intent, contextual spelling, regulatory requirements, print-shop-specific rules) still require human review.';
+      }
+
       return {
         content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
       };

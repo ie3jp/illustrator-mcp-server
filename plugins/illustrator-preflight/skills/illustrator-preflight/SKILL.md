@@ -89,6 +89,31 @@ When the user agrees to fix issues, use these tools:
 - Broken links — requires user to locate and relink original files
 - Low resolution images — requires higher resolution source
 
+## AI Limitation Awareness
+
+Do NOT add a disclaimer to every report. Instead, apply these rules based on the situation:
+
+### Rule 1: Distinguish mechanical checks from AI analysis
+When reporting `check_text_consistency` results, clearly separate the two reliability tiers:
+- **Mechanical checks** (`_reliability: deterministic`): pattern-matched results (dummy text, fullwidth/halfwidth, katakana long vowel). These are reliable.
+- **AI analysis** (`_reliability: ai-assisted`): typos, contextual inconsistencies, terminology drift found by LLM analysis of `allTexts`. These may contain false positives or miss real errors. Label them as AI-based findings.
+
+### Rule 2: When no issues are detected
+Never say "no issues found — ready to submit." Instead:
+- Say "no issues were detected by these automated checks"
+- Note that items outside scope (design intent, contextual spelling, regulatory requirements, print-shop-specific rules) still require human review
+- The `preflight_check` tool includes a `_note` field when all checks pass — relay its message
+
+### Rule 3: When the user treats this as a final verification
+This rule applies when:
+- The user explicitly asks for a go/no-go decision ("Is this ready for submission?", "Can I send this to print?")
+- The user's wording implies this is the last step before submission ("最終チェック", "入稿前チェック", "final check", "last check", "これで最後")
+
+In these cases:
+- Remind them that automated checks are not exhaustive
+- A human must perform the final review
+- This does not replace a professional preflight check
+
 ## Language
 
 Always respond in the user's language.
