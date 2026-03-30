@@ -19,6 +19,12 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ---
 
+## Support
+
+Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee ☕](https://ko-fi.com/cyocun)
+
+---
+
 ## Quick Start
 
 **Requirements:** macOS or Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
@@ -668,12 +674,6 @@ The E2E test creates a fresh document, places test objects, runs 106 test cases 
 | Japanese crop marks | `PageMarksTypes.Japanese` may not be applied correctly in PDF export |
 | Font embedding control | PDF font embedding mode (full/subset) is not exposed in the API. Use PDF presets instead |
 | Size variations | No text reflow. Proportional placement only (not smart layout) |
-
----
-
-## Support
-
-Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee ☕](https://ko-fi.com/cyocun)
 
 ---
 
