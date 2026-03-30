@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { executeJsx } from '../executor/jsx-runner.js';
 
-export type WorkflowType = 'web' | 'print' | 'video' | 'unknown';
-export type CoordinateSystem = 'artboard-web' | 'document';
+export type WorkflowType = 'print' | 'digital' | 'unknown';
+export type CoordinateSystem = 'page-relative' | 'spread';
 
 // --- Session state (module-level, lives for the MCP server process lifetime) ---
 
@@ -66,7 +66,7 @@ try {
 }
 `;
 
-/** Lightweight JSX to fetch only document signals needed for workflow detection */
+/** Lightweight JSX to fetch document signals needed for workflow detection */
 const DETECT_SIGNALS_JSX = `
 try {
   var preflight = preflightChecks();
@@ -77,33 +77,30 @@ try {
     var filePath = "";
     try { filePath = doc.fullName.fsName; } catch (e) { filePath = ""; }
 
-    var colorMode = "unknown";
-    if (doc.documentColorSpace === DocumentColorSpace.CMYK) colorMode = "CMYK";
-    else if (doc.documentColorSpace === DocumentColorSpace.RGB) colorMode = "RGB";
-
-    var colorProfile = "";
-    try { colorProfile = doc.colorProfileName; } catch (e) {}
-
-    var rulerUnits = "unknown";
+    var intent = "unknown";
     try {
-      var ru = doc.rulerUnits;
-      if (ru === RulerUnits.Pixels) rulerUnits = "px";
-      else if (ru === RulerUnits.Points) rulerUnits = "pt";
-      else if (ru === RulerUnits.Millimeters) rulerUnits = "mm";
-      else if (ru === RulerUnits.Centimeters) rulerUnits = "cm";
-      else if (ru === RulerUnits.Inches) rulerUnits = "in";
-      else if (ru === RulerUnits.Picas) rulerUnits = "pica";
+      var di = doc.documentPreferences.intent;
+      if (di === DocumentIntentOptions.PRINT_INTENT) intent = "print";
+      else if (di === DocumentIntentOptions.WEB_INTENT) intent = "digital";
+      else if (di === DocumentIntentOptions.MOBILE_INTENT) intent = "digital";
     } catch (e) {}
 
-    var rasterRes = 0;
-    try { rasterRes = doc.rasterEffectSettings.resolution; } catch (e) {}
+    var pageWidth = 0;
+    var pageHeight = 0;
+    try {
+      pageWidth = doc.documentPreferences.pageWidth;
+      pageHeight = doc.documentPreferences.pageHeight;
+    } catch (e) {}
+
+    var facingPages = false;
+    try { facingPages = doc.documentPreferences.facingPages; } catch (e) {}
 
     writeResultFile(RESULT_PATH, {
       documentKey: filePath || doc.name,
-      colorMode: colorMode,
-      rulerUnits: rulerUnits,
-      rasterEffectResolution: rasterRes,
-      colorProfile: colorProfile
+      intent: intent,
+      pageWidth: pageWidth,
+      pageHeight: pageHeight,
+      facingPages: facingPages
     });
   }
 } catch (e) {
@@ -118,15 +115,15 @@ try {
 async function autoDetectCoordinateSystem(): Promise<CoordinateSystem> {
   const result = await executeJsx(DETECT_SIGNALS_JSX);
   if (!result || result.error) {
-    return 'artboard-web'; // fallback on error
+    return 'page-relative'; // fallback on error
   }
 
   const docKey = (result.documentKey as string) ?? '';
   const hint = detectWorkflow({
-    colorMode: (result.colorMode as string) ?? 'unknown',
-    rulerUnits: (result.rulerUnits as string) ?? 'unknown',
-    rasterEffectResolution: (result.rasterEffectResolution as number) ?? 0,
-    colorProfile: (result.colorProfile as string) ?? '',
+    intent: (result.intent as string) ?? 'unknown',
+    pageWidth: (result.pageWidth as number) ?? 0,
+    pageHeight: (result.pageHeight as number) ?? 0,
+    facingPages: (result.facingPages as boolean) ?? false,
   });
 
   autoDetectCache = {
@@ -143,7 +140,7 @@ async function autoDetectCoordinateSystem(): Promise<CoordinateSystem> {
  *   1. explicit param (per-tool call)
  *   2. session default (set via set_workflow)
  *   3. auto-detect from document signals (cached, invalidated on document switch)
- *   4. fallback: 'artboard-web'
+ *   4. fallback: 'page-relative'
  */
 export async function resolveCoordinateSystem(
   explicit?: CoordinateSystem,
@@ -173,26 +170,26 @@ export async function resolveCoordinateSystem(
   try {
     return await autoDetectCoordinateSystem();
   } catch {
-    return 'artboard-web';
+    return 'page-relative';
   }
 }
 
 // --- Shared Zod schema (all tools import this instead of defining their own) ---
 
 export const coordinateSystemSchema = z
-  .enum(['artboard-web', 'document'])
+  .enum(['page-relative', 'spread'])
   .optional()
   .describe(
-    'Coordinate system. Omit to auto-detect from document (CMYK→document, RGB→artboard-web). Override via set_workflow.',
+    'Coordinate system. "page-relative" (default): coords relative to page top-left. "spread": pasteboard coordinates.',
   );
 
 // --- Workflow detection ---
 
 interface DocumentSignals {
-  colorMode: string;
-  rulerUnits: string;
-  rasterEffectResolution: number;
-  colorProfile: string;
+  intent: string;
+  pageWidth: number;
+  pageHeight: number;
+  facingPages: boolean;
 }
 
 export interface WorkflowHint {
@@ -203,83 +200,40 @@ export interface WorkflowHint {
 }
 
 export function detectWorkflow(signals: DocumentSignals): WorkflowHint {
-  const { colorMode, rulerUnits, rasterEffectResolution, colorProfile } =
-    signals;
+  const { intent, pageWidth, pageHeight, facingPages } = signals;
 
-  const isCMYK = colorMode === 'CMYK';
-  const isRGB = colorMode === 'RGB';
-  const isPixelUnit = rulerUnits === 'px';
-  const isPrintUnit = ['mm', 'cm', 'in', 'pica'].includes(rulerUnits);
-  const is72dpi = rasterEffectResolution === 72;
-  const isHighRes = rasterEffectResolution >= 300;
-  const isMidRes =
-    rasterEffectResolution >= 150 && rasterEffectResolution < 300;
-
-  const isPrintProfile =
-    isCMYK ||
-    /japan color|fogra|swop|gracol|coated|uncoated/i.test(colorProfile);
-  const isWebProfile = /srgb|display p3/i.test(colorProfile);
-
-  let webScore = 0;
-  let printScore = 0;
-  let videoScore = 0;
-
-  // Color mode
-  if (isCMYK) printScore += 3;
-  if (isRGB) {
-    webScore += 1;
-    videoScore += 1;
-  }
-
-  // Units
-  if (isPixelUnit) {
-    webScore += 2;
-    videoScore += 2;
-  }
-  if (isPrintUnit) printScore += 2;
-  if (rulerUnits === 'pt') {
-    printScore += 1;
-    webScore += 1;
-  }
-
-  // Resolution
-  if (is72dpi) webScore += 2;
-  if (isHighRes) printScore += 2;
-  if (isMidRes && isRGB) videoScore += 2;
-
-  // Color profile
-  if (isPrintProfile) printScore += 2;
-  if (isWebProfile) webScore += 2;
-
-  const maxScore = Math.max(webScore, printScore, videoScore);
-
-  let detectedWorkflow: WorkflowType;
   const reasons: string[] = [];
+  let detectedWorkflow: WorkflowType;
 
-  if (maxScore === 0) {
-    detectedWorkflow = 'unknown';
-    reasons.push('No strong signals detected');
-  } else if (printScore === maxScore && printScore > webScore) {
+  if (intent === 'print') {
     detectedWorkflow = 'print';
-    if (isCMYK) reasons.push('CMYK color mode');
-    if (isPrintUnit) reasons.push(`${rulerUnits} units`);
-    if (isHighRes) reasons.push(`${rasterEffectResolution}dpi`);
-    if (isPrintProfile && colorProfile) reasons.push(colorProfile);
-  } else if (videoScore === maxScore && videoScore > webScore) {
-    detectedWorkflow = 'video';
-    if (isRGB) reasons.push('RGB color mode');
-    if (isPixelUnit) reasons.push('px units');
-    if (isMidRes) reasons.push(`${rasterEffectResolution}dpi`);
+    reasons.push('Document intent: Print');
+  } else if (intent === 'digital') {
+    detectedWorkflow = 'digital';
+    reasons.push('Document intent: Digital/Web');
   } else {
-    detectedWorkflow = 'web';
-    if (isRGB) reasons.push('RGB color mode');
-    if (isPixelUnit) reasons.push('px units');
-    if (is72dpi) reasons.push('72dpi');
-    if (isWebProfile && colorProfile) reasons.push(colorProfile);
+    // Heuristic: large pages or facing pages suggest print
+    if (facingPages) {
+      detectedWorkflow = 'print';
+      reasons.push('Facing pages enabled');
+    } else if (pageWidth > 0 && pageHeight > 0) {
+      // Check for common screen sizes (landscape, 72dpi-ish)
+      const ratio = pageWidth / pageHeight;
+      if (ratio > 1.5 && pageWidth > 800) {
+        detectedWorkflow = 'digital';
+        reasons.push('Wide landscape format suggests digital');
+      } else {
+        detectedWorkflow = 'print';
+        reasons.push('Default: assumed print');
+      }
+    } else {
+      detectedWorkflow = 'unknown';
+      reasons.push('No strong signals detected');
+    }
   }
 
-  const recommendedCoordinateSystem: CoordinateSystem =
-    detectedWorkflow === 'print' ? 'document' : 'artboard-web';
+  // InDesign's coordinate system is always Y-down; page-relative is the standard
+  const recommendedCoordinateSystem: CoordinateSystem = 'page-relative';
 
   return {
     detectedWorkflow,

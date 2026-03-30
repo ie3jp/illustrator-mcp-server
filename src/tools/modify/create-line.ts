@@ -1,17 +1,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
-import {
-  coordinateSystemSchema,
-  resolveCoordinateSystem,
-} from '../session.js';
-import { colorSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
+import { strokeSchema, COLOR_HELPERS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
-/**
- * create_line — 直線の作成
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItems/ — PathItems.add()
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — PathItem.setEntirePath()
- */
 const jsxCode = `
 var preflight = preflightChecks();
 if (preflight) {
@@ -20,46 +11,37 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
-    var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
 
-    var ix1 = params.x1;
-    var iy1 = params.y1;
-    var ix2 = params.x2;
-    var iy2 = params.y2;
+    var x1 = params.x1;
+    var y1 = params.y1;
+    var x2 = params.x2;
+    var y2 = params.y2;
 
-    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
-    var p1 = webToAiPoint(ix1, iy1, coordSystem, abRect);
-    var p2 = webToAiPoint(ix2, iy2, coordSystem, abRect);
-    var px1 = p1[0], py1 = p1[1], px2 = p2[0], py2 = p2[1];
-
+    var page = resolveTargetPage(doc, params.page_index);
     var targetLayer = resolveTargetLayer(doc, params.layer_name);
 
-    var line = targetLayer.pathItems.add();
-    line.setEntirePath([[px1, py1], [px2, py2]]);
-    line.filled = false;
+    // Use bounding rect for graphicLine placement then set path
+    var top    = Math.min(y1, y2);
+    var left   = Math.min(x1, x2);
+    var bottom = Math.max(y1, y2);
+    var right  = Math.max(x1, x2);
 
-    if (params.stroke) {
-      applyStroke(line, params.stroke, true);
-      if (params.stroke.cap) {
-        if (params.stroke.cap === "round") {
-          line.strokeCap = StrokeCap.ROUNDENDCAP;
-        } else if (params.stroke.cap === "projecting") {
-          line.strokeCap = StrokeCap.PROJECTINGENDCAP;
-        } else {
-          line.strokeCap = StrokeCap.BUTTENDCAP;
-        }
-      }
-    } else {
-      line.stroked = true;
-    }
+    // Avoid zero-dimension bounds
+    if (top === bottom) { bottom = top + 0.001; }
+    if (left === right) { right = left + 0.001; }
 
-    if (params.name) {
-      line.name = params.name;
-    }
+    var line = page.graphicLines.add(targetLayer, LocationOptions.UNKNOWN, {
+      geometricBounds: [top, left, bottom, right]
+    });
+
+    // Set actual path endpoints
+    line.paths[0].entirePath = [[x1, y1], [x2, y2]];
+
+    applyStroke(line, doc, params.stroke);
 
     var uuid = ensureUUID(line);
-    writeResultFile(RESULT_PATH, { uuid: uuid, verified: verifyItem(line, coordSystem, abRect) });
+    writeResultFile(RESULT_PATH, { uuid: uuid, verified: verifyItem(line) });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create line: " + e.message, line: e.line });
   }
@@ -71,32 +53,20 @@ export function register(server: McpServer): void {
     'create_line',
     {
       title: 'Create Line',
-      description: 'Create a line. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Create a straight graphic line on the active InDesign document page.',
       inputSchema: {
-        x1: z.number().describe('Start point X coordinate'),
-        y1: z.number().describe('Start point Y coordinate'),
-        x2: z.number().describe('End point X coordinate'),
-        y2: z.number().describe('End point Y coordinate'),
-        stroke: z
-          .object({
-            color: colorSchema.describe('Stroke color'),
-            width: z.number().optional().describe('Stroke width'),
-            cap: z
-              .enum(['butt', 'round', 'projecting'])
-              .optional()
-              .describe('Line cap style'),
-          })
-          .optional()
-          .describe('Stroke settings'),
-        layer_name: z.string().optional().describe('Target layer name'),
-        name: z.string().optional().describe('Object name'),
-        coordinate_system: coordinateSystemSchema,
+        x1: z.number().describe('Start point X coordinate (points from page left)'),
+        y1: z.number().describe('Start point Y coordinate (points from page top)'),
+        x2: z.number().describe('End point X coordinate (points from page left)'),
+        y2: z.number().describe('End point Y coordinate (points from page top)'),
+        stroke: strokeSchema.describe('Stroke settings (color + weight)'),
+        page_index: z.number().int().min(0).optional().describe('Zero-based page index (default: active page)'),
+        layer_name: z.string().optional().describe('Target layer name (created if not exists)'),
       },
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
+      const result = await executeJsx(jsxCode, params, { activate: true });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

@@ -1,12 +1,12 @@
 {
-  "name": "illustrator-mcp-server",
-  "version": "1.2.10",
-  "mcpName": "io.github.ie3jp/illustrator-mcp-server",
-  "description": "MCP server for reading, manipulating, and exporting Adobe Illustrator design data",
+  "name": "indesign-mcp-server",
+  "version": "0.1.0",
+  "mcpName": "io.github.ie3jp/indesign-mcp-server",
+  "description": "MCP server for reading, manipulating, and exporting Adobe InDesign design data",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "illustrator-mcp-server": "dist/index.js"
+    "indesign-mcp-server": "dist/index.js"
   },
   "files": [
     "dist/**/*"
@@ -24,12 +24,15 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "illustrator",
+    "indesign",
     "adobe",
     "extendscript",
     "jsx",
     "design",
-    "svg"
+    "publishing",
+    "layout",
+    "idml",
+    "epub"
   ],
   "license": "MIT",
   "repository": {

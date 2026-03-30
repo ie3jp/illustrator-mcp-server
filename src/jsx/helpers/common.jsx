@@ -1,5 +1,5 @@
 // ============================================================
-// common.jsx — 共通ヘルパー（ExtendScript ES3 準拠）
+// common.jsx — 共通ヘルパー（ExtendScript ES3 準拠 / InDesign 版）
 // ============================================================
 
 // --- JSON ポリフィル ---
@@ -115,18 +115,18 @@ function generateUUID() {
 }
 
 function ensureUUID(pageItem) {
-  // note プロパティに UUID がなければ遅延割り当て
-  var note = "";
-  try { note = pageItem.note || ""; } catch(e) { /* note がないオブジェクトもある */ }
+  // InDesign の insertLabel/extractLabel を使用（Illustrator の note より堅牢）
+  var existing = "";
+  try { existing = pageItem.extractLabel("mcp-uuid") || ""; } catch(e) {}
 
   // UUID パターンチェック（xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx）
-  if (note.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
-    return note;
+  if (existing.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+    return existing;
   }
 
   var uuid = generateUUID();
   try {
-    pageItem.note = uuid;
+    pageItem.insertLabel("mcp-uuid", uuid);
   } catch(e) {
     // ロックされたオブジェクト等で書き込み不可の場合はそのまま返す
   }
@@ -138,150 +138,94 @@ function ensureUUID(pageItem) {
 function colorToObject(color) {
   if (color === void 0 || color === null) return { type: "none" };
 
-  var tn = color.typename;
-  if (tn === "CMYKColor") {
-    return { type: "cmyk", c: color.cyan, m: color.magenta, y: color.yellow, k: color.black };
-  }
-  if (tn === "RGBColor") {
-    return { type: "rgb", r: color.red, g: color.green, b: color.blue };
-  }
-  if (tn === "SpotColor") {
-    return {
-      type: "spot",
-      name: color.spot.name,
-      tint: color.tint,
-      color: colorToObject(color.spot.color)
-    };
-  }
-  if (tn === "GradientColor") {
-    var stops = [];
-    var grad = color.gradient;
-    for (var i = 0; i < grad.gradientStops.length; i++) {
-      var gs = grad.gradientStops[i];
-      stops.push({
-        color: colorToObject(gs.color),
-        midPoint: gs.midPoint,
-        rampPoint: gs.rampPoint
-      });
+  try {
+    // Swatch オブジェクトの場合
+    if (color.constructor && color.constructor.name === "Swatch") {
+      if (color.name === "None") return { type: "none" };
+      if (color.name === "Paper") return { type: "paper" };
+      return { type: "swatch", name: color.name, color: colorToObject(color.color) };
     }
-    return {
-      type: "gradient",
-      name: grad.name,
-      gradientType: grad.type.toString(),
-      stops: stops
-    };
-  }
-  if (tn === "PatternColor") {
-    return { type: "pattern", name: color.pattern.name };
-  }
-  if (tn === "GrayColor") {
-    return { type: "gray", value: color.gray };
-  }
-  if (tn === "NoColor") {
-    return { type: "none" };
-  }
-  return { type: "unknown", typename: tn || "undefined" };
+
+    // Color オブジェクトの場合
+    if (color.space !== void 0) {
+      if (color.space === ColorSpace.CMYK) {
+        var cv = color.colorValue;
+        return { type: "cmyk", c: cv[0], m: cv[1], y: cv[2], k: cv[3] };
+      }
+      if (color.space === ColorSpace.RGB) {
+        var rv = color.colorValue;
+        return { type: "rgb", r: rv[0], g: rv[1], b: rv[2] };
+      }
+      if (color.space === ColorSpace.LAB) {
+        var lv = color.colorValue;
+        return { type: "lab", l: lv[0], a: lv[1], b: lv[2] };
+      }
+    }
+
+    // 名前で判定
+    if (color.name === "None") return { type: "none" };
+    if (color.name === "Paper") return { type: "paper" };
+    if (color.name === "Black") return { type: "cmyk", c: 0, m: 0, y: 0, k: 100 };
+    if (color.name === "Registration") return { type: "registration" };
+  } catch(e) {}
+
+  return { type: "unknown" };
 }
 
 // --- バウンディングボックス ---
+// InDesign: geometricBounds = [top, left, bottom, right]（Y軸下向き正）
+// Illustrator とは順序が異なる（Illustrator: [left, top, right, bottom], Y軸上向き正）
 
-// デフォルト: アートボード相対・Y軸下向き正（Web座標系）
-function getBoundsWebCoord(item, artboardRect) {
-  var b = item.geometricBounds; // [left, top, right, bottom] （Illustrator座標: Y軸上向き正）
-  if (artboardRect) {
-    // アートボード相対座標に変換
-    var abLeft = artboardRect[0];
-    var abTop = artboardRect[1];
-    return {
-      x: b[0] - abLeft,
-      y: -(b[1] - abTop),  // Y 反転
-      width: b[2] - b[0],
-      height: b[1] - b[3]  // top - bottom (Illustrator座標では top > bottom)
-    };
-  }
-  // アートボードなしの場合はドキュメント座標をWeb向きに変換
+function getBounds(item) {
+  var b = item.geometricBounds; // [top, left, bottom, right]
   return {
-    x: b[0],
-    y: -b[1],
-    width: b[2] - b[0],
-    height: b[1] - b[3]
+    x: b[1],
+    y: b[0],
+    width: b[3] - b[1],
+    height: b[2] - b[0]
   };
 }
 
-// ドキュメント座標（Illustratorネイティブ）
-function getBoundsDocCoord(item) {
-  var b = item.geometricBounds;
+function getBoundsOnPage(item, page) {
+  var b = item.geometricBounds; // [top, left, bottom, right] in pasteboard coords
+  var pb = page.bounds; // [top, left, bottom, right]
   return {
-    x: b[0],
-    y: b[1],
-    width: b[2] - b[0],
-    height: b[1] - b[3]
+    x: b[1] - pb[1],
+    y: b[0] - pb[0],
+    width: b[3] - b[1],
+    height: b[2] - b[0]
   };
 }
 
-function getBounds(item, coordSystem, artboardRect) {
-  if (coordSystem === "document") {
-    return getBoundsDocCoord(item);
+// --- ページ関連 ---
+
+function getPageForItem(item) {
+  try { return item.parentPage; } catch(e) { return null; }
+}
+
+function getPageBounds(page) {
+  var b = page.bounds; // [top, left, bottom, right]
+  return { top: b[0], left: b[1], bottom: b[2], right: b[3] };
+}
+
+function resolveTargetPage(doc, pageIndex) {
+  if (typeof pageIndex === "number" && pageIndex >= 0 && pageIndex < doc.pages.length) {
+    return doc.pages[pageIndex];
   }
-  return getBoundsWebCoord(item, artboardRect);
-}
-
-// --- アートボード関連 ---
-
-function getActiveArtboardRect() {
-  var doc = app.activeDocument;
-  var abIdx = doc.artboards.getActiveArtboardIndex();
-  return doc.artboards[abIdx].artboardRect;
-}
-
-function getArtboardRectByIndex(index) {
-  var rects = _getArtboardRects();
-  if (index >= 0 && index < rects.length) {
-    return rects[index];
+  // デフォルト: アクティブウィンドウの表示ページ or 最初のページ
+  try {
+    return app.activeWindow.activePage;
+  } catch(e) {
+    return doc.pages[0];
   }
-  return null;
-}
-
-// アートボード矩形キャッシュ（同一 JSX 実行内で再利用）
-var _artboardRectsCache = null;
-
-function invalidateArtboardCache() {
-  _artboardRectsCache = null;
-}
-
-function _getArtboardRects() {
-  if (!_artboardRectsCache) {
-    _artboardRectsCache = [];
-    var doc = app.activeDocument;
-    for (var i = 0; i < doc.artboards.length; i++) {
-      _artboardRectsCache.push(doc.artboards[i].artboardRect);
-    }
-  }
-  return _artboardRectsCache;
-}
-
-// アイテムがどのアートボードに属するか判定（中心座標ベース）
-function getArtboardIndexForItem(item) {
-  var rects = _getArtboardRects();
-  var b = item.geometricBounds;
-  var cx = (b[0] + b[2]) / 2;
-  var cy = (b[1] + b[3]) / 2;
-
-  for (var i = 0; i < rects.length; i++) {
-    var r = rects[i];
-    if (cx >= r[0] && cx <= r[2] && cy <= r[1] && cy >= r[3]) {
-      return i;
-    }
-  }
-  return -1; // アートボード外
 }
 
 // --- バージョンチェック ---
 
-function checkIllustratorVersion() {
+function checkInDesignVersion() {
   var ver = parseInt(app.version.split(".")[0], 10);
-  if (ver < 28) {
-    return { error: true, message: "Illustrator CC 2024 or later is required (current: " + app.version + ")" };
+  if (ver < 19) {
+    return { error: true, message: "InDesign 2024 or later is required (current: " + app.version + ")" };
   }
   return null;
 }
@@ -290,7 +234,7 @@ function checkIllustratorVersion() {
 
 function checkDocumentOpen() {
   if (app.documents.length === 0) {
-    return { error: true, message: "No document is open. Please open a file in Illustrator." };
+    return { error: true, message: "No document is open. Please open a file in InDesign." };
   }
   return null;
 }
@@ -298,7 +242,7 @@ function checkDocumentOpen() {
 // --- 共通の前提条件チェック ---
 
 function preflightChecks() {
-  var verErr = checkIllustratorVersion();
+  var verErr = checkInDesignVersion();
   if (verErr) return verErr;
   var docErr = checkDocumentOpen();
   if (docErr) return docErr;
@@ -308,32 +252,33 @@ function preflightChecks() {
 // --- オブジェクトタイプ判定 ---
 
 function getItemType(item) {
-  var tn = item.typename;
+  var tn;
+  try { tn = item.constructor.name; } catch(e) { return "other"; }
   if (tn === "TextFrame") return "text";
-  if (tn === "PathItem") return "path";
-  if (tn === "CompoundPathItem") return "compound-path";
-  if (tn === "PlacedItem" || tn === "RasterItem") return "image";
-  if (tn === "GroupItem") return "group";
-  if (tn === "SymbolItem") return "symbol";
+  if (tn === "Rectangle") return "rectangle";
+  if (tn === "Oval") return "oval";
+  if (tn === "GraphicLine") return "line";
+  if (tn === "Polygon") return "polygon";
+  if (tn === "Image" || tn === "EPS" || tn === "PDF") return "image";
+  if (tn === "Group") return "group";
+  if (tn === "Table") return "table";
   return "other";
 }
 
 // --- zIndex 計算 ---
-// Illustrator の pageItems は前面→背面の順
-// zIndex は 0-based 背面→前面の昇順
+// InDesign の pageItems は前面→背面の順
 
 function getZIndex(item) {
   try {
     var parent = item.parent;
     var total = 0;
-    if (parent.typename === "Layer") {
-      total = parent.pageItems.length;
-    } else if (parent.typename === "GroupItem") {
+    if (parent.pageItems) {
       total = parent.pageItems.length;
     } else {
       return 0;
     }
-    var idx = total - item.itemIndex;
+    // InDesign の itemIndex は 0-based (前面が 0)
+    var idx = total - 1 - item.itemIndex;
     if (isNaN(idx)) return 0;
     return idx;
   } catch(e) {
@@ -341,38 +286,17 @@ function getZIndex(item) {
   }
 }
 
-// --- UUID 検索（インデックス付き） ---
-
-// 同一 JSX 実行内で UUID→item マップを遅延構築し、2回目以降は O(1) で引く
-var _uuidIndex = null;
-
-function _buildUUIDIndex() {
-  _uuidIndex = {};
-  var doc = app.activeDocument;
-  for (var li = 0; li < doc.layers.length; li++) {
-    _indexContainer(doc.layers[li]);
-  }
-}
-
-function _indexContainer(container) {
-  for (var i = 0; i < container.pageItems.length; i++) {
-    var item = container.pageItems[i];
-    try {
-      if (item.note && item.note.length > 0) {
-        _uuidIndex[item.note] = item;
-      }
-    } catch(e) {}
-    try {
-      if (item.typename === "GroupItem") {
-        _indexContainer(item);
-      }
-    } catch(e) {}
-  }
-}
+// --- UUID 検索 ---
 
 function findItemByUUID(uuid) {
-  if (!_uuidIndex) _buildUUIDIndex();
-  return _uuidIndex[uuid] || null;
+  var doc = app.activeDocument;
+  var allItems = doc.allPageItems;
+  for (var i = 0; i < allItems.length; i++) {
+    try {
+      if (allItems[i].extractLabel("mcp-uuid") === uuid) return allItems[i];
+    } catch(e) {}
+  }
+  return null;
 }
 
 // --- レイヤー解決 ---
@@ -380,7 +304,7 @@ function findItemByUUID(uuid) {
 function resolveTargetLayer(doc, layerName) {
   if (!layerName) return doc.activeLayer;
   try {
-    return doc.layers.getByName(layerName);
+    return doc.layers.itemByName(layerName);
   } catch (e) {
     var nl = doc.layers.add();
     nl.name = layerName;
@@ -388,46 +312,45 @@ function resolveTargetLayer(doc, layerName) {
   }
 }
 
-// --- 座標変換（Web → Illustrator ネイティブ） ---
-
-function webToAiPoint(x, y, coordSystem, artboardRect) {
-  if (coordSystem === "artboard-web" && artboardRect) {
-    return [artboardRect[0] + x, artboardRect[1] + (-y)];
-  }
-  return [x, y];
-}
-
 // --- 親レイヤー名取得 ---
 
 function getParentLayerName(item) {
-  var obj = item.parent;
-  while (obj) {
-    if (obj.typename === "Layer") return obj.name;
-    try { obj = obj.parent; } catch(e) { break; }
+  try {
+    return item.itemLayer.name;
+  } catch(e) {
+    return "";
   }
-  return "";
 }
 
-// --- テキストフレーム種別 ---
+// --- テキストフレーム情報 ---
 
-function getTextKind(tf) {
+function getTextFrameInfo(tf) {
+  var info = {};
+  try { info.overflows = tf.overflows; } catch(e) {}
   try {
-    if (tf.kind === TextType.POINTTEXT) return "point";
-    if (tf.kind === TextType.AREATEXT) return "area";
-    if (tf.kind === TextType.PATHTEXT) return "path";
+    info.storyId = tf.parentStory.id;
+    info.threadedFrameCount = tf.parentStory.textContainers.length;
   } catch(e) {}
-  return "unknown";
+  try {
+    info.previousTextFrame = tf.previousTextFrame ? ensureUUID(tf.previousTextFrame) : null;
+  } catch(e) { info.previousTextFrame = null; }
+  try {
+    info.nextTextFrame = tf.nextTextFrame ? ensureUUID(tf.nextTextFrame) : null;
+  } catch(e) { info.nextTextFrame = null; }
+  return info;
 }
 
 // --- 再帰的アイテム走査 ---
 
 function iterateAllItems(container, callback) {
-  for (var i = 0; i < container.pageItems.length; i++) {
-    var item = container.pageItems[i];
-    callback(item);
-    if (item.typename === "GroupItem") {
-      iterateAllItems(item, callback);
-    }
+  var items;
+  try {
+    items = container.allPageItems;
+  } catch(e) {
+    try { items = container.pageItems; } catch(e2) { return; }
+  }
+  for (var i = 0; i < items.length; i++) {
+    callback(items[i]);
   }
 }
 
@@ -436,72 +359,66 @@ function iterateAllItems(container, callback) {
 /**
  * 単一アイテムの現在の状態をスナップショットとして返す。
  * 操作後に呼び出し、結果に含めることで「実際にどうなったか」を確認できる。
- *
- * @param {PageItem} item - 検証対象
- * @param {string} [coordSystem] - "artboard-web" | "document"
- * @param {Array} [artboardRect] - アートボード矩形（artboard-web時に必要）
- * @returns {Object} アイテムのスナップショット
  */
-function verifyItem(item, coordSystem, artboardRect) {
+function verifyItem(item) {
   var snap = {
-    name: item.name || "",
+    name: "",
     type: getItemType(item),
-    bounds: getBounds(item, coordSystem, artboardRect)
+    bounds: getBounds(item)
   };
 
-  if (item.typename === "TextFrame") {
-    snap.contents = item.contents;
-    snap.textKind = getTextKind(item);
+  try { snap.name = item.name || ""; } catch(e) {}
+
+  var pg = getPageForItem(item);
+  if (pg) {
+    try {
+      snap.pageIndex = pg.documentOffset;
+      snap.boundsOnPage = getBoundsOnPage(item, pg);
+    } catch(e) {}
   }
 
-  try {
-    if (item.filled) {
-      snap.fill = colorToObject(item.fillColor);
-    } else {
-      snap.fill = { type: "none" };
-    }
-  } catch(e) {}
+  if (getItemType(item) === "text") {
+    try { snap.contents = item.contents; } catch(e) {}
+    try {
+      var tfInfo = getTextFrameInfo(item);
+      snap.overflows = tfInfo.overflows;
+      snap.storyId = tfInfo.storyId;
+    } catch(e) {}
+  }
 
+  try { snap.fillColor = colorToObject(item.fillColor); } catch(e) {}
   try {
-    if (item.stroked) {
-      snap.stroke = { color: colorToObject(item.strokeColor), width: item.strokeWidth };
-    }
+    snap.strokeColor = colorToObject(item.strokeColor);
+    snap.strokeWeight = item.strokeWeight;
   } catch(e) {}
 
   snap.layer = getParentLayerName(item);
-  snap.visible = item.hidden !== true;
+  try { snap.visible = item.visible; } catch(e) { snap.visible = true; }
 
   return snap;
 }
 
 /**
- * 指定アートボード上の名前付きアイテムのスナップショットを返す。
- * アートボード操作やバッチ操作の検証に使う。
- *
- * @param {number} artboardIndex - アートボードインデックス
- * @returns {Object} { artboard: string, items: Array }
+ * 指定ページ上の名前付きアイテムのスナップショットを返す。
  */
-function verifyArtboardContents(artboardIndex) {
+function verifyPageContents(pageIndex) {
   var doc = app.activeDocument;
-  var ab = doc.artboards[artboardIndex];
-  var abRect = ab.artboardRect;
+  var pg = doc.pages[pageIndex];
   var items = [];
 
-  for (var i = 0; i < doc.pageItems.length; i++) {
-    var item = doc.pageItems[i];
-    var gb = item.geometricBounds;
-    var cx = (gb[0] + gb[2]) / 2;
-    var cy = (gb[1] + gb[3]) / 2;
-    if (cx >= abRect[0] && cx <= abRect[2] && cy <= abRect[1] && cy >= abRect[3]) {
-      if (item.name && item.name !== "") {
-        var entry = { name: item.name, type: getItemType(item) };
-        if (item.typename === "TextFrame") {
-          entry.contents = item.contents;
-        }
-        items.push(entry);
+  var allItems = pg.allPageItems;
+  for (var i = 0; i < allItems.length; i++) {
+    var item = allItems[i];
+    var itemName = "";
+    try { itemName = item.name; } catch(e) {}
+    if (itemName && itemName !== "") {
+      var entry = { name: itemName, type: getItemType(item) };
+      if (getItemType(item) === "text") {
+        try { entry.contents = item.contents; } catch(e) {}
       }
+      items.push(entry);
     }
   }
 
-  return { artboard: ab.name, index: artboardIndex, itemCount: items.length, items: items };
+  return { page: pg.name, index: pageIndex, itemCount: items.length, items: items };
 }

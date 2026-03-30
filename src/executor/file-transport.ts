@@ -18,7 +18,7 @@ export interface TempFiles {
 }
 
 export async function ensureTmpDir(): Promise<void> {
-  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'illustrator-mcp-'));
+  tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'indesign-mcp-'));
 }
 
 export function createTempFiles(): TempFiles {
@@ -48,12 +48,13 @@ export async function writeAppleScript(
   scriptPath: string,
   options?: { activate?: boolean },
 ): Promise<void> {
-  const lines = ['tell application "Adobe Illustrator"'];
+  const lines = ['tell application "Adobe InDesign"'];
   if (options?.activate) {
     lines.push('  activate');
   }
+  // InDesign uses "do script" with "language javascript" instead of Illustrator's "do javascript"
   const escaped = scriptPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  lines.push(`  do javascript of file "${escaped}"`);
+  lines.push(`  do script POSIX file "${escaped}" language javascript`);
   lines.push('end tell');
   await fs.writeFile(scptPath, lines.join('\n'), 'utf-8');
 }
@@ -68,10 +69,12 @@ export async function writePowerShellScript(
   const jsxPathEscaped = jsxPathForward.replace(/'/g, "\\'");
   const lines = [
     'try {',
-    '  $ai = New-Object -ComObject "Illustrator.Application" -ErrorAction Stop',
-    `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathEscaped}'))")`,
+    '  $id = New-Object -ComObject "InDesign.Application" -ErrorAction Stop',
+    // 1246973031 = ScriptLanguage.JAVASCRIPT enum value for InDesign COM
+    `  $scriptContent = [System.IO.File]::ReadAllText('${jsxPathEscaped}', [System.Text.Encoding]::UTF8)`,
+    '  $id.DoScript($scriptContent, 1246973031)',
     '} catch {',
-    '  Write-Error "Illustrator COM automation failed: $_"',
+    '  Write-Error "InDesign COM automation failed: $_"',
     '  exit 1',
     '}',
   ];

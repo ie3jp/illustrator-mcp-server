@@ -15,7 +15,7 @@ import {
   cleanupTempFiles,
 } from './file-transport.js';
 
-// Illustrator はシングルスレッド — JSX 実行を直列化
+// InDesign はシングルスレッド — JSX 実行を直列化
 const jsxLimit = pLimit(1);
 
 // 実行中の JSX を追跡（グレースフルシャットダウン用）
@@ -24,7 +24,7 @@ let pendingResolvers: Array<() => void> = [];
 
 // ─── トランスポート選択 ───────────────────────────────────────────────────────
 //
-//  ILLUSTRATOR_MCP_TRANSPORT=osascript → macOS AppleScript (macOS 強制)
+//  INDESIGN_MCP_TRANSPORT=osascript → macOS AppleScript (macOS 強制)
 //  未設定:
 //    darwin  → osascript
 //    win32   → PowerShell COM
@@ -33,7 +33,7 @@ export type Transport = 'osascript' | 'powershell';
 
 export function resolveTransport(
   platform: string = process.platform,
-  envVar: string | undefined = process.env['ILLUSTRATOR_MCP_TRANSPORT'],
+  envVar: string | undefined = process.env['INDESIGN_MCP_TRANSPORT'],
 ): Transport {
   if (envVar === 'osascript') return 'osascript';
   if (envVar === 'powershell') return 'powershell';
@@ -107,7 +107,7 @@ ${toolScript}
 
 function parseOsascriptError(stderr: string): string {
   if (stderr.includes('Connection is invalid')) {
-    return 'Illustrator is not running. Please launch Adobe Illustrator.';
+    return 'InDesign is not running. Please launch Adobe InDesign.';
   }
   if (stderr.includes('not allowed to send keystrokes') || stderr.includes('not allowed assistive access')) {
     return 'Automation permission denied. Please allow access in System Settings > Privacy & Security > Automation.';
@@ -117,7 +117,7 @@ function parseOsascriptError(stderr: string): string {
 
 function parsePowerShellError(stderr: string): string {
   if (stderr.includes('Cannot create ActiveX component') || stderr.includes('80080005') || stderr.includes('80040154')) {
-    return 'Illustrator is not running or is not installed. Please launch Adobe Illustrator.';
+    return 'InDesign is not running or is not installed. Please launch Adobe InDesign.';
   }
   return stderr;
 }
@@ -270,7 +270,7 @@ export async function executeJsx(
 }
 
 /**
- * 重い処理用の JSX 実行（タイムアウト延長 + Illustrator をフォアグラウンドに）
+ * 重い処理用の JSX 実行（タイムアウト延長 + InDesign をフォアグラウンドに）
  */
 export async function executeJsxHeavy(
   jsxCode: string,

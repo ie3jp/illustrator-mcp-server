@@ -4,8 +4,8 @@ import { registerAllPrompts } from './prompts/registry.js';
 
 export function createServer(): McpServer {
   const server = new McpServer({
-    name: 'illustrator-mcp-server',
-    version: '1.2.4',
+    name: 'indesign-mcp-server',
+    version: '0.1.0',
   });
 
   registerAllTools(server);

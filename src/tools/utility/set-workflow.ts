@@ -14,9 +14,8 @@ const workflowToCoord: Record<
   Exclude<WorkflowType, 'unknown'>,
   CoordinateSystem
 > = {
-  web: 'artboard-web',
-  print: 'document',
-  video: 'artboard-web',
+  print: 'page-relative',
+  digital: 'page-relative',
 };
 
 export function register(server: McpServer): void {
@@ -26,29 +25,29 @@ export function register(server: McpServer): void {
       title: 'Set Workflow',
       description:
         'Set the session-level workflow and default coordinate system. ' +
-        'Call this after confirming the user\'s intent (web, print, or video). ' +
+        'Call this after confirming the user\'s intent (print or digital). ' +
         'Once set, all tools that omit coordinate_system will use the session default. ' +
-        'Use clear: true to reset to the default behavior (artboard-web).',
+        'Use action: "clear" to reset to default behavior.',
       inputSchema: {
         workflow: z
-          .enum(['web', 'print', 'video'])
+          .enum(['print', 'digital'])
           .optional()
-          .describe('The workflow type. Determines the default coordinate system.'),
+          .describe('The workflow type. "print" for press output, "digital" for screen/ebook.'),
         coordinate_system: z
-          .enum(['artboard-web', 'document'])
+          .enum(['page-relative', 'spread'])
           .optional()
           .describe(
-            'Explicit coordinate system override. If provided with workflow, overrides the workflow-derived default.',
+            'Explicit coordinate system override. "page-relative" (default): coordinates relative to page top-left. "spread": pasteboard coordinates.',
           ),
-        clear: z
-          .boolean()
+        action: z
+          .enum(['clear'])
           .optional()
-          .describe('Reset session to default behavior (auto-detect from document).'),
+          .describe('Set to "clear" to reset session to default behavior.'),
       },
       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
-      if (params.clear) {
+      if (params.action === 'clear') {
         clearSession();
         return {
           content: [
@@ -84,15 +83,15 @@ export function register(server: McpServer): void {
 
       const coordinateSystem: CoordinateSystem =
         params.coordinate_system ??
-        (params.workflow ? workflowToCoord[params.workflow] : 'artboard-web');
-      // workflow が未指定の場合は coordinate_system から推定（不明なら 'unknown'）
+        (params.workflow ? workflowToCoord[params.workflow] : 'page-relative');
+
+      // Infer workflow from coordinate_system when workflow not explicitly provided
       let workflow: WorkflowType;
       if (params.workflow) {
         workflow = params.workflow;
-      } else if (coordinateSystem === 'document') {
-        workflow = 'print';
       } else {
-        workflow = 'web';
+        // Both InDesign workflows use page-relative; default to print
+        workflow = 'print';
       }
 
       setSession(workflow, coordinateSystem);

@@ -3,9 +3,9 @@ import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 /**
- * export_pdf — PDF 書き出し
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.saveAs()
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/PDFSaveOptions/ — PDFSaveOptions
+ * export_pdf — PDF export for InDesign
+ * @see https://www.indesignjs.de/extendscriptAPI/indesign-cs6.html#ExportFormat
+ * @see https://www.indesignjs.de/extendscriptAPI/indesign-cs6.html#PDFExportPreference
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -17,135 +17,79 @@ if (preflight) {
     var doc = app.activeDocument;
     var outputPath = params.output_path;
     var preset = params.preset || "";
-    var options = params.options || {};
-
-    var pdfOpts = new PDFSaveOptions();
-
-    // Apply preset if specified
-    if (preset !== "") {
-      pdfOpts.pDFPreset = preset;
-    } else {
-      // プリセット未指定時のみデフォルト値を設定（プリセットの設定を上書きしない）
-      pdfOpts.compatibility = PDFCompatibility.ACROBAT7;
-      pdfOpts.preserveEditability = false;
-    }
-
-    // トンボ種類（enum名とリテラル値の両方を試す）
-    if (options.marks_style === "japanese") {
-      pdfOpts.pageMarksType = PageMarksTypes.Japanese;
-    } else if (options.marks_style === "roman") {
-      pdfOpts.pageMarksType = PageMarksTypes.Roman;
-    }
-
-    // トンボ ON/OFF
-    if (options.trim_marks === true) {
-      pdfOpts.trimMarks = true;
-    } else {
-      pdfOpts.trimMarks = false;
-    }
-
-    // 日本式トンボの場合、必須設定を自動適用
-    if (options.marks_style === "japanese" && options.trim_marks === true) {
-      // レジストレーションマーク（センタートンボ）が未指定なら自動ON
-      if (typeof options.registration_marks === "undefined") {
-        pdfOpts.registrationMarks = true;
-      }
-      // 裁ち落としが未指定なら3mm自動設定（外トンボの表示に必要）
-      if (options.bleed !== true) {
-        var bleedPt = 8.504; // 3mm
-        pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
-      }
-    }
-
-    // トンボの太さ（文字列・数値両対応）
-    var tw = String(options.trim_mark_weight);
-    if (tw === "0.125") {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
-    } else if (tw === "0.25") {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT025;
-    } else if (tw === "0.5") {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT05;
-    } else if (options.trim_marks === true) {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
-    }
-
-    // レジストレーションマーク
-    if (typeof options.registration_marks !== "undefined") {
-      pdfOpts.registrationMarks = options.registration_marks;
-    }
-
-    // カラーバー
-    if (typeof options.color_bars !== "undefined") {
-      pdfOpts.colorBars = options.color_bars;
-    }
-
-    // ページ情報
-    if (typeof options.page_information !== "undefined") {
-      pdfOpts.pageInformation = options.page_information;
-    }
-
-    // Bleed
-    if (options.bleed === true) {
-      // Set 3mm bleed on all sides (approx 8.504 pt)
-      var bleedPt = 8.504;
-      pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
-    }
-
-    // Downsample images
-    if (typeof options.color_downsample_dpi === "number" || typeof options.grayscale_downsample_dpi === "number" || typeof options.monochrome_downsample_dpi === "number") {
-      // Selective downsampling per image type
-      var colorDpi = (typeof options.color_downsample_dpi === "number") ? options.color_downsample_dpi : 300;
-      pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
-      pdfOpts.colorDownsampling = colorDpi;
-      pdfOpts.colorDownsamplingImageThreshold = Math.round(colorDpi * 1.5);
-
-      var grayDpi = (typeof options.grayscale_downsample_dpi === "number") ? options.grayscale_downsample_dpi : 300;
-      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
-      pdfOpts.grayscaleDownsampling = grayDpi;
-      pdfOpts.grayscaleDownsamplingImageThreshold = Math.round(grayDpi * 1.5);
-
-      var monoDpi = (typeof options.monochrome_downsample_dpi === "number") ? options.monochrome_downsample_dpi : 1200;
-      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
-      pdfOpts.monochromeDownsampling = monoDpi;
-      pdfOpts.monochromeDownsamplingImageThreshold = Math.round(monoDpi * 1.5);
-    } else if (options.downsample === true) {
-      pdfOpts.colorDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
-      pdfOpts.colorDownsampling = 300;
-      pdfOpts.colorDownsamplingImageThreshold = 450;
-      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
-      pdfOpts.grayscaleDownsampling = 300;
-      pdfOpts.grayscaleDownsamplingImageThreshold = 450;
-      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.BICUBICDOWNSAMPLE;
-      pdfOpts.monochromeDownsampling = 1200;
-      pdfOpts.monochromeDownsamplingImageThreshold = 1800;
-    } else if (options.downsample === false) {
-      pdfOpts.colorDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
-      pdfOpts.grayscaleDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
-      pdfOpts.monochromeDownsamplingMethod = DownsampleMethod.NODOWNSAMPLE;
-    }
-
-    // Output intent ICC profile (version-dependent, may not be available)
-    if (typeof options.output_intent_profile === "string" && options.output_intent_profile !== "") {
-      try {
-        pdfOpts.outputIntentProfile = options.output_intent_profile;
-      } catch(e) {
-        // outputIntentProfile not supported in this Illustrator version
-      }
-    }
+    var pageRange = params.page_range || "";
+    var bleed = params.bleed || false;
+    var marks = params.marks || false;
 
     var outFile = new File(outputPath);
     var parentFolder = outFile.parent;
     if (!parentFolder.exists) {
       writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
     } else {
-      doc.saveAs(outFile, pdfOpts);
+      // Apply PDF export preset if specified
+      if (preset !== "") {
+        try {
+          app.pdfExportPreferences.appliedFlattenerPreset = preset;
+        } catch(e) {
+          // Preset may refer to a PDF export preset name — try loading it
+          try {
+            var pdfPreset = app.pdfExportPresets.item(preset);
+            pdfPreset.loadSettings();
+          } catch(e2) {
+            // Ignore preset errors and continue with current settings
+          }
+        }
+      }
 
-      // エクスポート後にファイル存在を検証
+      // Page range
+      if (pageRange !== "") {
+        app.pdfExportPreferences.pageRange = pageRange;
+      } else {
+        app.pdfExportPreferences.pageRange = PageRange.ALL_PAGES;
+      }
+
+      // Bleed: set 3mm (8.504pt) on all sides when requested
+      if (bleed) {
+        app.pdfExportPreferences.bleedBottom = 8.504;
+        app.pdfExportPreferences.bleedTop = 8.504;
+        app.pdfExportPreferences.bleedInside = 8.504;
+        app.pdfExportPreferences.bleedOutside = 8.504;
+        app.pdfExportPreferences.includeSlugWithPDF = false;
+      } else {
+        app.pdfExportPreferences.bleedBottom = 0;
+        app.pdfExportPreferences.bleedTop = 0;
+        app.pdfExportPreferences.bleedInside = 0;
+        app.pdfExportPreferences.bleedOutside = 0;
+      }
+
+      // Printer's marks
+      if (marks) {
+        app.pdfExportPreferences.cropMarks = true;
+        app.pdfExportPreferences.registrationMarks = true;
+        app.pdfExportPreferences.colorBars = true;
+        app.pdfExportPreferences.pageInformationMarks = true;
+      } else {
+        app.pdfExportPreferences.cropMarks = false;
+        app.pdfExportPreferences.registrationMarks = false;
+        app.pdfExportPreferences.colorBars = false;
+        app.pdfExportPreferences.pageInformationMarks = false;
+      }
+
+      doc.exportFile(ExportFormat.PDF_TYPE, outFile);
+
+      // Verify output
       var verifyFile = new File(outputPath);
       if (!verifyFile.exists) {
-        writeResultFile(RESULT_PATH, { error: true, message: "PDF export completed but output file was not created. The path may not be writable: " + outputPath });
+        writeResultFile(RESULT_PATH, { error: true, message: "PDF export completed but output file was not created. Path may not be writable: " + outputPath });
       } else {
-        writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+        writeResultFile(RESULT_PATH, {
+          success: true,
+          output_path: outputPath,
+          preset: preset || "(current settings)",
+          page_range: pageRange || "all",
+          bleed: bleed,
+          marks: marks
+        });
       }
     }
   } catch (e) {
@@ -159,30 +103,24 @@ export function register(server: McpServer): void {
     'export_pdf',
     {
       title: 'Export PDF',
-      description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) during execution. The exported PDF should be verified by a human before final submission.',
+      description:
+        'Export the active InDesign document as a PDF file. Note: InDesign will be activated (brought to foreground) during execution. The exported PDF should be verified by a human before final print submission.',
       inputSchema: {
         output_path: z.string().describe('Output file path'),
         preset: z
           .string()
           .optional()
-          .describe('PDF preset name (e.g. "[PDF/X-4:2008]")'),
-        options: z
-          .object({
-            trim_marks: coerceBoolean.optional().describe('Add trim marks'),
-            marks_style: z.enum(['japanese', 'roman']).optional().describe('Trim mark style (japanese or roman)'),
-            trim_mark_weight: z.enum(['0.125', '0.25', '0.5']).optional().describe('Trim mark weight (pt)'),
-            registration_marks: coerceBoolean.optional().describe('Registration marks'),
-            color_bars: coerceBoolean.optional().describe('Color bars'),
-            page_information: coerceBoolean.optional().describe('Page information'),
-            bleed: coerceBoolean.optional().describe('Include bleed (3mm)'),
-            downsample: coerceBoolean.optional().describe('Downsample all images (shorthand: color 300dpi, grayscale 300dpi, monochrome 1200dpi)'),
-            color_downsample_dpi: z.number().int().min(72).optional().describe('Color image downsample target DPI (overrides downsample)'),
-            grayscale_downsample_dpi: z.number().int().min(72).optional().describe('Grayscale image downsample target DPI (overrides downsample)'),
-            monochrome_downsample_dpi: z.number().int().min(72).optional().describe('Monochrome image downsample target DPI (overrides downsample)'),
-            output_intent_profile: z.string().optional().describe('Output intent ICC profile name (e.g. "Japan Color 2001 Coated"). Version-dependent feature.'),
-          })
+          .describe('PDF export preset name (e.g. "[PDF/X-4:2008]", "[Press Quality]")'),
+        page_range: z
+          .string()
           .optional()
-          .describe('PDF export options'),
+          .describe('Page range string (e.g. "1-3", "1, 3, 5"). Omit to export all pages.'),
+        bleed: coerceBoolean
+          .optional()
+          .describe('Include 3mm bleed on all sides'),
+        marks: coerceBoolean
+          .optional()
+          .describe('Include crop marks, registration marks, and color bars'),
       },
       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
@@ -190,7 +128,8 @@ export function register(server: McpServer): void {
       const result = await executeJsxHeavy(jsxCode, params);
       const output = {
         ...result,
-        _note: 'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',
+        _note:
+          'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',
       };
       return { content: [{ type: 'text', text: JSON.stringify(output, null, 2) }] };
     },
