@@ -368,12 +368,13 @@ flowchart LR
     Server -.->|generate| JSX["script-{uuid}.jsx\n(BOM UTF-8)"]
     Server -.->|write| PF["params-{uuid}.json"]
 
-    Server -->|"execFile(runner)"| osascript
-    Server -->|"execFile(runner)"| PS["powershell.exe"]
+    Runner -->|execFile| osascript
+    Runner -->|execFile| PS["powershell.exe"]
 
-    osascript -->|"do javascript(jsx)"| AI["Adobe Illustrator\n(ExtendScript/JSX)"]
-    PS -->|"DoJavaScript(jsx)"| AI
+    osascript -->|do javascript| AI["Adobe Illustrator\n(ExtendScript/JSX)"]
+    PS -->|DoJavaScript| AI
 
+    JSX -.->|execute| AI
     PF -.->|read| AI
     AI -.->|write| RF["result-{uuid}.json"]
     RF -.->|read| Server
