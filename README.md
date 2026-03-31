@@ -1,4 +1,5 @@
-> **⚠️ Caution:** AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
+> [!CAUTION]
+> AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
 
 **[日本語版はこちら / Japanese version](README.ja.md)**
 
@@ -19,7 +20,8 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ---
 
-> **☕ Support:** Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee!](https://ko-fi.com/cyocun)
+> [!TIP]
+> **☕** Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee!](https://ko-fi.com/cyocun)
 
 ---
 
@@ -60,7 +62,8 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 3. Drag and drop the `.mcpb` file into the Extensions panel
 4. Click the **Install** button
 
-> **Updating:** The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
+> [!NOTE]
+> The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
 
 <details>
 <summary><strong>Alternative: manual config (always up to date via npx)</strong></summary>
@@ -86,7 +89,8 @@ From the Claude Desktop menu bar:
 }
 ```
 
-> **Note:** If you installed Node.js via a version manager (nvm, mise, fnm, etc.), Claude Desktop may not find `npx`. In that case, use the full path:
+> [!NOTE]
+> If you installed Node.js via a version manager (nvm, mise, fnm, etc.), Claude Desktop may not find `npx`. In that case, use the full path:
 > ```json
 > "command": "/full/path/to/npx"
 > ```
@@ -99,9 +103,11 @@ From the Claude Desktop menu bar:
 
 </details>
 
+> [!NOTE]
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
-> **Note:** Modify and export tools will bring Illustrator to the foreground during execution.
+> [!NOTE]
+> Modify and export tools will bring Illustrator to the foreground during execution.
 
 ---
 
