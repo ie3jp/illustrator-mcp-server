@@ -11,7 +11,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for reading, manipulating, and exporting Adobe Illustrator design data.
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for reading, manipulating, and exporting Adobe Illustrator design data — with 63 built-in tools.
 
 Control Illustrator directly from AI assistants like Claude — extract design information for web implementation, verify print-ready data, and export assets.
 
@@ -141,8 +141,6 @@ Claude:  → get_document_info → resize_for_variation
 
 ## 📖 Recipes
 
-### Web Implementation
-
 <details>
 <summary><b>Extract colors and fonts for CSS</b></summary>
 
@@ -183,27 +181,6 @@ Claude:  → get_artboards → convert_to_outlines → export (repeated)
 </details>
 
 <details>
-<summary><b>Inspect a specific object's styling</b></summary>
-
-```
-You:    Tell me about the "CTA Button" object
-
-Claude:  → find_objects (name: "CTA Button") → get_path_items → get_effects
-
-         ■ CTA Button (uuid: abc-123)
-         - Size: 200×48px
-         - Corner radius: 24px
-         - Fill: #1A73E8
-         - Stroke: none
-         - Opacity: 100%
-         - Drop shadow: present (parameters not readable due to API limitation)
-```
-
-</details>
-
-### Print & Pre-press
-
-<details>
 <summary><b>Check PDF/X-1a compliance before submission</b></summary>
 
 ```
@@ -218,63 +195,6 @@ Claude:  → preflight_check (target_pdf_profile: "x1a")
          ⚠ Warnings:
          - 5 non-outlined fonts (embedding recommended)
          - Image "photo_02.jpg" at 150dpi (300dpi recommended)
-```
-
-</details>
-
-<details>
-<summary><b>Audit overprint settings to prevent print accidents</b></summary>
-
-```
-You:    Check overprint settings
-
-Claude:  → get_overprint_info
-
-         ■ 4 objects with overprint
-
-         ✅ Safe (K100 overprint — intentional):
-         - "Headline" text (K100, ink coverage 100%)
-         - "Rule line" path (K100, ink coverage 100%)
-
-         ⚠ Review needed (possibly accidental):
-         - "Background decoration" (C30 M80 Y0 K0, coverage 110%)
-         - "Rich black frame" (C40 M40 Y40 K100, coverage 320%)
-           → Rich black + overprint can cause unexpected color bleed
-```
-
-</details>
-
-<details>
-<summary><b>Check color separations</b></summary>
-
-```
-You:    Show me the color separation info
-
-Claude:  → get_separation_info
-
-         ■ Separations (CMYK document)
-         - Cyan: 342 uses
-         - Magenta: 287 uses
-         - Yellow: 301 uses
-         - Black: 456 uses
-         - DIC 2585 (spot): 12 uses
-           → This will output as 5 plates.
-```
-
-</details>
-
-<details>
-<summary><b>Export PDF with crop marks and bleed</b></summary>
-
-```
-You:    Export PDF with Japanese crop marks and 3mm bleed
-
-Claude:  → export_pdf (trim_marks: true, marks_style: "japanese", bleed: true)
-
-         Exported to /output/print_ready.pdf
-         - Japanese crop marks (0.125pt)
-         - 3mm bleed
-         - Registration marks auto-applied
 ```
 
 </details>
@@ -296,137 +216,6 @@ Claude:  → get_images (include_print_info: true)
 
 </details>
 
-### Text Proofing
-
-<details>
-<summary><b>Find placeholder text and notation inconsistencies</b></summary>
-
-```
-You:    Check text for inconsistencies
-
-Claude:  → check_text_consistency
-
-         📝 Consistency Report:
-
-         ■ Notation variations
-         ⚠ "Contact Us" (2 places) vs "Contact us" (1 place)
-         ⚠ "e-mail" (1 place) vs "email" (3 places) vs "E-mail" (1 place)
-
-         ■ Possible outdated content
-         ❌ Header still says "2024" (all other instances are "2025")
-         ❌ Footer phone number differs from other pages
-
-         ■ Placeholder text
-         ❌ "Lorem ipsum" (2 places) — forgotten placeholder?
-         ❌ "Sample text" (1 place)
-```
-
-</details>
-
-### Design Variations
-
-<details>
-<summary><b>Create multiple banner sizes from a single design</b></summary>
-
-```
-You:    Create 3 web banner sizes from this A4 flyer
-
-Claude:  → get_document_info → resize_for_variation (3 targets)
-
-         Created 3 variations:
-         - "Leaderboard" artboard (728×90pt, scaled to 11%)
-         - "Medium Rectangle" artboard (300×250pt, scaled to 30%)
-         - "Wide Skyscraper" artboard (160×600pt, scaled to 71%)
-
-         ⚠ Text reflow is not applied.
-           You may need to adjust text sizing and overflow manually.
-```
-
-</details>
-
-<details>
-<summary><b>Build a layout with shapes and text</b></summary>
-
-```
-You:    Create a business card layout with company name, name, email, and phone
-
-Claude:  → create_document (91×55mm, CMYK)
-         → create_text_frame × 4
-         → create_rectangle (background)
-         → create_line (divider)
-
-         Business card layout created:
-         - Company: top center / Noto Sans JP Bold 9pt
-         - Name: center / Noto Sans JP Bold 14pt
-         - Email: bottom / Noto Sans JP Regular 7pt
-         - Phone: bottom / Noto Sans JP Regular 7pt
-```
-
-</details>
-
-### Color Management
-
-<details>
-<summary><b>Diagnose color issues in a CMYK document</b></summary>
-
-```
-You:    Run a color diagnostic
-
-Claude:  → get_colors (include_diagnostics: true)
-
-         ■ Color Diagnostics (CMYK document)
-         ❌ RGB colors found: 3 fills / 1 stroke
-         ⚠ Gradient warning:
-           - "Rainbow gradient": stop #2 is RGB
-         ■ High ink coverage:
-           - C80 M70 Y70 K90 (total 310%) — may cause ink pooling
-```
-
-</details>
-
-### Object Operations
-
-<details>
-<summary><b>Align and distribute multiple objects</b></summary>
-
-```
-You:    Align these 3 buttons to the left and distribute vertically
-
-Claude:  → find_objects → align_objects (alignment: "left", distribute: "vertical")
-
-         Aligned 3 objects: left-aligned + vertically distributed.
-```
-
-</details>
-
-<details>
-<summary><b>Replace brand colors across the document</b></summary>
-
-```
-You:    Replace all red (C0 M100 Y100 K0) with the new brand blue (C80 M10 Y0 K0)
-
-Claude:  → replace_color (from → to)
-
-         Replaced 24 fills and 3 strokes.
-```
-
-</details>
-
-<details>
-<summary><b>Place color chips outside the artboard</b></summary>
-
-```
-You:    Show all used colors as chips to the right of the artboard
-
-Claude:  → place_color_chips (position: "right")
-
-         Placed 12 color chips on "Color Chips" layer with CMYK labels.
-```
-
-</details>
-
-### Accessibility
-
 <details>
 <summary><b>Check WCAG color contrast ratios</b></summary>
 
@@ -443,77 +232,16 @@ Claude:  → check_contrast (auto_detect: true)
 
 </details>
 
-### Design System
-
-<details>
-<summary><b>Extract design tokens from a comp</b></summary>
-
-```
-You:    Extract design tokens as CSS custom properties
-
-Claude:  → extract_design_tokens (format: "css")
-
-         :root {
-           --color-primary: #1A73E8;
-           --color-secondary: #34A853;
-           --font-heading-family: "NotoSansJP-Bold";
-           --font-heading-size: 32pt;
-           --spacing-8: 8pt;
-           --spacing-16: 16pt;
-         }
-```
-
-</details>
-
 ---
 
-## MCP Prompts
+## Workflow Templates
 
-Workflow templates that guide Claude through multi-step tasks. Available in the Claude Desktop prompt picker.
+Pre-built workflow templates available in the Claude Desktop prompt picker.
 
-| Prompt | Description |
-|--------|-------------|
+| Template | Description |
+|----------|-------------|
 | `quick-layout` | Paste text content and Claude arranges it on the artboard as headings, body, and captions |
 | `print-preflight-workflow` | Comprehensive 7-step pre-press check (document → preflight → overprint → separations → images → colors → text) |
-
----
-
-## Claude Code Skills
-
-Add pre-built workflows as slash commands in Claude Code, combining multiple MCP tools into guided processes.
-
-### Pre-press Preflight Check (`/illustrator-preflight`)
-
-Runs `preflight_check` + `get_overprint_info` + `check_text_consistency` in parallel, then merges results into a unified report grouped by severity (Critical / Warning / Info). Catches print-critical issues that are easy to miss manually.
-
-**Install:**
-
-```bash
-/plugin install illustrator-preflight
-```
-
-**Usage:**
-
-Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask "run a preflight check".
-
----
-
-## Features
-
-- **63 tools + 2 prompts** — 21 read / 37 modify / 2 export / 3 utility
-- **Web coordinate system** — Y-axis down, artboard-relative (same as CSS/SVG)
-- **UUID tracking** — Stable object identification across tool calls
-
----
-
-## Coordinate System
-
-Geometry-aware read and modify tools accept a `coordinate_system` parameter. Export and document-wide utility tools do not.
-
-| Value | Origin | Y-axis | Use case |
-|---|---|---|---|
-| `artboard-web` (default) | Artboard top-left | Positive downward | Web / CSS implementation |
-| `document` | Pasteboard | Positive upward (Illustrator native) | Print / DTP |
 
 ---
 
@@ -599,12 +327,20 @@ Geometry-aware read and modify tools accept a `coordinate_system` parameter. Exp
 
 ### Export Tools (2)
 
+<details>
+<summary>Click to expand</summary>
+
 | Tool | Description |
 |---|---|
 | `export` | SVG / PNG / JPG export (by artboard, selection, or UUID) |
 | `export_pdf` | Print-ready PDF export (crop marks, bleed, selective downsampling, output intent) |
 
+</details>
+
 ### Utility (3)
+
+<details>
+<summary>Click to expand</summary>
 
 | Tool | Description |
 |---|---|
@@ -612,20 +348,22 @@ Geometry-aware read and modify tools accept a `coordinate_system` parameter. Exp
 | `check_text_consistency` | Text consistency check (placeholder detection, notation variation patterns, full text listing for LLM analysis) |
 | `set_workflow` | Set workflow mode (web/print) to configure default coordinate system |
 
+</details>
+
 ---
 
 ## Known Limitations
 
 | Limitation | Details |
 |---|---|
-| macOS / Windows | macOS uses osascript, Windows uses PowerShell COM automation (not yet tested on real hardware) |
-| Live effects | ExtendScript DOM limitations prevent reading parameters for drop shadows, etc. |
-| Color profile conversion | Only profile assignment is supported; full ICC conversion is not available |
-| Bleed settings | Not accessible via the ExtendScript API (undocumented) |
-| WebP export | Not supported — ExportType does not include WebP in ExtendScript |
-| Japanese crop marks | `PageMarksTypes.Japanese` may not be applied correctly in PDF export |
-| Font embedding control | PDF font embedding mode (full/subset) is not exposed in the API. Use PDF presets instead |
-| Size variations | No text reflow. Proportional placement only (not smart layout) |
+| Windows support | Windows uses PowerShell COM automation (not yet tested on real hardware) |
+| Live effects | Drop shadow and other effect parameters can be detected but not read |
+| Color profiles | Color profile assignment only — full conversion is not available |
+| Bleed settings | Bleed settings cannot be read (Illustrator API limitation) |
+| WebP export | Not supported — use PNG or SVG instead |
+| Japanese crop marks | May not render correctly in PDF export in some cases |
+| Font embedding | Embedding mode (full/subset) cannot be controlled directly — use PDF presets |
+| Size variations | Proportional scaling only — text may need manual adjustment afterward |
 
 ---
 
