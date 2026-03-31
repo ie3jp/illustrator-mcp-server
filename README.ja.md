@@ -1,6 +1,3 @@
-> [!CAUTION]
-> AI は間違えることがあります。出力を過信せず、**入稿データの最終確認は必ず人間が行ってください**。結果についての責任は利用者にあります。
-
 **[English version](README.md)**
 
 # Illustrator MCP Server
@@ -89,6 +86,9 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 > [!NOTE]
 > 操作系・書き出し系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。
+
+> [!CAUTION]
+> AI は間違えることがあります。出力を過信せず、**入稿データの最終確認は必ず人間が行ってください**。結果についての責任は利用者にあります。
 
 ---
 
