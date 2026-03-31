@@ -61,6 +61,13 @@ describe('writePowerShellScript', () => {
     expect(content).toContain('exit 1');
   });
 
+  it('activate=true の場合は Illustrator を可視化するコードを含む', async () => {
+    const ps1 = path.join(tmpDir, 'run-visible.ps1');
+    await writePowerShellScript(ps1, '/tmp/script.jsx', { activate: true });
+    const content = await fs.readFile(ps1, 'utf-8');
+    expect(content).toContain('$ai.Visible = $true');
+  });
+
   it('Windows パスのバックスラッシュをスラッシュに変換する', async () => {
     const ps1 = path.join(tmpDir, 'run.ps1');
     await writePowerShellScript(ps1, 'C:\\Users\\test\\script.jsx');

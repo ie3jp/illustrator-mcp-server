@@ -173,13 +173,14 @@ async function executeViaPowerShell(
   jsxCode: string,
   params: unknown,
   timeout: number,
+  activate: boolean,
 ): Promise<JsxResult> {
   const files = createTempFiles();
   try {
     await writeParams(files.paramsPath, params);
     const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
     await writeJsx(files.scriptPath, fullJsx);
-    await writePowerShellScript(files.runnerPath, files.scriptPath);
+    await writePowerShellScript(files.runnerPath, files.scriptPath, { activate });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
@@ -236,7 +237,7 @@ async function executeJsxRaw(
     case 'osascript':
       return await executeViaOsascript(jsxCode, params, timeout, activate);
     case 'powershell':
-      return await executeViaPowerShell(jsxCode, params, timeout);
+      return await executeViaPowerShell(jsxCode, params, timeout, activate);
     default: {
       const _: never = transport;
       throw new Error(`Unknown transport: ${_ as string}`);

@@ -9,6 +9,8 @@ on:
 
 jobs:
   build-and-test:
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -45,7 +47,7 @@ jobs:
       - name: Update server.json version
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/g" server.json
+          VERSION="$VERSION" node -e "const fs=require('fs'); const p='server.json'; const d=JSON.parse(fs.readFileSync(p,'utf8')); d.version=process.env.VERSION; fs.writeFileSync(p, JSON.stringify(d, null, 2)+'\\n');"
 
       # npm publish (OIDC trusted publishing)
       - run: npm ci
@@ -53,7 +55,6 @@ jobs:
       - run: npm test
       - name: Publish to npm
         run: npm publish --provenance --access public
-        continue-on-error: true
 
       # GitHub Release with .mcpb
       - run: npm ci --omit=dev
@@ -66,8 +67,13 @@ jobs:
 
       # MCP Registry publish
       - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.5.0
+          MCP_PUBLISHER_SHA256: 79bbb73ba048c5906034f73ef6286d7763bd53cf368ea0b358fc593ed360cbd5
         run: |
-          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o mcp-publisher_linux_amd64.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
           sudo mv mcp-publisher /usr/local/bin/
       - name: Publish to MCP Registry
         run: |

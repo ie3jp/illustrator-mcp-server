@@ -62,6 +62,7 @@ export async function writeAppleScript(
 export async function writePowerShellScript(
   ps1Path: string,
   scriptPath: string,
+  options?: { activate?: boolean },
 ): Promise<void> {
   // ExtendScript の File() はスラッシュ区切りを要求
   const jsxPathForward = scriptPath.replace(/\\/g, '/');
@@ -69,6 +70,7 @@ export async function writePowerShellScript(
   const lines = [
     'try {',
     '  $ai = New-Object -ComObject "Illustrator.Application" -ErrorAction Stop',
+    ...(options?.activate ? ['  $ai.Visible = $true'] : []),
     `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathEscaped}'))")`,
     '} catch {',
     '  Write-Error "Illustrator COM automation failed: $_"',
