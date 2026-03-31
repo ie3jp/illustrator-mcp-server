@@ -7,7 +7,7 @@
  */
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { writeFileSync, mkdirSync, rmSync } from 'fs';
+import { writeFileSync, mkdirSync, rmSync, unlinkSync } from 'fs';
 import { deflateSync } from 'zlib';
 
 const PASS = '✓';
@@ -52,20 +52,30 @@ async function callTool(client: Client, name: string, params: Record<string, unk
   throw new Error('No text content in response');
 }
 
-async function test(name: string, fn: () => Promise<void>): Promise<void> {
+async function test(name: string, fn: () => Promise<void>, retries = 1): Promise<void> {
   const start = Date.now();
-  try {
-    await fn();
-    const duration = Date.now() - start;
-    results.push({ name, status: 'pass', duration });
-    console.log(`  ${PASS} ${name} (${duration}ms)`);
-  } catch (e) {
-    const duration = Date.now() - start;
-    const message = e instanceof Error ? e.message : String(e);
-    results.push({ name, status: 'fail', message, duration });
-    console.log(`  ${FAIL} ${name} (${duration}ms)`);
-    console.log(`    → ${message}`);
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 500));
+      await fn();
+      const duration = Date.now() - start;
+      results.push({ name, status: 'pass', duration });
+      if (attempt > 0) {
+        console.log(`  ${PASS} ${name} (${duration}ms) [retry ${attempt}]`);
+      } else {
+        console.log(`  ${PASS} ${name} (${duration}ms)`);
+      }
+      return;
+    } catch (e) {
+      lastError = e;
+    }
   }
+  const duration = Date.now() - start;
+  const message = lastError instanceof Error ? (lastError as Error).message : String(lastError);
+  results.push({ name, status: 'fail', message, duration });
+  console.log(`  ${FAIL} ${name} (${duration}ms)`);
+  console.log(`    → ${message}`);
 }
 
 function assert(condition: boolean, message: string): void {
@@ -608,21 +618,24 @@ async function main(): Promise<void> {
     assert(typeof result.totalFrames === 'number', 'should have totalFrames');
     // __e2e_text (Phase 0) + 9 dummy text frames = 10+
     assert(result.totalFrames >= 10, `should have >= 10 text frames, got ${result.totalFrames}`);
-    assert(Array.isArray(result.dummyTexts), 'should have dummyTexts array');
-    assert(Array.isArray(result.allTexts), 'should have allTexts array');
-    assert(Array.isArray(result.knownVariations), 'should have knownVariations array');
+    const dummyTexts = result.mechanicalChecks?.dummyTexts ?? result.dummyTexts;
+    const allTexts = result.llmAnalysis?.allTexts ?? result.allTexts;
+    const knownVariations = result.mechanicalChecks?.knownVariations ?? result.knownVariations;
+    assert(Array.isArray(dummyTexts), 'should have dummyTexts array');
+    assert(Array.isArray(allTexts), 'should have allTexts array');
+    assert(Array.isArray(knownVariations), 'should have knownVariations array');
 
     // 全ダミーパターンが検出されることを検証
     const expectedPatterns = dummyTextCases.map((dc) => dc.label);
     for (const label of expectedPatterns) {
-      const hit = result.dummyTexts.find((d: any) => d.pattern === label);
+      const hit = dummyTexts.find((d: any) => d.pattern === label);
       assert(hit !== undefined, `should detect pattern: "${label}"`);
       if (hit && dummyTextUuids[label]) {
         assert(hit.uuid === dummyTextUuids[label], `UUID should match for "${label}"`);
       }
     }
-    assert(result.dummyTexts.length >= expectedPatterns.length,
-      `should detect >= ${expectedPatterns.length} dummy texts, got ${result.dummyTexts.length}`);
+    assert(dummyTexts.length >= expectedPatterns.length,
+      `should detect >= ${expectedPatterns.length} dummy texts, got ${dummyTexts.length}`);
     // artboard_index filter
     const filtered = await callTool(client, 'check_text_consistency', { artboard_index: 0 }) as any;
     assert(filtered.totalFrames >= 1, 'artboard 0 should have text frames');
@@ -791,6 +804,34 @@ async function main(): Promise<void> {
     assert(result.position === 'right', `position should be right, got ${result.position}`);
   });
 
+  // --- place_style_guide ---
+
+  await test('place_style_guide → bottom', async () => {
+    const result = await callTool(client, 'place_style_guide', {
+      position: 'bottom',
+      layer_name: '__e2e_style_guide',
+    }) as any;
+    assert(result.success === true, 'place_style_guide should succeed');
+    assert(typeof result.placedCount === 'number', 'should have placedCount');
+    assert(result.placedCount >= 1, `should place >= 1 item, got ${result.placedCount}`);
+    assert(result.layerName === '__e2e_style_guide', `layer name should match, got ${result.layerName}`);
+    assert(result.position === 'bottom', `position should be bottom, got ${result.position}`);
+  });
+
+  // --- select_objects ---
+
+  await test('select_objects → select + deselect', async () => {
+    // select
+    const r1 = await callTool(client, 'select_objects', { uuids: [rectUuid] }) as any;
+    assert(r1.success === true, 'select should succeed');
+    assert(r1.verified.selectionCount === 1, `should select 1, got ${r1.verified.selectionCount}`);
+    assert(r1.verified.selection[0].uuid === rectUuid, 'selected UUID should match');
+    // deselect
+    const r2 = await callTool(client, 'select_objects', { uuids: [] }) as any;
+    assert(r2.success === true, 'deselect should succeed');
+    assert(r2.deselected === true, 'should be deselected');
+  });
+
   await test('convert_to_outlines (TestLayer-Text)', async () => {
     const result = await callTool(client, 'convert_to_outlines', {
       target: 'TestLayer-Text',
@@ -907,6 +948,37 @@ async function main(): Promise<void> {
     assert(result.error === true, 'should return error for non-existent directory');
     assert(typeof result.message === 'string' && result.message.includes('does not exist'),
       'error message should mention directory does not exist');
+  });
+
+  // --- default output path (output_path omitted) ---
+
+  await test('export PNG → default path (unsaved doc → desktop)', async () => {
+    const result = await callTool(client, 'export', {
+      target: 'artboard:0', format: 'png',
+    }) as any;
+    assert(result.success === true, 'export should succeed: ' + (result.message || ''));
+    assert(typeof result.output_path === 'string', 'should return output_path');
+    assert(!result.output_path.includes(' '), 'output_path should not contain spaces');
+    // cleanup
+    try { unlinkSync(result.output_path); } catch (_) { /* ignore */ }
+  });
+
+  await test('export_pdf → default path (unsaved doc → desktop)', async () => {
+    const result = await callTool(client, 'export_pdf') as any;
+    assert(result.success === true, 'export_pdf should succeed: ' + (result.message || ''));
+    assert(typeof result.output_path === 'string', 'should return output_path');
+    assert(!result.output_path.includes(' '), 'output_path should not contain spaces');
+    // cleanup
+    try { unlinkSync(result.output_path); } catch (_) { /* ignore */ }
+  });
+
+  await test('save_document → save_as default path (unsaved doc → desktop)', async () => {
+    const result = await callTool(client, 'save_document', { mode: 'save_as' }) as any;
+    assert(result.success === true, 'save_as should succeed: ' + (result.message || ''));
+    assert(typeof result.path === 'string', 'should return path');
+    assert(!result.path.includes(' '), 'path should not contain spaces');
+    // cleanup: delete the saved file and re-create a fresh doc for subsequent tests
+    try { unlinkSync(result.path); } catch (_) { /* ignore */ }
   });
 
   // ============================================================

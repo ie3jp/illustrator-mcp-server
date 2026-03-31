@@ -26,13 +26,31 @@ if (preflight) {
       doc.save();
       writeResultFile(RESULT_PATH, { success: true, mode: "save" });
     } else if (mode === "save_as") {
-      if (!params.path) {
-        writeResultFile(RESULT_PATH, { error: true, message: "path is required for save_as mode" });
-      } else {
-        var saveFile = new File(params.path);
-        doc.saveAs(saveFile);
-        writeResultFile(RESULT_PATH, { success: true, mode: "save_as", path: params.path });
+      var savePath = params.path;
+      // Default path generation when path is omitted
+      if (!savePath) {
+        var dir;
+        try {
+          var docPath = doc.path ? doc.path.fsName : '';
+          if (docPath && docPath !== '/') {
+            dir = docPath;
+          } else {
+            dir = Folder.desktop.fsName;
+          }
+        } catch (e) {
+          dir = Folder.desktop.fsName;
+        }
+        var baseName = doc.name.replace(/\\.[^.]+$/, '').replace(/ /g, '-');
+        savePath = dir + '/' + baseName + '.ai';
+        var counter = 2;
+        while (new File(savePath).exists) {
+          savePath = dir + '/' + baseName + '_' + counter + '.ai';
+          counter++;
+        }
       }
+      var saveFile = new File(savePath);
+      doc.saveAs(saveFile);
+      writeResultFile(RESULT_PATH, { success: true, mode: "save_as", path: savePath });
     } else {
       writeResultFile(RESULT_PATH, { error: true, message: "Unknown mode: " + mode });
     }
@@ -58,7 +76,7 @@ export function register(server: McpServer): void {
         path: z
           .string()
           .optional()
-          .describe('File path for save_as mode (required when mode is save_as)'),
+          .describe('File path for save_as mode. If omitted, auto-generates in the same directory as the document (or ~/Desktop for unsaved documents)'),
       },
       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },

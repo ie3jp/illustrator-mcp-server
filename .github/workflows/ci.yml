@@ -63,6 +63,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: '*.mcpb'
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
 
       # MCP Registry publish
