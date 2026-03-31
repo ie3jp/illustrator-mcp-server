@@ -412,6 +412,12 @@ The E2E test creates a fresh document, places test objects, runs 106 test cases 
 
 ---
 
+## Disclaimer
+
+This tool automates many Illustrator operations, but AI can make mistakes. Extracted data, preflight results, and document modifications should always be reviewed by a person. **Do not rely on this tool as your sole quality check.** Use it as an assistant alongside your own manual verification, especially for print submissions and client deliverables. The authors are not responsible for any damages or losses arising from the use of this software or its outputs.
+
+---
+
 ## License
 
 [MIT](LICENSE)
