@@ -467,10 +467,6 @@ Claude:  → extract_design_tokens (format: "css")
 
 ---
 
-<br>
-
-# For Developers
-
 ## MCP Prompts
 
 Workflow templates that guide Claude through multi-step tasks. Available in the Claude Desktop prompt picker.
@@ -507,6 +503,17 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 - **63 tools + 2 prompts** — 21 read / 37 modify / 2 export / 3 utility
 - **Web coordinate system** — Y-axis down, artboard-relative (same as CSS/SVG)
 - **UUID tracking** — Stable object identification across tool calls
+
+---
+
+## Coordinate System
+
+Geometry-aware read and modify tools accept a `coordinate_system` parameter. Export and document-wide utility tools do not.
+
+| Value | Origin | Y-axis | Use case |
+|---|---|---|---|
+| `artboard-web` (default) | Artboard top-left | Positive downward | Web / CSS implementation |
+| `document` | Pasteboard | Positive upward (Illustrator native) | Print / DTP |
 
 ---
 
@@ -607,6 +614,25 @@ Type `/illustrator-preflight:illustrator-preflight` in Claude Code, or just ask 
 
 ---
 
+## Known Limitations
+
+| Limitation | Details |
+|---|---|
+| macOS / Windows | macOS uses osascript, Windows uses PowerShell COM automation (not yet tested on real hardware) |
+| Live effects | ExtendScript DOM limitations prevent reading parameters for drop shadows, etc. |
+| Color profile conversion | Only profile assignment is supported; full ICC conversion is not available |
+| Bleed settings | Not accessible via the ExtendScript API (undocumented) |
+| WebP export | Not supported — ExportType does not include WebP in ExtendScript |
+| Japanese crop marks | `PageMarksTypes.Japanese` may not be applied correctly in PDF export |
+| Font embedding control | PDF font embedding mode (full/subset) is not exposed in the API. Use PDF presets instead |
+| Size variations | No text reflow. Proportional placement only (not smart layout) |
+
+---
+
+<br>
+
+# For Developers
+
 ## Architecture
 
 ```mermaid
@@ -624,15 +650,6 @@ flowchart LR
     Server -.->|generate| JSX["script-{uuid}.jsx\n(BOM UTF-8)"]
     Server -.->|generate| Runner["run-{uuid}.scpt / .ps1"]
 ```
-
-### Coordinate System
-
-Geometry-aware read and modify tools accept a `coordinate_system` parameter. Export and document-wide utility tools do not.
-
-| Value | Origin | Y-axis | Use case |
-|---|---|---|---|
-| `artboard-web` (default) | Artboard top-left | Positive downward | Web / CSS implementation |
-| `document` | Pasteboard | Positive upward (Illustrator native) | Print / DTP |
 
 ---
 
@@ -663,21 +680,6 @@ npx tsx test/e2e/smoke-test.ts
 ```
 
 The E2E test creates a fresh document, places test objects, runs 106 test cases across 6 phases covering all registered tools, and cleans up automatically.
-
----
-
-## Known Limitations
-
-| Limitation | Details |
-|---|---|
-| macOS / Windows | macOS uses osascript, Windows uses PowerShell COM automation (not yet tested on real hardware) |
-| Live effects | ExtendScript DOM limitations prevent reading parameters for drop shadows, etc. |
-| Color profile conversion | Only profile assignment is supported; full ICC conversion is not available |
-| Bleed settings | Not accessible via the ExtendScript API (undocumented) |
-| WebP export | Not supported — ExportType does not include WebP in ExtendScript |
-| Japanese crop marks | `PageMarksTypes.Japanese` may not be applied correctly in PDF export |
-| Font embedding control | PDF font embedding mode (full/subset) is not exposed in the API. Use PDF presets instead |
-| Size variations | No text reflow. Proportional placement only (not smart layout) |
 
 ---
 
