@@ -34,6 +34,9 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 3. Drag and drop the `.mcpb` file into the Extensions panel
 4. Click the **Install** button
 
+> [!CAUTION]
+> AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
+
 > [!NOTE]
 > The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
 
@@ -88,9 +91,6 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 > [!NOTE]
 > Modify and export tools will bring Illustrator to the foreground during execution.
-
-> [!CAUTION]
-> AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
 
 ---
 
