@@ -56,7 +56,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest) から **`illustrator-mcp-server-x.x.x.mcpb`** をダウンロード
+1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest) から **`illustrator-mcp-server.mcpb`** をダウンロード
 2. Claude Desktop を開き、**設定** → **拡張機能** を開く
 3. ダウンロードした `.mcpb` ファイルを拡張機能パネルにドラッグ＆ドロップ
 4. **インストール** ボタンをクリック

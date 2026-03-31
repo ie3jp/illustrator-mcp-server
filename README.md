@@ -58,7 +58,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 ### Claude Desktop
 
-1. Download **`illustrator-mcp-server-x.x.x.mcpb`** from [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
+1. Download **`illustrator-mcp-server.mcpb`** from [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
 2. Open Claude Desktop → **Settings** → **Extensions**
 3. Drag and drop the `.mcpb` file into the Extensions panel
 4. Click the **Install** button
