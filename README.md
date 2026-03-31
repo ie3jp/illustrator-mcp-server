@@ -25,8 +25,6 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ## 🚀 Quick Start
 
-**Requirements:** macOS or Windows / Adobe Illustrator CC 2024+
-
 ### 🛠️ Claude Code
 
 Requires [Node.js 20+](https://nodejs.org/).

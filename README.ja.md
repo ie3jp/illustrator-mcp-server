@@ -23,8 +23,6 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 ## 🚀 クイックスタート
 
-**必要なもの:** macOS または Windows / Adobe Illustrator CC 2024+
-
 ### 🛠️ Claude Code
 
 [Node.js 20+](https://nodejs.org/) が必要です。
