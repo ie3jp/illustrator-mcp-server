@@ -25,15 +25,20 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 **必要なもの:** macOS または Windows / Adobe Illustrator CC 2024+
 
+### 🛠️ Claude Code
+
+[Node.js 20+](https://nodejs.org/) が必要です。
+
+```bash
+claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+```
+
 ### 🖥️ Claude Desktop
 
 1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest) から **`illustrator-mcp-server.mcpb`** をダウンロード
 2. Claude Desktop を開き、**設定** → **拡張機能** を開く
 3. ダウンロードした `.mcpb` ファイルを拡張機能パネルにドラッグ＆ドロップ
 4. **インストール** ボタンをクリック
-
-> [!CAUTION]
-> AI は間違えることがあります。出力を過信せず、**入稿データの最終確認は必ず人間が行ってください**。結果についての責任は利用者にあります。
 
 > [!NOTE]
 > `.mcpb` 拡張機能は自動更新されません。更新するには新しいバージョンをダウンロードして再インストールしてください。自動更新が必要な場合は、下記の npx 方式をお使いください。
@@ -76,13 +81,8 @@ Claude Desktop のメニューバーから:
 
 </details>
 
-### 🛠️ Claude Code
-
-[Node.js 20+](https://nodejs.org/) が必要です。
-
-```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
-```
+> [!CAUTION]
+> AI は間違えることがあります。出力を過信せず、**入稿データの最終確認は必ず人間が行ってください**。結果についての責任は利用者にあります。
 
 > [!NOTE]
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。

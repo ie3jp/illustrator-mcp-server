@@ -27,15 +27,20 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 **Requirements:** macOS or Windows / Adobe Illustrator CC 2024+
 
+### 🛠️ Claude Code
+
+Requires [Node.js 20+](https://nodejs.org/).
+
+```bash
+claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+```
+
 ### 🖥️ Claude Desktop
 
 1. Download **`illustrator-mcp-server.mcpb`** from [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
 2. Open Claude Desktop → **Settings** → **Extensions**
 3. Drag and drop the `.mcpb` file into the Extensions panel
 4. Click the **Install** button
-
-> [!CAUTION]
-> AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
 
 > [!NOTE]
 > The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
@@ -78,13 +83,8 @@ From the Claude Desktop menu bar:
 
 </details>
 
-### 🛠️ Claude Code
-
-Requires [Node.js 20+](https://nodejs.org/).
-
-```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
-```
+> [!CAUTION]
+> AI can make mistakes. Do not over-rely on the output — **always have a human perform the final check on submission data**. The user is responsible for the results.
 
 > [!NOTE]
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
