@@ -363,17 +363,21 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 ```mermaid
 flowchart LR
     Claude <-->|MCP Protocol| Server["MCP Server\n(TypeScript/Node.js)"]
-    Server <-->|"execFile (macOS)"| osascript
-    Server <-->|"execFile (Windows)"| PS["powershell.exe\n(COM Automation)"]
-    osascript <-->|do javascript| AI["Adobe Illustrator\n(ExtendScript/JSX)"]
-    PS <-->|DoJavaScript| AI
 
+    Server -.->|generate| Runner["run-{uuid}.scpt / .ps1"]
+    Server -.->|generate| JSX["script-{uuid}.jsx\n(BOM UTF-8)"]
     Server -.->|write| PF["params-{uuid}.json"]
+
+    Runner -->|execFile| osascript
+    Runner -->|execFile| PS["powershell.exe"]
+
+    osascript -->|do javascript| AI["Adobe Illustrator\n(ExtendScript/JSX)"]
+    PS -->|DoJavaScript| AI
+
+    JSX -.->|execute| AI
     PF -.->|read| AI
     AI -.->|write| RF["result-{uuid}.json"]
     RF -.->|read| Server
-    Server -.->|generate| JSX["script-{uuid}.jsx\n(BOM UTF-8)"]
-    Server -.->|generate| Runner["run-{uuid}.scpt / .ps1"]
 ```
 
 ---
