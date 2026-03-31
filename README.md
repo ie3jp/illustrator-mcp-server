@@ -21,7 +21,8 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 ---
 
 > [!TIP]
-> **☕** Developing and maintaining this tool takes time and resources. If it helps your workflow, your support means a lot — [buy me a coffee!](https://ko-fi.com/cyocun)
+> Developing and maintaining this tool takes time and resources.
+> If it helps your workflow, your support means a lot — [☕ buy me a coffee!](https://ko-fi.com/cyocun)
 
 ---
 
