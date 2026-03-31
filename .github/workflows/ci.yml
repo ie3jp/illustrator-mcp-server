@@ -43,11 +43,12 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm install -g npm@latest
 
-      # Update server.json version from tag
-      - name: Update server.json version
+      # Update version in metadata files from tag
+      - name: Update server.json and manifest.json version
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          VERSION="$VERSION" node -e "const fs=require('fs'); const p='server.json'; const d=JSON.parse(fs.readFileSync(p,'utf8')); d.version=process.env.VERSION; fs.writeFileSync(p, JSON.stringify(d, null, 2)+'\\n');"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/g" server.json
+          sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
 
       # npm publish (OIDC trusted publishing)
       - run: npm ci
