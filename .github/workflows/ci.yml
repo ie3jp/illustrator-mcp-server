@@ -9,6 +9,8 @@ on:
 
 jobs:
   build-and-test:
+    permissions:
+      contents: read
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
@@ -54,7 +56,6 @@ jobs:
       - run: npm test
       - name: Publish to npm
         run: npm publish --provenance --access public
-        continue-on-error: true
 
       # GitHub Release with .mcpb
       - run: npm ci --omit=dev
@@ -63,12 +64,18 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: '*.mcpb'
+          body_path: RELEASE_NOTES.md
           generate_release_notes: true
 
       # MCP Registry publish
       - name: Install mcp-publisher
+        env:
+          MCP_PUBLISHER_VERSION: v1.5.0
+          MCP_PUBLISHER_SHA256: 79bbb73ba048c5906034f73ef6286d7763bd53cf368ea0b358fc593ed360cbd5
         run: |
-          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz mcp-publisher
+          curl -fsSL "https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" -o mcp-publisher_linux_amd64.tar.gz
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
           sudo mv mcp-publisher /usr/local/bin/
       - name: Publish to MCP Registry
         run: |

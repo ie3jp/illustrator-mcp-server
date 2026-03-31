@@ -17,6 +17,29 @@ if (preflight) {
     var doc = app.activeDocument;
     var outputPath = params.output_path;
     var preset = params.preset || "";
+
+    // Default path generation when output_path is omitted
+    if (!outputPath) {
+      var dir;
+      try {
+        var docPath = doc.path ? doc.path.fsName : '';
+        if (docPath && docPath !== '/') {
+          dir = docPath;
+        } else {
+          dir = Folder.desktop.fsName;
+        }
+      } catch (e) {
+        dir = Folder.desktop.fsName;
+      }
+      var baseName = doc.name.replace(/\\.[^.]+$/, '').replace(/ /g, '-');
+      var sep = Folder.fs === 'Windows' ? '\\\\' : '/';
+      outputPath = dir + sep + baseName + '.pdf';
+      var counter = 2;
+      while (new File(outputPath).exists) {
+        outputPath = dir + sep + baseName + '_' + counter + '.pdf';
+        counter++;
+      }
+    }
     var options = params.options || {};
 
     var pdfOpts = new PDFSaveOptions();
@@ -161,7 +184,7 @@ export function register(server: McpServer): void {
       title: 'Export PDF',
       description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) during execution. The exported PDF should be verified by a human before final submission.',
       inputSchema: {
-        output_path: z.string().describe('Output file path'),
+        output_path: z.string().optional().describe('Output file path. If omitted, auto-generates in the same directory as the document (or ~/Desktop for unsaved documents)'),
         preset: z
           .string()
           .optional()

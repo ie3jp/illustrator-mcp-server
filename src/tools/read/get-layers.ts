@@ -1,10 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
-import {
-  coordinateSystemSchema,
-  resolveCoordinateSystem,
-} from '../session.js';
+import { coordinateSystemSchema } from '../session.js';
+import { executeToolJsx } from '../tool-executor.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * get_layers — レイヤー一覧の取得
@@ -109,11 +106,7 @@ export function register(server: McpServer): void {
       annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = await executeJsx(jsxCode, resolvedParams);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

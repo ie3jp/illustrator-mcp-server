@@ -23,6 +23,35 @@ if (preflight) {
     var format = params.format;
     var outputPath = params.output_path;
     var scale = params.scale || 1;
+
+    // Default path generation when output_path is omitted
+    if (!outputPath) {
+      var dir;
+      try {
+        // doc.path is empty string for unsaved documents
+        var docPath = doc.path ? doc.path.fsName : '';
+        if (docPath && docPath !== '/') {
+          dir = docPath;
+        } else {
+          dir = Folder.desktop.fsName;
+        }
+      } catch (e) {
+        dir = Folder.desktop.fsName;
+      }
+      var baseName = doc.name.replace(/\\.[^.]+$/, '').replace(/ /g, '-');
+      // ASCII以外の文字を含む場合、SVGでは警告ダイアログが出るためフォールバック
+      if (format === 'svg' && /[^\\x00-\\x7F]/.test(baseName)) {
+        baseName = 'export';
+      }
+      var ext = format; // png, jpg, svg
+      var sep = Folder.fs === 'Windows' ? '\\\\' : '/';
+      outputPath = dir + sep + baseName + '.' + ext;
+      var counter = 2;
+      while (new File(outputPath).exists) {
+        outputPath = dir + sep + baseName + '_' + counter + '.' + ext;
+        counter++;
+      }
+    }
     var svgOpts = params.svg_options || {};
     var rasterOpts = params.raster_options || {};
 
@@ -222,11 +251,24 @@ if (preflight) {
 
       if (targetType !== "error") {
         // エクスポート後にファイル存在を検証
+        // SVG artboard exportではIllustratorが {basename}_{artboardName}.svg にリネームする
+        var actualPath = outputPath;
         var verifyFile = new File(outputPath);
-        if (!verifyFile.exists) {
+        if (!verifyFile.exists && format === "svg" && artboardIndex >= 0) {
+          var svgDir = new File(outputPath).parent.fsName;
+          var svgBase = new File(outputPath).name.replace(/\\.svg$/i, '');
+          var abName = doc.artboards[artboardIndex].name.replace(/ /g, '-');
+          var svgActual = svgDir + '/' + svgBase + '_' + abName + '.svg';
+          var svgFile = new File(svgActual);
+          if (svgFile.exists) {
+            actualPath = svgActual;
+          }
+        }
+        var finalFile = new File(actualPath);
+        if (!finalFile.exists) {
           writeResultFile(RESULT_PATH, { error: true, message: "Export completed but output file was not created. The path may not be writable: " + outputPath });
         } else {
-          var resultInfo = { success: true, output_path: outputPath, format: format };
+          var resultInfo = { success: true, output_path: actualPath, format: format };
           if (format === "png" || format === "jpg") {
             var effectiveDpi = (rasterOpts.dpi || 72) * scale;
             resultInfo.dpi = effectiveDpi;
@@ -256,7 +298,7 @@ export function register(server: McpServer): void {
         // WebP is not supported by ExtendScript API
         // format: z.enum(['svg', 'png', 'webp', 'jpg']).describe('Export format'),
         format: z.enum(['svg', 'png', 'jpg']).describe('Export format'),
-        output_path: z.string().describe('Output file path'),
+        output_path: z.string().optional().describe('Output file path. If omitted, auto-generates in the same directory as the document (or ~/Desktop for unsaved documents)'),
         scale: z.number().optional().default(1).describe('Scale factor'),
         svg_options: z
           .object({

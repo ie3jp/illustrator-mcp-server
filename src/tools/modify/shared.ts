@@ -5,8 +5,9 @@ import { z } from 'zod';
 export const coerceBoolean = z.preprocess(
   (val) => {
     if (typeof val === 'string') {
-      if (val === 'true') return true;
-      if (val === 'false') return false;
+      const normalized = val.trim().toLowerCase();
+      if (normalized === 'true') return true;
+      if (normalized === 'false') return false;
     }
     return val;
   },

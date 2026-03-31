@@ -6,4 +6,5 @@ dist/
 .DS_Store
 .mcpregistry_*
 docs/
+CLAUDE.md
 *.skill

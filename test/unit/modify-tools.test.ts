@@ -1,6 +1,4 @@
-import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { z } from 'zod';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { register as registerExport } from '../../src/tools/export/export.js';
 import { register as registerExportPdf } from '../../src/tools/export/export-pdf.js';
 import { register as registerApplyColorProfile } from '../../src/tools/modify/apply-color-profile.js';
@@ -8,23 +6,7 @@ import { register as registerConvertToOutlines } from '../../src/tools/modify/co
 import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
 import { register as registerCreateLine } from '../../src/tools/modify/create-line.js';
 import { colorSchema } from '../../src/tools/modify/shared.js';
-
-function captureInputSchema(register: (server: McpServer) => void) {
-  let inputSchema: Record<string, z.ZodTypeAny> | undefined;
-  const server = {
-    registerTool: vi.fn((_name: string, config: { inputSchema: Record<string, z.ZodTypeAny> }) => {
-      inputSchema = config.inputSchema;
-    }),
-  } as unknown as McpServer;
-
-  register(server);
-
-  if (!inputSchema) {
-    throw new Error('Tool schema was not registered');
-  }
-
-  return z.object(inputSchema);
-}
+import { captureInputSchema } from './helpers/tool-schema.js';
 
 describe('modify tool schemas', () => {
   it('rejects incomplete RGB colors', () => {
