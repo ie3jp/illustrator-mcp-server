@@ -40,11 +40,11 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 3. Drag and drop the `.mcpb` file into the Extensions panel
 4. Click the **Install** button
 
-> [!NOTE]
-> The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
-
 <details>
 <summary><strong>Alternative: manual config (always up to date via npx)</strong></summary>
+
+> [!NOTE]
+> The `.mcpb` extension does not auto-update. To update, download the new version and reinstall. If you prefer automatic updates, use the npx method below instead.
 
 Requires [Node.js 20+](https://nodejs.org/). Open the config file and add the connection settings.
 
