@@ -26,33 +26,7 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 ## 🚀 クイックスタート
 
-**必要なもの:** macOS または Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
-
-<details>
-<summary><strong>Node.js のインストール方法（初めての方はこちら）</strong></summary>
-
-Node.js は、このツールを動かすために必要なソフトウェアです。
-すでにインストール済みの方はスキップしてください。
-
-1. [nodejs.org](https://nodejs.org/) を開く
-2. **「LTS」と書かれた緑色のボタン**をクリックしてダウンロード
-3. ダウンロードしたファイルを開き、画面の指示に従ってインストール
-
-インストールできたか確認するには、ターミナル（macOS）またはコマンドプロンプト（Windows）を開いて以下を入力します:
-
-```bash
-node -v
-```
-
-`v20.x.x` のようにバージョン番号が表示されれば OK です。
-
-</details>
-
-### Claude Code
-
-```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
-```
+**必要なもの:** macOS または Windows / Adobe Illustrator CC 2024+
 
 ### Claude Desktop
 
@@ -67,7 +41,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 <details>
 <summary><strong>別の方法: 手動設定（npx 経由で常に最新版）</strong></summary>
 
-設定ファイルを開いて、接続情報を書き込みます。
+[Node.js 20+](https://nodejs.org/) が必要です。設定ファイルを開いて、接続情報を書き込みます。
 
 #### 1. 設定ファイルを開く
 

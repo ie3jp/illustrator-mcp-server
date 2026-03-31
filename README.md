@@ -28,33 +28,7 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ## 🚀 Quick Start
 
-**Requirements:** macOS or Windows / Adobe Illustrator CC 2024+ / [Node.js 20+](https://nodejs.org/)
-
-<details>
-<summary><strong>How to install Node.js (first-time setup)</strong></summary>
-
-Node.js is a runtime required to run this tool.
-Skip this section if you already have it installed.
-
-1. Go to [nodejs.org](https://nodejs.org/)
-2. Click the **green "LTS" button** to download
-3. Open the downloaded file and follow the installer instructions
-
-To verify the installation, open Terminal (macOS) or Command Prompt (Windows) and type:
-
-```bash
-node -v
-```
-
-If you see a version number like `v20.x.x`, you're all set.
-
-</details>
-
-### Claude Code
-
-```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
-```
+**Requirements:** macOS or Windows / Adobe Illustrator CC 2024+
 
 ### Claude Desktop
 
@@ -69,7 +43,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 <details>
 <summary><strong>Alternative: manual config (always up to date via npx)</strong></summary>
 
-Open the config file and add the connection settings.
+Requires [Node.js 20+](https://nodejs.org/). Open the config file and add the connection settings.
 
 #### 1. Open the config file
 
@@ -103,6 +77,14 @@ From the Claude Desktop menu bar:
 2. **Fully quit** Claude Desktop (⌘Q / Ctrl+Q) and reopen it
 
 </details>
+
+### Claude Code
+
+Requires [Node.js 20+](https://nodejs.org/).
+
+```bash
+claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+```
 
 > [!NOTE]
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
