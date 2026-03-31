@@ -27,7 +27,7 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 **Requirements:** macOS or Windows / Adobe Illustrator CC 2024+
 
-### Claude Desktop
+### 🖥️ Claude Desktop
 
 1. Download **`illustrator-mcp-server.mcpb`** from [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
 2. Open Claude Desktop → **Settings** → **Extensions**
@@ -78,7 +78,7 @@ From the Claude Desktop menu bar:
 
 </details>
 
-### Claude Code
+### 🛠️ Claude Code
 
 Requires [Node.js 20+](https://nodejs.org/).
 

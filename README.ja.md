@@ -25,7 +25,7 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 **必要なもの:** macOS または Windows / Adobe Illustrator CC 2024+
 
-### Claude Desktop
+### 🖥️ Claude Desktop
 
 1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest) から **`illustrator-mcp-server.mcpb`** をダウンロード
 2. Claude Desktop を開き、**設定** → **拡張機能** を開く
@@ -76,7 +76,7 @@ Claude Desktop のメニューバーから:
 
 </details>
 
-### Claude Code
+### 🛠️ Claude Code
 
 [Node.js 20+](https://nodejs.org/) が必要です。
 
