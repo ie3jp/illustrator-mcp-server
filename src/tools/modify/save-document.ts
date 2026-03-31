@@ -41,10 +41,11 @@ if (preflight) {
           dir = Folder.desktop.fsName;
         }
         var baseName = doc.name.replace(/\\.[^.]+$/, '').replace(/ /g, '-');
-        savePath = dir + '/' + baseName + '.ai';
+        var sep = Folder.fs === 'Windows' ? '\\\\' : '/';
+        savePath = dir + sep + baseName + '.ai';
         var counter = 2;
         while (new File(savePath).exists) {
-          savePath = dir + '/' + baseName + '_' + counter + '.ai';
+          savePath = dir + sep + baseName + '_' + counter + '.ai';
           counter++;
         }
       }

@@ -32,10 +32,11 @@ if (preflight) {
         dir = Folder.desktop.fsName;
       }
       var baseName = doc.name.replace(/\\.[^.]+$/, '').replace(/ /g, '-');
-      outputPath = dir + '/' + baseName + '.pdf';
+      var sep = Folder.fs === 'Windows' ? '\\\\' : '/';
+      outputPath = dir + sep + baseName + '.pdf';
       var counter = 2;
       while (new File(outputPath).exists) {
-        outputPath = dir + '/' + baseName + '_' + counter + '.pdf';
+        outputPath = dir + sep + baseName + '_' + counter + '.pdf';
         counter++;
       }
     }

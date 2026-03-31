@@ -44,10 +44,11 @@ if (preflight) {
         baseName = 'export';
       }
       var ext = format; // png, jpg, svg
-      outputPath = dir + '/' + baseName + '.' + ext;
+      var sep = Folder.fs === 'Windows' ? '\\\\' : '/';
+      outputPath = dir + sep + baseName + '.' + ext;
       var counter = 2;
       while (new File(outputPath).exists) {
-        outputPath = dir + '/' + baseName + '_' + counter + '.' + ext;
+        outputPath = dir + sep + baseName + '_' + counter + '.' + ext;
         counter++;
       }
     }
