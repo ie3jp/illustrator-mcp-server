@@ -76,6 +76,13 @@ Claude Desktop のメニューバーから:
 
 </details>
 
+### Claude Code
+
+[Node.js 20+](https://nodejs.org/) が必要です。
+
+```bash
+claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+```
 
 > [!NOTE]
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
