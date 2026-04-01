@@ -305,6 +305,40 @@ function preflightChecks() {
   return null;
 }
 
+// --- フォアグラウンド必須メニューコマンド実行 ---
+
+/**
+ * app.executeMenuCommand のラッパー。
+ * 失敗時にフォアグラウンド要求のガイダンス付きエラーを投げる。
+ * executeMenuCommand はIllustratorが前面でないと失敗するため、
+ * ユーザーにウィンドウを切り替えないよう案内する。
+ */
+function executeMenuCommandSafe(command) {
+  try {
+    app.executeMenuCommand(command);
+  } catch (e) {
+    throw new Error(
+      "Menu command \"" + command + "\" failed. " +
+      "Illustrator must be in the foreground during execution. " +
+      "Please do not switch windows while the operation is running. " +
+      "(コマンド \"" + command + "\" に失敗しました。実行中は Illustrator を前面に保ち、ウィンドウを切り替えないでください)" +
+      " / Original error: " + e.message
+    );
+  }
+}
+
+/**
+ * TrimMark メニューコマンドを実行する。
+ * v25 → レガシー の順にフォールバック。
+ */
+function executeTrimMark() {
+  try {
+    executeMenuCommandSafe("TrimMark v25");
+  } catch (e1) {
+    executeMenuCommandSafe("TrimMark");
+  }
+}
+
 // --- オブジェクトタイプ判定 ---
 
 function getItemType(item) {
