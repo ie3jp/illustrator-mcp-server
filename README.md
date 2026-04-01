@@ -348,7 +348,7 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 | Color profiles | Color profile assignment only — full conversion is not available |
 | Bleed settings | Bleed settings cannot be read (Illustrator API limitation) |
 | WebP export | Not supported — use PNG or SVG instead |
-| Japanese crop marks | May not render correctly in PDF export in some cases |
+| Japanese crop marks | PDF export automatically uses the TrimMark command approach: generates marks as document paths, exports, then removes via undo |
 | Font embedding | Embedding mode (full/subset) cannot be controlled directly — use PDF presets |
 | Size variations | Proportional scaling only — text may need manual adjustment afterward |
 
