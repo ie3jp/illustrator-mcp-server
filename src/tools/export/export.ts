@@ -107,7 +107,7 @@ if (preflight) {
 
       if (useIsolatedExport) {
         // 選択オブジェクトをコピー
-        app.executeMenuCommand("copy");
+        executeMenuCommandSafe("copy");
 
         // 対象オブジェクトの bounds を取得（[left, top, right, bottom] in document coords）
         var vb = targetItem.visibleBounds;
@@ -120,7 +120,7 @@ if (preflight) {
         tempDoc.artboards[0].artboardRect = [0, objH, objW, 0];
 
         // ペースト
-        app.executeMenuCommand("paste");
+        executeMenuCommandSafe("paste");
 
         // ペーストされたオブジェクトをアートボード中央に配置
         if (tempDoc.selection && tempDoc.selection.length > 0) {

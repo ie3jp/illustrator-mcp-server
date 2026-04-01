@@ -42,6 +42,68 @@ if (preflight) {
     }
     var options = params.options || {};
 
+    // --- 日本式トンボ: TrimMark コマンドでドキュメント上に生成 ---
+    // PDFSaveOptions.pageMarksType = PageMarksTypes.Japanese は
+    // Illustrator バージョンによって正しく反映されない場合がある。
+    // そのため日本式トンボはドキュメント上にパスとして生成し、
+    // アートボードを一時拡張して PDF に含める。書き出し後に復元する。
+    var usedDocumentMarks = false;
+    var trimMarkGroups = [];
+    var origAbRect = null;
+    var abIdx = doc.artboards.getActiveArtboardIndex();
+    if (options.marks_style === "japanese" && options.trim_marks === true) {
+      try {
+        app.preferences.setBooleanPreference("cropMarkStyle", true);
+
+        var groupCountBefore = doc.groupItems.length;
+
+        var abRect = doc.artboards[abIdx].artboardRect;
+        origAbRect = abRect.slice();
+        var tempRect = doc.pathItems.rectangle(abRect[1], abRect[0], abRect[2] - abRect[0], abRect[1] - abRect[3]);
+        tempRect.filled = false;
+        tempRect.stroked = false;
+
+        doc.selection = null;
+        tempRect.selected = true;
+        executeTrimMark();
+
+        try { tempRect.remove(); } catch (re) { /* consumed by command */ }
+        doc.selection = null;
+
+        var newGroupCount = doc.groupItems.length - groupCountBefore;
+        for (var g = 0; g < newGroupCount; g++) {
+          trimMarkGroups.push(doc.groupItems[g]);
+        }
+
+        // TrimMark がグループを生成しなかった場合はフォールバック
+        if (trimMarkGroups.length === 0) {
+          throw new Error("TrimMark command produced no marks");
+        }
+
+        // トンボが収まるようにアートボードを一時拡張
+        if (trimMarkGroups.length > 0) {
+          var mb = trimMarkGroups[0].geometricBounds.slice();
+          for (var g = 1; g < trimMarkGroups.length; g++) {
+            var gb = trimMarkGroups[g].geometricBounds;
+            if (gb[0] < mb[0]) mb[0] = gb[0];
+            if (gb[1] > mb[1]) mb[1] = gb[1];
+            if (gb[2] > mb[2]) mb[2] = gb[2];
+            if (gb[3] < mb[3]) mb[3] = gb[3];
+          }
+          doc.artboards[abIdx].artboardRect = [mb[0] - 1, mb[1] + 1, mb[2] + 1, mb[3] - 1];
+        }
+
+        usedDocumentMarks = true;
+      } catch (tmErr) {
+        // TrimMark コマンド失敗時は PDFSaveOptions にフォールバック
+        usedDocumentMarks = false;
+        // アートボードを復元（途中で拡張済みの場合）
+        if (origAbRect) {
+          try { doc.artboards[abIdx].artboardRect = origAbRect; } catch (restoreErr) {}
+        }
+      }
+    }
+
     var pdfOpts = new PDFSaveOptions();
 
     // Apply preset if specified
@@ -53,43 +115,53 @@ if (preflight) {
       pdfOpts.preserveEditability = false;
     }
 
-    // トンボ種類（enum名とリテラル値の両方を試す）
-    if (options.marks_style === "japanese") {
-      pdfOpts.pageMarksType = PageMarksTypes.Japanese;
+    // トンボ種類
+    if (usedDocumentMarks) {
+      // ドキュメント上にトンボを生成済み → PDF のマークは OFF
+      pdfOpts.trimMarks = false;
     } else if (options.marks_style === "roman") {
       pdfOpts.pageMarksType = PageMarksTypes.Roman;
-    }
-
-    // トンボ ON/OFF
-    if (options.trim_marks === true) {
-      pdfOpts.trimMarks = true;
+      if (options.trim_marks === true) {
+        pdfOpts.trimMarks = true;
+      } else {
+        pdfOpts.trimMarks = false;
+      }
     } else {
-      pdfOpts.trimMarks = false;
+      // marks_style 未指定 or フォールバック
+      if (options.marks_style === "japanese") {
+        // TrimMark コマンド失敗時のフォールバック
+        pdfOpts.pageMarksType = PageMarksTypes.Japanese;
+      }
+      if (options.trim_marks === true) {
+        pdfOpts.trimMarks = true;
+      } else {
+        pdfOpts.trimMarks = false;
+      }
     }
 
-    // 日本式トンボの場合、必須設定を自動適用
-    if (options.marks_style === "japanese" && options.trim_marks === true) {
-      // レジストレーションマーク（センタートンボ）が未指定なら自動ON
+    // 日本式トンボ（PDFSaveOptions フォールバック時）の必須設定を自動適用
+    if (options.marks_style === "japanese" && options.trim_marks === true && !usedDocumentMarks) {
       if (typeof options.registration_marks === "undefined") {
         pdfOpts.registrationMarks = true;
       }
-      // 裁ち落としが未指定なら3mm自動設定（外トンボの表示に必要）
       if (options.bleed !== true) {
         var bleedPt = 8.504; // 3mm
         pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
       }
     }
 
-    // トンボの太さ（文字列・数値両対応）
-    var tw = String(options.trim_mark_weight);
-    if (tw === "0.125") {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
-    } else if (tw === "0.25") {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT025;
-    } else if (tw === "0.5") {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT05;
-    } else if (options.trim_marks === true) {
-      pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
+    // トンボの太さ（文字列・数値両対応） — ドキュメントマーク時は不要
+    if (!usedDocumentMarks) {
+      var tw = String(options.trim_mark_weight);
+      if (tw === "0.125") {
+        pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
+      } else if (tw === "0.25") {
+        pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT025;
+      } else if (tw === "0.5") {
+        pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT05;
+      } else if (options.trim_marks === true) {
+        pdfOpts.trimMarkWeight = PDFTrimMarkWeight.TRIMMARKWEIGHT0125;
+      }
     }
 
     // レジストレーションマーク
@@ -107,10 +179,9 @@ if (preflight) {
       pdfOpts.pageInformation = options.page_information;
     }
 
-    // Bleed
-    if (options.bleed === true) {
-      // Set 3mm bleed on all sides (approx 8.504 pt)
-      var bleedPt = 8.504;
+    // Bleed — ドキュメントマーク時はアートボード拡張済みなので bleed 不要
+    if (options.bleed === true && !usedDocumentMarks) {
+      var bleedPt = 8.504; // 3mm
       pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
     }
 
@@ -161,14 +232,38 @@ if (preflight) {
     if (!parentFolder.exists) {
       writeResultFile(RESULT_PATH, { error: true, message: "Output directory does not exist: " + parentFolder.fsName });
     } else {
-      doc.saveAs(outFile, pdfOpts);
+      var saveError = null;
+      try {
+        doc.saveAs(outFile, pdfOpts);
+      } catch (saveErr) {
+        saveError = saveErr;
+      } finally {
+        // ドキュメントを元の状態に復元（saveAs の成否にかかわらず必ず実行）
+        if (usedDocumentMarks) {
+          for (var g = 0; g < trimMarkGroups.length; g++) {
+            try { trimMarkGroups[g].remove(); } catch (re) {}
+          }
+          if (origAbRect) {
+            try { doc.artboards[abIdx].artboardRect = origAbRect; } catch (restoreErr) {}
+          }
+        }
+      }
 
-      // エクスポート後にファイル存在を検証
-      var verifyFile = new File(outputPath);
-      if (!verifyFile.exists) {
-        writeResultFile(RESULT_PATH, { error: true, message: "PDF export completed but output file was not created. The path may not be writable: " + outputPath });
+      if (saveError) {
+        writeResultFile(RESULT_PATH, { error: true, message: "PDF export failed: " + saveError.message, line: saveError.line });
       } else {
-        writeResultFile(RESULT_PATH, { success: true, output_path: outputPath });
+        // エクスポート後にファイル存在を検証
+        var verifyFile = new File(outputPath);
+        if (!verifyFile.exists) {
+          writeResultFile(RESULT_PATH, { error: true, message: "PDF export completed but output file was not created. The path may not be writable: " + outputPath });
+        } else {
+          var result = { success: true, output_path: outputPath };
+          if (usedDocumentMarks) {
+            result.japanese_marks_method = "document_trimmark";
+            result.japanese_marks_note = "Japanese crop marks were generated as document paths via TrimMark command for reliable rendering, then removed after export.";
+          }
+          writeResultFile(RESULT_PATH, result);
+        }
       }
     }
   } catch (e) {

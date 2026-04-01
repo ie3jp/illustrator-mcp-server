@@ -46,6 +46,7 @@ import { register as registerReplaceColor } from './modify/replace-color.js';
 import { register as registerManageLayers } from './modify/manage-layers.js';
 import { register as registerPlaceColorChips } from './modify/place-color-chips.js';
 import { register as registerPlaceStyleGuide } from './modify/place-style-guide.js';
+import { register as registerCreateCropMarks } from './modify/create-crop-marks.js';
 
 // Phase 5: ドキュメント管理ツール
 import { register as registerCreateDocument } from './modify/create-document.js';
@@ -120,6 +121,7 @@ export function registerAllTools(server: McpServer): void {
   registerManageLayers(server);
   registerPlaceColorChips(server);
   registerPlaceStyleGuide(server);
+  registerCreateCropMarks(server);
 
   // Phase 5: ドキュメント管理
   registerCreateDocument(server);
