@@ -50,6 +50,16 @@ function getTransport(): Transport {
 }
 
 /**
+ * ILLUSTRATOR_APP_PATH 環境変数からアプリパスを取得する。
+ *
+ * macOS 例: "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"
+ * Windows 例: "C:\Program Files\Adobe\Adobe Illustrator 2025\Support Files\Contents\Windows\Illustrator.exe"
+ */
+export function getAppPath(): string | undefined {
+  return process.env['ILLUSTRATOR_APP_PATH'] || undefined;
+}
+
+/**
  * 実行中の JSX がすべて完了するまで待機する（シャットダウン用）
  */
 export function waitForPendingExecutions(): Promise<void> {
@@ -151,7 +161,7 @@ async function executeViaOsascript(
     await writeParams(files.paramsPath, params);
     const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
     await writeJsx(files.scriptPath, fullJsx);
-    await writeAppleScript(files.runnerPath, files.scriptPath, { activate });
+    await writeAppleScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
 
     await new Promise<void>((resolve, reject) => {
       execFile('osascript', [files.runnerPath], { timeout }, (error, _stdout, stderr) => {
@@ -180,7 +190,7 @@ async function executeViaPowerShell(
     await writeParams(files.paramsPath, params);
     const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
     await writeJsx(files.scriptPath, fullJsx);
-    await writePowerShellScript(files.runnerPath, files.scriptPath, { activate });
+    await writePowerShellScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
 
     await new Promise<void>((resolve, reject) => {
       execFile(

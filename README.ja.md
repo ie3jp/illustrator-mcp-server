@@ -88,6 +88,44 @@ Claude Desktop のメニューバーから:
 > [!NOTE]
 > 操作系・書き出し系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。
 
+### 詳細設定
+
+#### Illustrator のバージョンを指定する
+
+複数バージョンの Illustrator がインストールされている場合、環境変数 `ILLUSTRATOR_APP_PATH` にアプリケーションのフルパスを指定することで、使用するバージョンを選択できます。
+
+**macOS:**
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_APP_PATH": "/Applications/Adobe Illustrator 2025/Adobe Illustrator.app"
+      }
+    }
+  }
+}
+```
+
+**Windows:**
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_APP_PATH": "C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## 🎬 こんなことができます

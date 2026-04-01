@@ -9,8 +9,8 @@ import * as os from 'os';
 import * as path from 'path';
 import type { ExecFileException } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { writePowerShellScript } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage, resolveTransport } from '../../src/executor/jsx-runner.js';
+import { writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
+import { getExecFailureMessage, getAppPath, resolveTransport } from '../../src/executor/jsx-runner.js';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
 
@@ -33,6 +33,73 @@ describe('resolveTransport', () => {
 
   it('ILLUSTRATOR_MCP_TRANSPORT=powershell は darwin でも powershell を返す', () => {
     expect(resolveTransport('darwin', 'powershell')).toBe('powershell');
+  });
+});
+
+// ─── getAppPath ─────────────────────────────────────────────────────────────
+
+describe('getAppPath', () => {
+  const originalEnv = process.env['ILLUSTRATOR_APP_PATH'];
+
+  afterEach(() => {
+    if (originalEnv === undefined) {
+      delete process.env['ILLUSTRATOR_APP_PATH'];
+    } else {
+      process.env['ILLUSTRATOR_APP_PATH'] = originalEnv;
+    }
+  });
+
+  it('未設定の場合は undefined を返す', () => {
+    delete process.env['ILLUSTRATOR_APP_PATH'];
+    expect(getAppPath()).toBeUndefined();
+  });
+
+  it('空文字列の場合は undefined を返す', () => {
+    process.env['ILLUSTRATOR_APP_PATH'] = '';
+    expect(getAppPath()).toBeUndefined();
+  });
+
+  it('設定されている場合はパスを返す', () => {
+    process.env['ILLUSTRATOR_APP_PATH'] = '/Applications/Adobe Illustrator 2024/Adobe Illustrator.app';
+    expect(getAppPath()).toBe('/Applications/Adobe Illustrator 2024/Adobe Illustrator.app');
+  });
+});
+
+// ─── writeAppleScript ────────────────────────────────────────────────────────
+
+describe('writeAppleScript', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-as-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('デフォルトでは "Adobe Illustrator" を対象にする', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx');
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).toContain('tell application "Adobe Illustrator"');
+  });
+
+  it('appPath 指定時はフルパスで tell application する', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx', {
+      appPath: '/Applications/Adobe Illustrator 2024/Adobe Illustrator.app',
+    });
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).toContain('tell application "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"');
+    expect(content).not.toContain('tell application "Adobe Illustrator"');
+  });
+
+  it('activate オプションが反映される', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx', { activate: true });
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).toContain('activate');
   });
 });
 
@@ -83,6 +150,27 @@ describe('writePowerShellScript', () => {
     const content = await fs.readFile(ps1, 'utf-8');
 
     expect(content).toContain('/tmp/illustrator-mcp/script.jsx');
+  });
+
+  it('appPath 指定時は Start-Process でアプリを起動するコードを含む', async () => {
+    const ps1 = path.join(tmpDir, 'run.ps1');
+    await writePowerShellScript(ps1, '/tmp/script.jsx', {
+      appPath: 'C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe',
+    });
+    const content = await fs.readFile(ps1, 'utf-8');
+
+    expect(content).toContain('Start-Process');
+    expect(content).toContain('Illustrator.exe');
+    // COM 接続も含む
+    expect(content).toContain('New-Object -ComObject "Illustrator.Application"');
+  });
+
+  it('appPath 未指定時は Start-Process を含まない', async () => {
+    const ps1 = path.join(tmpDir, 'run.ps1');
+    await writePowerShellScript(ps1, '/tmp/script.jsx');
+    const content = await fs.readFile(ps1, 'utf-8');
+
+    expect(content).not.toContain('Start-Process');
   });
 });
 

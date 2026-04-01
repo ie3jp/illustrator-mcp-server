@@ -90,6 +90,44 @@ From the Claude Desktop menu bar:
 > [!NOTE]
 > Modify and export tools will bring Illustrator to the foreground during execution.
 
+### Advanced Configuration
+
+#### Specifying an Illustrator version
+
+If you have multiple versions of Illustrator installed and want to target a specific version, set the `ILLUSTRATOR_APP_PATH` environment variable to the full path of the Illustrator application.
+
+**macOS:**
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_APP_PATH": "/Applications/Adobe Illustrator 2025/Adobe Illustrator.app"
+      }
+    }
+  }
+}
+```
+
+**Windows:**
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_APP_PATH": "C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## 🎬 What You Can Do

@@ -46,9 +46,14 @@ export async function writeJsx(scriptPath: string, jsxCode: string): Promise<voi
 export async function writeAppleScript(
   scptPath: string,
   scriptPath: string,
-  options?: { activate?: boolean },
+  options?: { activate?: boolean; appPath?: string },
 ): Promise<void> {
-  const lines = ['tell application "Adobe Illustrator"'];
+  // appPath が指定された場合はフルパスで tell application する
+  // 例: "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"
+  const appTarget = options?.appPath
+    ? options.appPath.replace(/"/g, '\\"')
+    : 'Adobe Illustrator';
+  const lines = [`tell application "${appTarget}"`];
   if (options?.activate) {
     lines.push('  activate');
   }
@@ -62,13 +67,28 @@ export async function writeAppleScript(
 export async function writePowerShellScript(
   ps1Path: string,
   scriptPath: string,
-  options?: { activate?: boolean },
+  options?: { activate?: boolean; appPath?: string },
 ): Promise<void> {
   // ExtendScript の File() はスラッシュ区切りを要求
   const jsxPathForward = scriptPath.replace(/\\/g, '/');
   const jsxPathEscaped = jsxPathForward.replace(/'/g, "\\'");
+
+  // appPath が指定された場合は COM の代わりにプロセスを起動して COM 接続
+  // COM ProgID はバージョンごとに同じ "Illustrator.Application" なので、
+  // appPath 指定時はまず対象バージョンを起動してから COM で接続する
+  const launchLines = options?.appPath
+    ? [
+      `  $exePath = "${options.appPath.replace(/"/g, '`"')}"`,
+      '  if (-not (Get-Process -Name "Illustrator" -ErrorAction SilentlyContinue)) {',
+      '    Start-Process $exePath',
+      '    Start-Sleep -Seconds 5',
+      '  }',
+    ]
+    : [];
+
   const lines = [
     'try {',
+    ...launchLines,
     '  $ai = New-Object -ComObject "Illustrator.Application" -ErrorAction Stop',
     ...(options?.activate ? ['  $ai.Visible = $true'] : []),
     `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathEscaped}'))")`,
