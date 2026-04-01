@@ -94,9 +94,7 @@ From the Claude Desktop menu bar:
 
 #### Specifying an Illustrator version
 
-If you have multiple versions of Illustrator installed and want to target a specific version, set the `ILLUSTRATOR_APP_PATH` environment variable to the full path of the Illustrator application.
-
-**macOS:**
+If you have multiple versions of Illustrator installed and want to target a specific version, set the `ILLUSTRATOR_VERSION` environment variable to the version year (e.g. `"2025"`).
 
 ```json
 {
@@ -105,28 +103,24 @@ If you have multiple versions of Illustrator installed and want to target a spec
       "command": "npx",
       "args": ["illustrator-mcp-server"],
       "env": {
-        "ILLUSTRATOR_APP_PATH": "/Applications/Adobe Illustrator 2025/Adobe Illustrator.app"
+        "ILLUSTRATOR_VERSION": "2025"
       }
     }
   }
 }
 ```
 
-**Windows:**
+> [!NOTE]
+> If Illustrator is already running, the server will connect to the running instance regardless of the version setting. The version is only used to launch the correct version when Illustrator is not yet running.
 
-```json
-{
-  "mcpServers": {
-    "illustrator": {
-      "command": "npx",
-      "args": ["illustrator-mcp-server"],
-      "env": {
-        "ILLUSTRATOR_APP_PATH": "C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe"
-      }
-    }
-  }
-}
-```
+For non-standard install locations, use `ILLUSTRATOR_APP_PATH` instead to specify the full path:
+
+| Platform | Example path |
+|----------|-------------|
+| macOS | `/Applications/Adobe Illustrator 2025/Adobe Illustrator.app` |
+| Windows | `C:\Program Files\Adobe\Adobe Illustrator 2025\Support Files\Contents\Windows\Illustrator.exe` |
+
+`ILLUSTRATOR_APP_PATH` takes priority over `ILLUSTRATOR_VERSION` if both are set.
 
 ---
 

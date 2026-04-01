@@ -92,9 +92,7 @@ Claude Desktop のメニューバーから:
 
 #### Illustrator のバージョンを指定する
 
-複数バージョンの Illustrator がインストールされている場合、環境変数 `ILLUSTRATOR_APP_PATH` にアプリケーションのフルパスを指定することで、使用するバージョンを選択できます。
-
-**macOS:**
+複数バージョンの Illustrator がインストールされている場合、環境変数 `ILLUSTRATOR_VERSION` にバージョンの年号（例: `"2025"`）を指定できます。
 
 ```json
 {
@@ -103,28 +101,24 @@ Claude Desktop のメニューバーから:
       "command": "npx",
       "args": ["illustrator-mcp-server"],
       "env": {
-        "ILLUSTRATOR_APP_PATH": "/Applications/Adobe Illustrator 2025/Adobe Illustrator.app"
+        "ILLUSTRATOR_VERSION": "2025"
       }
     }
   }
 }
 ```
 
-**Windows:**
+> [!NOTE]
+> すでに Illustrator が起動している場合は、バージョン設定に関わらず起動中のインスタンスに接続します。バージョン指定は、Illustrator が未起動の場合に起動するバージョンを決定するためのものです。
 
-```json
-{
-  "mcpServers": {
-    "illustrator": {
-      "command": "npx",
-      "args": ["illustrator-mcp-server"],
-      "env": {
-        "ILLUSTRATOR_APP_PATH": "C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe"
-      }
-    }
-  }
-}
-```
+デフォルト以外の場所にインストールしている場合は、`ILLUSTRATOR_APP_PATH` でフルパスを指定してください：
+
+| プラットフォーム | パスの例 |
+|----------|-------------|
+| macOS | `/Applications/Adobe Illustrator 2025/Adobe Illustrator.app` |
+| Windows | `C:\Program Files\Adobe\Adobe Illustrator 2025\Support Files\Contents\Windows\Illustrator.exe` |
+
+両方設定した場合、`ILLUSTRATOR_APP_PATH` が `ILLUSTRATOR_VERSION` より優先されます。
 
 ---
 

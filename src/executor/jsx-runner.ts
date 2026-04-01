@@ -49,14 +49,44 @@ function getTransport(): Transport {
   return _transport;
 }
 
+// ─── アプリパス解決 ─────────────────────────────────────────────────────────
+//
+//  優先順位:
+//    1. ILLUSTRATOR_APP_PATH (フルパス指定)
+//    2. ILLUSTRATOR_VERSION  (バージョン番号 → パス自動解決)
+//    3. 未指定 → undefined (デフォルトの "Adobe Illustrator" に接続)
+//
+
 /**
- * ILLUSTRATOR_APP_PATH 環境変数からアプリパスを取得する。
- *
- * macOS 例: "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"
- * Windows 例: "C:\Program Files\Adobe\Adobe Illustrator 2025\Support Files\Contents\Windows\Illustrator.exe"
+ * バージョン番号（例: "2025"）からアプリのフルパスを解決する。
  */
-export function getAppPath(): string | undefined {
-  return process.env['ILLUSTRATOR_APP_PATH'] || undefined;
+export function resolveVersionToPath(
+  version: string,
+  platform: string = process.platform,
+): string {
+  if (platform === 'darwin') {
+    return `/Applications/Adobe Illustrator ${version}/Adobe Illustrator.app`;
+  }
+  if (platform === 'win32') {
+    return `C:\\Program Files\\Adobe\\Adobe Illustrator ${version}\\Support Files\\Contents\\Windows\\Illustrator.exe`;
+  }
+  throw new Error(`Unsupported platform: ${platform}`);
+}
+
+/**
+ * 環境変数からアプリパスを取得する。
+ *
+ * - ILLUSTRATOR_APP_PATH: フルパス指定（最優先）
+ * - ILLUSTRATOR_VERSION: バージョン番号（例: "2025"）→ パス自動解決
+ */
+export function getAppPath(
+  platform: string = process.platform,
+  appPathEnv: string | undefined = process.env['ILLUSTRATOR_APP_PATH'],
+  versionEnv: string | undefined = process.env['ILLUSTRATOR_VERSION'],
+): string | undefined {
+  if (appPathEnv) return appPathEnv;
+  if (versionEnv) return resolveVersionToPath(versionEnv, platform);
+  return undefined;
 }
 
 /**

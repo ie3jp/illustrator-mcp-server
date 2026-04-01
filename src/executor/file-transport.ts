@@ -48,19 +48,41 @@ export async function writeAppleScript(
   scriptPath: string,
   options?: { activate?: boolean; appPath?: string },
 ): Promise<void> {
-  // appPath が指定された場合はフルパスで tell application する
-  // 例: "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"
-  const appTarget = options?.appPath
-    ? options.appPath.replace(/"/g, '\\"')
-    : 'Adobe Illustrator';
-  const lines = [`tell application "${appTarget}"`];
-  if (options?.activate) {
-    lines.push('  activate');
-  }
   const escaped = scriptPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  lines.push(`  do javascript of file "${escaped}"`);
-  lines.push('end tell');
-  await fs.writeFile(scptPath, lines.join('\n'), 'utf-8');
+  const activateLine = options?.activate ? '\n  activate' : '';
+  const jsxLine = `  do javascript of file "${escaped}"`;
+
+  let script: string;
+  if (options?.appPath) {
+    // appPath 指定時: 起動済みイラレがあればそちらに接続、なければ指定バージョンを起動
+    const appPathEscaped = options.appPath.replace(/"/g, '\\"');
+    script = [
+      '-- 起動済みの Illustrator があればそちらを優先',
+      'tell application "System Events"',
+      '  set isRunning to (exists (processes whose name contains "Illustrator"))',
+      'end tell',
+      '',
+      'if isRunning then',
+      `  tell application "Adobe Illustrator"${activateLine}`,
+      `  ${jsxLine}`,
+      '  end tell',
+      'else',
+      `  tell application "${appPathEscaped}"`,
+      '    activate',
+      `  ${jsxLine}`,
+      '  end tell',
+      'end if',
+    ].join('\n');
+  } else {
+    // デフォルト: 通常の接続
+    script = [
+      `tell application "Adobe Illustrator"${activateLine}`,
+      jsxLine,
+      'end tell',
+    ].join('\n');
+  }
+
+  await fs.writeFile(scptPath, script, 'utf-8');
 }
 
 /** Windows 用 PowerShell スクリプト生成 */
@@ -73,14 +95,13 @@ export async function writePowerShellScript(
   const jsxPathForward = scriptPath.replace(/\\/g, '/');
   const jsxPathEscaped = jsxPathForward.replace(/'/g, "\\'");
 
-  // appPath が指定された場合は COM の代わりにプロセスを起動して COM 接続
-  // COM ProgID はバージョンごとに同じ "Illustrator.Application" なので、
-  // appPath 指定時はまず対象バージョンを起動してから COM で接続する
+  // appPath 指定時: 起動済みイラレがなければ指定バージョンを起動
+  // 起動済みがあればそちらに COM 接続（バージョン問わず）
   const launchLines = options?.appPath
     ? [
-      `  $exePath = "${options.appPath.replace(/"/g, '`"')}"`,
+      '  # 起動済みの Illustrator があればそちらを優先',
       '  if (-not (Get-Process -Name "Illustrator" -ErrorAction SilentlyContinue)) {',
-      '    Start-Process $exePath',
+      `    Start-Process "${options.appPath.replace(/"/g, '`"')}"`,
       '    Start-Sleep -Seconds 5',
       '  }',
     ]
