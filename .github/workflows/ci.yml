@@ -3,12 +3,14 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
+  release:
+    types: [published]
 
 jobs:
   build-and-test:
+    if: github.event_name != 'release'
     permissions:
       contents: read
     strategy:
@@ -27,8 +29,7 @@ jobs:
       - run: npm test
 
   release:
-    needs: build-and-test
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -36,6 +37,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -43,10 +46,21 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm install -g npm@latest
 
-      # Update version in metadata files from tag
+      - name: Verify package version matches tag
+        run: |
+          RAW_TAG="${{ github.event.release.tag_name }}"
+          TAG_VERSION="${RAW_TAG#v}"
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          if [ "$PACKAGE_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag version ($TAG_VERSION) does not match package.json version ($PACKAGE_VERSION)." >&2
+            exit 1
+          fi
+
+      # Update version in metadata files from release tag
       - name: Update server.json and manifest.json version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          RAW_TAG="${{ github.event.release.tag_name }}"
+          VERSION="${RAW_TAG#v}"
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/g" server.json
           sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" manifest.json
 
@@ -57,15 +71,14 @@ jobs:
       - name: Publish to npm
         run: npm publish --provenance --access public
 
-      # GitHub Release with .mcpb
+      # Attach .mcpb to the published GitHub Release
       - run: npm ci --omit=dev
       - run: npx @anthropic-ai/mcpb pack
-      - name: Create GitHub Release
+      - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.event.release.tag_name }}
           files: '*.mcpb'
-          body_path: RELEASE_NOTES.md
-          generate_release_notes: true
 
       # MCP Registry publish
       - name: Install mcp-publisher
