@@ -265,7 +265,7 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 
 </details>
 
-### Modify Tools (37)
+### Modify Tools (38)
 
 <details>
 <summary>Click to expand</summary>
@@ -307,6 +307,7 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 | `create_path_text` | Create text along a path |
 | `place_symbol` | Place or replace symbol instances |
 | `select_objects` | Select objects by UUID (multi-select supported) |
+| `create_crop_marks` | Create crop marks (trim marks) with locale-based style auto-detection (Japanese double-line / Western single-line) |
 | `place_style_guide` | Place a visual style guide outside the artboard (colors, fonts, spacing, margins, guide gaps) |
 | `undo` | Undo/redo operations (multi-step) |
 
