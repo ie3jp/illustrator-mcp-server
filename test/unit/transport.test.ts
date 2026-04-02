@@ -9,8 +9,8 @@ import * as os from 'os';
 import * as path from 'path';
 import type { ExecFileException } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { writePowerShellScript } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage, resolveTransport } from '../../src/executor/jsx-runner.js';
+import { writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
+import { getExecFailureMessage, getAppPath, resolveVersionToPath, resolveTransport } from '../../src/executor/jsx-runner.js';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
 
@@ -33,6 +33,106 @@ describe('resolveTransport', () => {
 
   it('ILLUSTRATOR_MCP_TRANSPORT=powershell は darwin でも powershell を返す', () => {
     expect(resolveTransport('darwin', 'powershell')).toBe('powershell');
+  });
+});
+
+// ─── resolveVersionToPath ───────────────────────────────────────────────────
+
+describe('resolveVersionToPath', () => {
+  it('macOS: バージョン番号からアプリパスを生成する', () => {
+    expect(resolveVersionToPath('2025', 'darwin')).toBe(
+      '/Applications/Adobe Illustrator 2025/Adobe Illustrator.app',
+    );
+  });
+
+  it('Windows: バージョン番号から exe パスを生成する', () => {
+    expect(resolveVersionToPath('2025', 'win32')).toBe(
+      'C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe',
+    );
+  });
+
+  it('未対応プラットフォームはエラーをスロー', () => {
+    expect(() => resolveVersionToPath('2025', 'linux')).toThrow('Unsupported platform');
+  });
+});
+
+// ─── getAppPath ─────────────────────────────────────────────────────────────
+
+describe('getAppPath', () => {
+  it('両方未設定の場合は undefined を返す', () => {
+    expect(getAppPath('darwin', undefined, undefined)).toBeUndefined();
+  });
+
+  it('ILLUSTRATOR_APP_PATH が空文字列の場合は ILLUSTRATOR_VERSION にフォールバック', () => {
+    expect(getAppPath('darwin', '', '2025')).toBe(
+      '/Applications/Adobe Illustrator 2025/Adobe Illustrator.app',
+    );
+  });
+
+  it('ILLUSTRATOR_APP_PATH が設定されている場合はそちらを優先', () => {
+    const customPath = '/custom/path/Illustrator.app';
+    expect(getAppPath('darwin', customPath, '2025')).toBe(customPath);
+  });
+
+  it('ILLUSTRATOR_VERSION のみ設定時にパスを自動解決する (macOS)', () => {
+    expect(getAppPath('darwin', undefined, '2024')).toBe(
+      '/Applications/Adobe Illustrator 2024/Adobe Illustrator.app',
+    );
+  });
+
+  it('ILLUSTRATOR_VERSION のみ設定時にパスを自動解決する (Windows)', () => {
+    expect(getAppPath('win32', undefined, '2025')).toBe(
+      'C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe',
+    );
+  });
+
+  it('両方未設定なら undefined', () => {
+    expect(getAppPath('darwin', undefined, undefined)).toBeUndefined();
+  });
+});
+
+// ─── writeAppleScript ────────────────────────────────────────────────────────
+
+describe('writeAppleScript', () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'mcp-as-test-'));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  it('デフォルトでは "Adobe Illustrator" を対象にする', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx');
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).toContain('tell application "Adobe Illustrator"');
+    // appPath 未指定時は起動チェック不要
+    expect(content).not.toContain('System Events');
+  });
+
+  it('appPath 指定時は起動済みイラレ優先 + 未起動時に指定バージョンを起動', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx', {
+      appPath: '/Applications/Adobe Illustrator 2024/Adobe Illustrator.app',
+    });
+    const content = await fs.readFile(scpt, 'utf-8');
+    // 起動チェックが含まれる
+    expect(content).toContain('System Events');
+    expect(content).toContain('isRunning');
+    // 起動済みなら "Adobe Illustrator" に接続
+    expect(content).toContain('tell application "Adobe Illustrator"');
+    // 未起動ならフルパスで起動
+    expect(content).toContain('tell application "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"');
+  });
+
+  it('activate オプションが反映される', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx', { activate: true });
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).toContain('activate');
   });
 });
 
@@ -83,6 +183,30 @@ describe('writePowerShellScript', () => {
     const content = await fs.readFile(ps1, 'utf-8');
 
     expect(content).toContain('/tmp/illustrator-mcp/script.jsx');
+  });
+
+  it('appPath 指定時は起動済みチェック + 未起動時のみ Start-Process', async () => {
+    const ps1 = path.join(tmpDir, 'run.ps1');
+    await writePowerShellScript(ps1, '/tmp/script.jsx', {
+      appPath: 'C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe',
+    });
+    const content = await fs.readFile(ps1, 'utf-8');
+
+    // 起動済みチェック
+    expect(content).toContain('Get-Process -Name "Illustrator"');
+    // 未起動時のみ起動
+    expect(content).toContain('Start-Process');
+    expect(content).toContain('Illustrator.exe');
+    // COM 接続も含む
+    expect(content).toContain('New-Object -ComObject "Illustrator.Application"');
+  });
+
+  it('appPath 未指定時は Start-Process を含まない', async () => {
+    const ps1 = path.join(tmpDir, 'run.ps1');
+    await writePowerShellScript(ps1, '/tmp/script.jsx');
+    const content = await fs.readFile(ps1, 'utf-8');
+
+    expect(content).not.toContain('Start-Process');
   });
 });
 

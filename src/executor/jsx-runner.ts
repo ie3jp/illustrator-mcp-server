@@ -49,6 +49,46 @@ function getTransport(): Transport {
   return _transport;
 }
 
+// ─── アプリパス解決 ─────────────────────────────────────────────────────────
+//
+//  優先順位:
+//    1. ILLUSTRATOR_APP_PATH (フルパス指定)
+//    2. ILLUSTRATOR_VERSION  (バージョン番号 → パス自動解決)
+//    3. 未指定 → undefined (デフォルトの "Adobe Illustrator" に接続)
+//
+
+/**
+ * バージョン番号（例: "2025"）からアプリのフルパスを解決する。
+ */
+export function resolveVersionToPath(
+  version: string,
+  platform: string = process.platform,
+): string {
+  if (platform === 'darwin') {
+    return `/Applications/Adobe Illustrator ${version}/Adobe Illustrator.app`;
+  }
+  if (platform === 'win32') {
+    return `C:\\Program Files\\Adobe\\Adobe Illustrator ${version}\\Support Files\\Contents\\Windows\\Illustrator.exe`;
+  }
+  throw new Error(`Unsupported platform: ${platform}`);
+}
+
+/**
+ * 環境変数からアプリパスを取得する。
+ *
+ * - ILLUSTRATOR_APP_PATH: フルパス指定（最優先）
+ * - ILLUSTRATOR_VERSION: バージョン番号（例: "2025"）→ パス自動解決
+ */
+export function getAppPath(
+  platform: string = process.platform,
+  appPathEnv: string | undefined = process.env['ILLUSTRATOR_APP_PATH'],
+  versionEnv: string | undefined = process.env['ILLUSTRATOR_VERSION'],
+): string | undefined {
+  if (appPathEnv) return appPathEnv;
+  if (versionEnv) return resolveVersionToPath(versionEnv, platform);
+  return undefined;
+}
+
 /**
  * 実行中の JSX がすべて完了するまで待機する（シャットダウン用）
  */
@@ -151,7 +191,7 @@ async function executeViaOsascript(
     await writeParams(files.paramsPath, params);
     const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
     await writeJsx(files.scriptPath, fullJsx);
-    await writeAppleScript(files.runnerPath, files.scriptPath, { activate });
+    await writeAppleScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
 
     await new Promise<void>((resolve, reject) => {
       execFile('osascript', [files.runnerPath], { timeout }, (error, _stdout, stderr) => {
@@ -180,7 +220,7 @@ async function executeViaPowerShell(
     await writeParams(files.paramsPath, params);
     const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
     await writeJsx(files.scriptPath, fullJsx);
-    await writePowerShellScript(files.runnerPath, files.scriptPath, { activate });
+    await writePowerShellScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
 
     await new Promise<void>((resolve, reject) => {
       execFile(
