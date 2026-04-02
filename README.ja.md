@@ -88,37 +88,12 @@ Claude Desktop のメニューバーから:
 > [!NOTE]
 > 操作系・書き出し系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。
 
-### 詳細設定
+### 複数バージョンの Illustrator
 
-#### Illustrator のバージョンを指定する
-
-複数バージョンの Illustrator がインストールされている場合、環境変数 `ILLUSTRATOR_VERSION` にバージョンの年号（例: `"2025"`）を指定できます。
-
-```json
-{
-  "mcpServers": {
-    "illustrator": {
-      "command": "npx",
-      "args": ["illustrator-mcp-server"],
-      "env": {
-        "ILLUSTRATOR_VERSION": "2025"
-      }
-    }
-  }
-}
-```
+Illustrator が複数インストールされている場合、会話で使用するバージョンを指定できます。「Illustrator 2024 を使って」と伝えるだけで、`set_illustrator_version` ツールが対象バージョンを切り替えます。
 
 > [!NOTE]
 > すでに Illustrator が起動している場合は、バージョン設定に関わらず起動中のインスタンスに接続します。バージョン指定は、Illustrator が未起動の場合に起動するバージョンを決定するためのものです。
-
-デフォルト以外の場所にインストールしている場合は、`ILLUSTRATOR_APP_PATH` でフルパスを指定してください：
-
-| プラットフォーム | パスの例 |
-|----------|-------------|
-| macOS | `/Applications/Adobe Illustrator 2025/Adobe Illustrator.app` |
-| Windows | `C:\Program Files\Adobe\Adobe Illustrator 2025\Support Files\Contents\Windows\Illustrator.exe` |
-
-両方設定した場合、`ILLUSTRATOR_APP_PATH` が `ILLUSTRATOR_VERSION` より優先されます。
 
 ---
 

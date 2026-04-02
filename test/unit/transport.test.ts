@@ -10,7 +10,7 @@ import * as path from 'path';
 import type { ExecFileException } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage, getAppPath, resolveVersionToPath, resolveTransport } from '../../src/executor/jsx-runner.js';
+import { getExecFailureMessage, getAppPath, setAppVersion, getAppVersion, resolveVersionToPath, resolveTransport } from '../../src/executor/jsx-runner.js';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
 
@@ -56,38 +56,40 @@ describe('resolveVersionToPath', () => {
   });
 });
 
-// ─── getAppPath ─────────────────────────────────────────────────────────────
+// ─── setAppVersion / getAppPath / getAppVersion ────────────────────────────
 
-describe('getAppPath', () => {
-  it('両方未設定の場合は undefined を返す', () => {
-    expect(getAppPath('darwin', undefined, undefined)).toBeUndefined();
+describe('setAppVersion / getAppPath / getAppVersion', () => {
+  afterEach(() => {
+    setAppVersion(undefined);
   });
 
-  it('ILLUSTRATOR_APP_PATH が空文字列の場合は ILLUSTRATOR_VERSION にフォールバック', () => {
-    expect(getAppPath('darwin', '', '2025')).toBe(
+  it('初期状態では undefined', () => {
+    expect(getAppPath()).toBeUndefined();
+    expect(getAppVersion()).toBeUndefined();
+  });
+
+  it('バージョン設定で macOS パスが返る', () => {
+    setAppVersion('2025', 'darwin');
+    expect(getAppPath()).toBe(
       '/Applications/Adobe Illustrator 2025/Adobe Illustrator.app',
     );
+    expect(getAppVersion()).toBe('2025');
   });
 
-  it('ILLUSTRATOR_APP_PATH が設定されている場合はそちらを優先', () => {
-    const customPath = '/custom/path/Illustrator.app';
-    expect(getAppPath('darwin', customPath, '2025')).toBe(customPath);
-  });
-
-  it('ILLUSTRATOR_VERSION のみ設定時にパスを自動解決する (macOS)', () => {
-    expect(getAppPath('darwin', undefined, '2024')).toBe(
-      '/Applications/Adobe Illustrator 2024/Adobe Illustrator.app',
-    );
-  });
-
-  it('ILLUSTRATOR_VERSION のみ設定時にパスを自動解決する (Windows)', () => {
-    expect(getAppPath('win32', undefined, '2025')).toBe(
+  it('バージョン設定で Windows パスが返る', () => {
+    setAppVersion('2025', 'win32');
+    expect(getAppPath()).toBe(
       'C:\\Program Files\\Adobe\\Adobe Illustrator 2025\\Support Files\\Contents\\Windows\\Illustrator.exe',
     );
+    expect(getAppVersion()).toBe('2025');
   });
 
-  it('両方未設定なら undefined', () => {
-    expect(getAppPath('darwin', undefined, undefined)).toBeUndefined();
+  it('undefined で解除', () => {
+    setAppVersion('2024', 'darwin');
+    expect(getAppPath()).toBeDefined();
+    setAppVersion(undefined);
+    expect(getAppPath()).toBeUndefined();
+    expect(getAppVersion()).toBeUndefined();
   });
 });
 

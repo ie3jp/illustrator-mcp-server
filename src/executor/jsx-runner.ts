@@ -51,10 +51,9 @@ function getTransport(): Transport {
 
 // ─── アプリパス解決 ─────────────────────────────────────────────────────────
 //
-//  優先順位:
-//    1. ILLUSTRATOR_APP_PATH (フルパス指定)
-//    2. ILLUSTRATOR_VERSION  (バージョン番号 → パス自動解決)
-//    3. 未指定 → undefined (デフォルトの "Adobe Illustrator" に接続)
+//  会話で set_illustrator_version ツールを使ってバージョンを指定すると、
+//  そのセッション中は指定バージョンの Illustrator に接続する。
+//  未指定時はデフォルトの "Adobe Illustrator" に接続。
 //
 
 /**
@@ -73,20 +72,31 @@ export function resolveVersionToPath(
   throw new Error(`Unsupported platform: ${platform}`);
 }
 
+// セッション中のアプリパス（set_illustrator_version で設定）
+let _sessionAppPath: string | undefined;
+
 /**
- * 環境変数からアプリパスを取得する。
- *
- * - ILLUSTRATOR_APP_PATH: フルパス指定（最優先）
- * - ILLUSTRATOR_VERSION: バージョン番号（例: "2025"）→ パス自動解決
+ * セッションのアプリパスを設定する。
+ * version が指定された場合はパスに変換、undefined で解除。
  */
-export function getAppPath(
-  platform: string = process.platform,
-  appPathEnv: string | undefined = process.env['ILLUSTRATOR_APP_PATH'],
-  versionEnv: string | undefined = process.env['ILLUSTRATOR_VERSION'],
-): string | undefined {
-  if (appPathEnv) return appPathEnv;
-  if (versionEnv) return resolveVersionToPath(versionEnv, platform);
-  return undefined;
+export function setAppVersion(version: string | undefined, platform?: string): void {
+  _sessionAppPath = version ? resolveVersionToPath(version, platform) : undefined;
+}
+
+/**
+ * セッションのアプリパスを取得する。
+ */
+export function getAppPath(): string | undefined {
+  return _sessionAppPath;
+}
+
+/**
+ * 現在設定されているバージョン情報を返す（ステータス表示用）。
+ */
+export function getAppVersion(): string | undefined {
+  if (!_sessionAppPath) return undefined;
+  const match = _sessionAppPath.match(/Illustrator (\d{4})/);
+  return match ? match[1] : undefined;
 }
 
 /**
