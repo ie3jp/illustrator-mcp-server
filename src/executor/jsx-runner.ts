@@ -55,6 +55,9 @@ function getTransport(): Transport {
 //  そのセッション中は指定バージョンの Illustrator に接続する。
 //  未指定時はデフォルトの "Adobe Illustrator" に接続。
 //
+//  macOS: フルパスで tell するため、複数バージョン同時起動時も正しく接続。
+//  Windows: COM ProgID にバージョン区別がないため、複数同時起動時の切り替えは不可。
+//
 
 /**
  * バージョン番号（例: "2025"）からアプリのフルパスを解決する。

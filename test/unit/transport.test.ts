@@ -111,23 +111,20 @@ describe('writeAppleScript', () => {
     await writeAppleScript(scpt, '/tmp/script.jsx');
     const content = await fs.readFile(scpt, 'utf-8');
     expect(content).toContain('tell application "Adobe Illustrator"');
-    // appPath 未指定時は起動チェック不要
     expect(content).not.toContain('System Events');
   });
 
-  it('appPath 指定時は起動済みイラレ優先 + 未起動時に指定バージョンを起動', async () => {
+  it('appPath 指定時はフルパスで特定バージョンに接続する', async () => {
     const scpt = path.join(tmpDir, 'run.scpt');
     await writeAppleScript(scpt, '/tmp/script.jsx', {
       appPath: '/Applications/Adobe Illustrator 2024/Adobe Illustrator.app',
     });
     const content = await fs.readFile(scpt, 'utf-8');
-    // 起動チェックが含まれる
-    expect(content).toContain('System Events');
-    expect(content).toContain('isRunning');
-    // 起動済みなら "Adobe Illustrator" に接続
-    expect(content).toContain('tell application "Adobe Illustrator"');
-    // 未起動ならフルパスで起動
+    // フルパスで tell して特定バージョンに接続
     expect(content).toContain('tell application "/Applications/Adobe Illustrator 2024/Adobe Illustrator.app"');
+    // 起動チェックは不要（フルパス指定で直接接続）
+    expect(content).not.toContain('System Events');
+    expect(content).not.toContain('isRunning');
   });
 
   it('activate オプションが反映される', async () => {

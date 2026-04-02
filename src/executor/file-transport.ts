@@ -54,24 +54,13 @@ export async function writeAppleScript(
 
   let script: string;
   if (options?.appPath) {
-    // appPath 指定時: 起動済みイラレがあればそちらに接続、なければ指定バージョンを起動
+    // appPath 指定時: フルパスで tell して特定バージョンに接続
+    // 複数バージョン同時起動時でも正しいバージョンに接続できる
     const appPathEscaped = options.appPath.replace(/"/g, '\\"');
     script = [
-      '-- 起動済みの Illustrator があればそちらを優先',
-      'tell application "System Events"',
-      '  set isRunning to (exists (processes whose name contains "Illustrator"))',
+      `tell application "${appPathEscaped}"${activateLine}`,
+      jsxLine,
       'end tell',
-      '',
-      'if isRunning then',
-      `  tell application "Adobe Illustrator"${activateLine}`,
-      `  ${jsxLine}`,
-      '  end tell',
-      'else',
-      `  tell application "${appPathEscaped}"`,
-      '    activate',
-      `  ${jsxLine}`,
-      '  end tell',
-      'end if',
     ].join('\n');
   } else {
     // デフォルト: 通常の接続
@@ -96,7 +85,7 @@ export async function writePowerShellScript(
   const jsxPathEscaped = jsxPathForward.replace(/'/g, "\\'");
 
   // appPath 指定時: 起動済みイラレがなければ指定バージョンを起動
-  // 起動済みがあればそちらに COM 接続（バージョン問わず）
+  // COM はバージョン別 ProgID がないため、複数バージョン同時起動時の切り替えは不可
   const launchLines = options?.appPath
     ? [
       '  # 起動済みの Illustrator があればそちらを優先',
