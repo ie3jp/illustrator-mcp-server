@@ -5,6 +5,7 @@ dist/
 .env.*
 .DS_Store
 .mcpregistry_*
+*.mcpb
 docs/
 CLAUDE.md
 *.skill
