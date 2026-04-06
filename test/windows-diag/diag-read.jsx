@@ -2,8 +2,6 @@
 // Tests reading document info from Illustrator
 // This script is executed via DoJavaScript through PowerShell COM
 
-var RESULT_PATH = arguments[0]; // passed from PowerShell
-
 (function() {
   var results = [];
 
@@ -42,15 +40,15 @@ var RESULT_PATH = arguments[0]; // passed from PowerShell
   }
 
   // Write result to file
-  if (RESULT_PATH) {
-    var f = new File(RESULT_PATH);
+  try {
+    var resultPath = Folder.temp.fsName.replace(/\\/g, "/") + "/illustrator-mcp-diag-read.txt";
+    var f = new File(resultPath);
     f.encoding = "UTF-8";
     if (f.open("w")) {
       f.write(results.join("\n"));
       f.close();
     }
-  }
+  } catch(e) {}
 
-  // Also return as string (captured by DoJavaScript return value)
   return results.join("\n");
 })();

@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { realpathSync, existsSync } from 'node:fs';
 import { dirname, basename, join } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 /**
  * export — SVG/PNG/JPG/WebP 書き出し
@@ -344,7 +345,7 @@ export function register(server: McpServer): void {
         }
       }
       const result = await executeJsxHeavy(jsxCode, resolvedParams);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return formatToolResult(result);
     },
   );
 }

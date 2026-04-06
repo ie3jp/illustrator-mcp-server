@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { WRITE_ANNOTATIONS, COLOR_HELPERS_JSX, cmykColorSchema, rgbColorSchema, grayColorSchema } from './shared.js';
 
 /**
@@ -123,7 +124,7 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return formatToolResult(result);
     },
   );
 }

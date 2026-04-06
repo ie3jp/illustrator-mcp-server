@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * get_colors — ドキュメントの色情報取得（スウォッチ・グラデーション・パターン・スポットカラー）
@@ -258,7 +259,7 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return formatToolResult(result);
     },
   );
 }

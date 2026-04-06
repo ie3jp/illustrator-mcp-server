@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 /**
  * export_pdf — PDF 書き出し
@@ -310,7 +311,7 @@ export function register(server: McpServer): void {
         ...result,
         _note: 'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',
       };
-      return { content: [{ type: 'text', text: JSON.stringify(output, null, 2) }] };
+      return formatToolResult(output);
     },
   );
 }

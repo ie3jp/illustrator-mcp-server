@@ -1,10 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
-import {
-  coordinateSystemSchema,
-  resolveCoordinateSystem,
-} from '../session.js';
+import { executeToolJsx } from '../tool-executor.js';
+import { coordinateSystemSchema } from '../session.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * get_path_items — パスアイテム情報の取得
@@ -118,14 +115,20 @@ if (preflight) {
       try { info.closed = item.closed; } catch (e) {}
       try { info.opacity = item.opacity; } catch (e) {}
 
-      // Extract rotation from transformation matrix
+      // Extract rotation from transformation matrix, fallback to note metadata
       try {
         var m = item.matrix;
-        if (m) {
+        if (m && typeof m.mValueA === "number") {
           var rad = Math.atan2(m.mValueB, m.mValueA);
           info.transform.rotation = Math.round(rad * 180 / Math.PI * 100) / 100;
         }
       } catch (e) {}
+      if (info.transform.rotation === null) {
+        try {
+          var notRot = getNoteMeta(item.note, "rot");
+          if (notRot) info.transform.rotation = parseFloat(notRot);
+        } catch (e) {}
+      }
 
       // fill
       // Note: ExtendScript does not expose per-fill opacity on pathItems.
@@ -257,11 +260,7 @@ export function register(server: McpServer): void {
       annotations: READ_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = await executeJsx(jsxCode, resolvedParams);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

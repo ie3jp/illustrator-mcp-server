@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
@@ -239,7 +240,7 @@ export function register(server: McpServer): void {
       const result = (await executeJsx(jsxCode, resolvedParams)) as Record<string, unknown>;
 
       if (result.error) {
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return formatToolResult(result);
       }
 
       // --- CSS ヒント付与 & サマリ生成 ---

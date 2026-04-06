@@ -1,10 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeJsxHeavy } from '../../executor/jsx-runner.js';
-import {
-  coordinateSystemSchema,
-  resolveCoordinateSystem,
-} from '../session.js';
+import { executeToolJsx } from '../tool-executor.js';
+import { coordinateSystemSchema } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
 /**
@@ -181,9 +178,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const resolvedParams = { ...params, coordinate_system: await resolveCoordinateSystem(params.coordinate_system) };
-      const result = await executeJsxHeavy(jsxCode, resolvedParams);
-      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+      return executeToolJsx(jsxCode, params, { heavy: true, resolveCoordinate: true });
     },
   );
 }

@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * extract_design_tokens — デザイントークン（色・タイポグラフィ・スペーシング）の抽出
@@ -227,7 +228,7 @@ export function register(server: McpServer): void {
       };
 
       if (result.error) {
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return formatToolResult(result);
       }
 
       // Deduplicate and count colors

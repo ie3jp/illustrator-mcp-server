@@ -1,5 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * get_overprint_info — オーバープリント設定の取得
@@ -115,9 +116,7 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params);
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return formatToolResult(result);
     },
   );
 }

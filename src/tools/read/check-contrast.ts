@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * check_contrast — WCAG コントラスト比チェック
@@ -190,30 +191,19 @@ export function register(server: McpServer): void {
         const rgb1 = colorToRGB(params.color1 as ColorValue);
         const rgb2 = colorToRGB(params.color2 as ColorValue);
         if (!rgb1 || !rgb2) {
-          return { content: [{ type: 'text', text: JSON.stringify({ error: true, message: 'Could not convert colors to RGB' }) }] };
+          return formatToolResult({ error: true, message: 'Could not convert colors to RGB' });
         }
         const l1 = relativeLuminance(rgb1.r, rgb1.g, rgb1.b);
         const l2 = relativeLuminance(rgb2.r, rgb2.g, rgb2.b);
         const ratio = Math.round(contrastRatio(l1, l2) * 100) / 100;
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(
-                {
-                  contrastRatio: ratio,
-                  wcagAA_normal: ratio >= 4.5,
-                  wcagAA_large: ratio >= 3,
-                  wcagAAA: ratio >= 7,
-                  color1_rgb: rgb1,
-                  color2_rgb: rgb2,
-                },
-                null,
-                2,
-              ),
-            },
-          ],
-        };
+        return formatToolResult({
+          contrastRatio: ratio,
+          wcagAA_normal: ratio >= 4.5,
+          wcagAA_large: ratio >= 3,
+          wcagAAA: ratio >= 7,
+          color1_rgb: rgb1,
+          color2_rgb: rgb2,
+        });
       }
 
       // Auto-detect mode
@@ -224,7 +214,7 @@ export function register(server: McpServer): void {
       };
 
       if (result.error) {
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return formatToolResult(result);
       }
 
       const items = result.colorItems;
@@ -285,14 +275,7 @@ export function register(server: McpServer): void {
       });
       unique.sort((a, b) => a.contrastRatio - b.contrastRatio);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ pairCount: unique.length, pairs: unique }, null, 2),
-          },
-        ],
-      };
+      return formatToolResult({ pairCount: unique.length, pairs: unique });
     },
   );
 }

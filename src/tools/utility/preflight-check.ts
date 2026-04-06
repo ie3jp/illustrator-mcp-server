@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
@@ -167,18 +168,32 @@ if (preflight) {
           var pFile = pItem.file;
           if (pFile && pFile.exists) {
             var pUuid = ensureUUID(pItem);
+            var pData = {
+              uuid: pUuid,
+              name: pItem.name || "",
+              filePath: pFile.fsName,
+              widthPt: 0,
+              heightPt: 0,
+              matrixScaleX: 0,
+              matrixScaleY: 0
+            };
+            // Get matrix scale factors for rotation-safe PPI calculation
+            try {
+              var plm = pItem.matrix;
+              if (plm) {
+                pData.matrixScaleX = Math.sqrt(plm.mValueA * plm.mValueA + plm.mValueB * plm.mValueB);
+                pData.matrixScaleY = Math.sqrt(plm.mValueC * plm.mValueC + plm.mValueD * plm.mValueD);
+              }
+            } catch(e2) {}
+            // Fallback: geometricBounds
             var pBounds = pItem.geometricBounds;
             var pWPt = pBounds[2] - pBounds[0];
             var pHPt = -(pBounds[3] - pBounds[1]);
             if (pWPt < 0) pWPt = -pWPt;
             if (pHPt < 0) pHPt = -pHPt;
-            placedImageData.push({
-              uuid: pUuid,
-              name: pItem.name || "",
-              filePath: pFile.fsName,
-              widthPt: pWPt,
-              heightPt: pHPt
-            });
+            pData.widthPt = pWPt;
+            pData.heightPt = pHPt;
+            placedImageData.push(pData);
           }
         } catch(e) {}
       }
@@ -420,6 +435,8 @@ export function register(server: McpServer): void {
           filePath: string;
           widthPt: number;
           heightPt: number;
+          matrixScaleX: number;
+          matrixScaleY: number;
         }>;
         minDPI?: number;
         [key: string]: unknown;
@@ -429,15 +446,27 @@ export function register(server: McpServer): void {
       const minDpi = result?.minDPI ?? params.min_dpi ?? 300;
       if (result?.placedImageData) {
         for (const placed of result.placedImageData) {
-          if (!placed.filePath || placed.widthPt <= 0 || placed.heightPt <= 0) continue;
+          if (!placed.filePath) continue;
           try {
             const dims = readImageDimensions(placed.filePath);
             if (dims) {
-              const widthInches = placed.widthPt / 72;
-              const heightInches = placed.heightPt / 72;
-              const ppiH = Math.round(dims.width / widthInches);
-              const ppiV = Math.round(dims.height / heightInches);
-              const effectivePPI = Math.min(ppiH, ppiV);
+              let effectivePPI: number;
+              // Use matrix scale factors for rotation-safe PPI calculation
+              // Matrix scale = pt per pixel, so PPI = 72 / scale
+              if (placed.matrixScaleX > 0 && placed.matrixScaleY > 0) {
+                const ppiH = Math.round(72 / placed.matrixScaleX);
+                const ppiV = Math.round(72 / placed.matrixScaleY);
+                effectivePPI = Math.min(ppiH, ppiV);
+              } else if (placed.widthPt > 0 && placed.heightPt > 0) {
+                // Fallback to geometricBounds (inaccurate for rotated images)
+                const widthInches = placed.widthPt / 72;
+                const heightInches = placed.heightPt / 72;
+                const ppiH = Math.round(dims.width / widthInches);
+                const ppiV = Math.round(dims.height / heightInches);
+                effectivePPI = Math.min(ppiH, ppiV);
+              } else {
+                continue;
+              }
               if (effectivePPI < minDpi) {
                 result.results.push({
                   level: 'error',
@@ -538,9 +567,7 @@ export function register(server: McpServer): void {
           'No issues detected by these automated checks. This does not mean the document is free of problems — items outside the scope of automated checks (design intent, contextual spelling, regulatory requirements, print-shop-specific rules) still require human review.';
       }
 
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return formatToolResult(result);
     },
   );
 }

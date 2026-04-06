@@ -87,9 +87,7 @@ if (-not (Test-Path $readJsx)) {
     Write-Host "  SKIP: diag-read.jsx not found at $readJsx"
 } else {
     try {
-        $resultFile4 = Join-Path $env:TEMP "illustrator-mcp-diag-read.txt"
         $jsxPath = $readJsx.Replace('\', '/')
-        $resultFilePath = $resultFile4.Replace('\', '/')
 
         # This is the EXACT pattern used by the MCP server
         $evalCmd = "`$.evalFile(new File('$jsxPath'))"
@@ -104,6 +102,7 @@ if (-not (Test-Path $readJsx)) {
         } else {
             Write-Host "  WARNING: evalFile returned empty/null"
             # Check if result was written to file instead
+            $resultFile4 = Join-Path $env:TEMP "illustrator-mcp-diag-read.txt"
             if (Test-Path $resultFile4) {
                 $content = Get-Content $resultFile4 -Raw
                 Write-Host "  File output: $content"
@@ -126,15 +125,14 @@ if (-not (Test-Path $writeJsx)) {
     Write-Host "  SKIP: diag-write.jsx not found at $writeJsx"
 } else {
     try {
-        $resultFile5 = Join-Path $env:TEMP "illustrator-mcp-diag-write.txt"
         $jsxPath = $writeJsx.Replace('\', '/')
-        $resultFilePath = $resultFile5.Replace('\', '/')
 
         $evalCmd = "`$.evalFile(new File('$jsxPath'))"
         Write-Host "  Command: `$ai.DoJavaScript(`"$evalCmd`")"
 
         $result5 = $ai.DoJavaScript($evalCmd)
         if ($result5) {
+            Write-Host "  PASS: evalFile returned output"
             Write-Host "  --- Output ---"
             $result5 -split "`n" | ForEach-Object { Write-Host "  $_" }
             Write-Host "  --- End ---"

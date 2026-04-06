@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
@@ -59,7 +60,19 @@ if (preflight) {
 
       try { info.name = item.name || ""; } catch(e) {}
 
-      // Store placed dimensions in points for Node.js-side DPI calculation
+      // Store matrix scale factors for Node.js-side DPI calculation
+      // Using matrix vector magnitude instead of geometricBounds to handle rotation correctly
+      // (geometricBounds returns AABB which is larger when rotated, giving incorrect PPI)
+      try {
+        var pm = item.matrix;
+        if (pm) {
+          var psX = Math.sqrt(pm.mValueA * pm.mValueA + pm.mValueB * pm.mValueB);
+          var psY = Math.sqrt(pm.mValueC * pm.mValueC + pm.mValueD * pm.mValueD);
+          info.matrixScaleX = psX;
+          info.matrixScaleY = psY;
+        }
+      } catch(e) {}
+      // Fallback: also store geometricBounds dimensions
       try {
         var pBounds = item.geometricBounds;
         var pWidthPt = pBounds[2] - pBounds[0];
@@ -213,17 +226,30 @@ export function register(server: McpServer): void {
           if (img.type === 'linked' && img.filePath && !img.linkBroken) {
             try {
               const dims = readImageDimensions(img.filePath);
-              if (dims && img.widthPt && img.heightPt) {
+              if (dims) {
                 img.pixelWidth = dims.width;
                 img.pixelHeight = dims.height;
-                const widthInches = img.widthPt / 72;
-                const heightInches = img.heightPt / 72;
-                const ppiH = Math.round(dims.width / widthInches);
-                const ppiV = Math.round(dims.height / heightInches);
-                img.resolution = Math.min(ppiH, ppiV);
-                // Print diagnostics for linked images
-                if (resolvedParams.include_print_info) {
-                  img.scaleFactor = Math.round((img.widthPt / dims.width) * 100);
+                // Use matrix scale factors for PPI calculation (rotation-safe)
+                // Matrix scale = pt per pixel, so PPI = 72 / scale
+                const matrixScaleX = img.matrixScaleX as number | undefined;
+                const matrixScaleY = img.matrixScaleY as number | undefined;
+                if (matrixScaleX && matrixScaleY && matrixScaleX > 0 && matrixScaleY > 0) {
+                  const ppiH = Math.round(72 / matrixScaleX);
+                  const ppiV = Math.round(72 / matrixScaleY);
+                  img.resolution = Math.min(ppiH, ppiV);
+                  if (resolvedParams.include_print_info) {
+                    img.scaleFactor = Math.round(matrixScaleX * 100);
+                  }
+                } else if (img.widthPt && img.heightPt) {
+                  // Fallback to geometricBounds (inaccurate for rotated images)
+                  const widthInches = img.widthPt / 72;
+                  const heightInches = img.heightPt / 72;
+                  const ppiH = Math.round(dims.width / widthInches);
+                  const ppiV = Math.round(dims.height / heightInches);
+                  img.resolution = Math.min(ppiH, ppiV);
+                  if (resolvedParams.include_print_info) {
+                    img.scaleFactor = Math.round((img.widthPt / dims.width) * 100);
+                  }
                 }
               }
             } catch {
@@ -233,12 +259,12 @@ export function register(server: McpServer): void {
           // Clean up internal fields
           delete img.widthPt;
           delete img.heightPt;
+          delete img.matrixScaleX;
+          delete img.matrixScaleY;
         }
       }
 
-      return {
-        content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-      };
+      return formatToolResult(result);
     },
   );
 }

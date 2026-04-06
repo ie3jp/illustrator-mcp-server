@@ -96,11 +96,22 @@ export async function writePowerShellScript(
     ]
     : [];
 
+  // Illustrator 2026+ では COM の Visible プロパティが read-only のため、
+  // フォアグラウンド化には WScript.Shell の AppActivate を使う
+  const activateLines = options?.activate
+    ? [
+      '  try {',
+      '    $wsh = New-Object -ComObject "WScript.Shell"',
+      '    $wsh.AppActivate("Adobe Illustrator") | Out-Null',
+      '  } catch {}',
+    ]
+    : [];
+
   const lines = [
     'try {',
     ...launchLines,
     '  $ai = New-Object -ComObject "Illustrator.Application" -ErrorAction Stop',
-    ...(options?.activate ? ['  $ai.Visible = $true'] : []),
+    ...activateLines,
     `  $ai.DoJavaScript("$.evalFile(new File('${jsxPathEscaped}'))")`,
     '} catch {',
     '  Write-Error "Illustrator COM automation failed: $_"',

@@ -1,6 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
+import { formatToolResult } from '../tool-executor.js';
 import {
   coordinateSystemSchema,
   resolveCoordinateSystem,
@@ -333,34 +334,23 @@ export function register(server: McpServer): void {
       };
 
       if (result.error) {
-        return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+        return formatToolResult(result);
       }
 
       const analysis = analyzeTextConsistency(result.frames);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                totalFrames: result.totalFrames,
-                mechanicalChecks: {
-                  _reliability: 'deterministic',
-                  dummyTexts: analysis.dummyTexts,
-                  knownVariations: analysis.knownVariations,
-                },
-                llmAnalysis: {
-                  _reliability: 'ai-assisted — may miss errors or produce false positives. Clearly distinguish AI-based findings from mechanical checks when reporting to the user.',
-                  allTexts: analysis.allTexts,
-                },
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
+      return formatToolResult({
+        totalFrames: result.totalFrames,
+        mechanicalChecks: {
+          _reliability: 'deterministic',
+          dummyTexts: analysis.dummyTexts,
+          knownVariations: analysis.knownVariations,
+        },
+        llmAnalysis: {
+          _reliability: 'ai-assisted — may miss errors or produce false positives. Clearly distinguish AI-based findings from mechanical checks when reporting to the user.',
+          allTexts: analysis.allTexts,
+        },
+      });
     },
   );
 }
