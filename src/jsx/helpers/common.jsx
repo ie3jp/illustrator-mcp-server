@@ -114,17 +114,53 @@ function generateUUID() {
   return parts.join("-");
 }
 
+// note フォーマット: "UUID" または "UUID::key=value::key=value"
+// UUID 部分は先頭36文字で固定
+
+function extractUUIDFromNote(note) {
+  if (!note || note.length < 36) return "";
+  var head = note.substring(0, 36);
+  if (head.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
+    return head;
+  }
+  return "";
+}
+
+function getNoteMeta(note, key) {
+  if (!note) return null;
+  var tag = "::" + key + "=";
+  var idx = note.indexOf(tag);
+  if (idx < 0) return null;
+  var start = idx + tag.length;
+  var end = note.indexOf("::", start);
+  return end < 0 ? note.substring(start) : note.substring(start, end);
+}
+
+function setNoteMeta(item, key, value) {
+  var note = "";
+  try { note = item.note || ""; } catch(e) { return; }
+  var tag = "::" + key + "=";
+  var idx = note.indexOf(tag);
+  if (idx >= 0) {
+    // 既存のキーを置換
+    var start = idx + tag.length;
+    var end = note.indexOf("::", start);
+    note = note.substring(0, idx) + tag + value + (end >= 0 ? note.substring(end) : "");
+  } else {
+    note = note + tag + value;
+  }
+  try { item.note = note; } catch(e) {}
+}
+
 function ensureUUID(pageItem) {
   // note プロパティに UUID がなければ遅延割り当て
   var note = "";
   try { note = pageItem.note || ""; } catch(e) { /* note がないオブジェクトもある */ }
 
-  // UUID パターンチェック（xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx）
-  if (note.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)) {
-    return note;
-  }
+  var uuid = extractUUIDFromNote(note);
+  if (uuid) return uuid;
 
-  var uuid = generateUUID();
+  uuid = generateUUID();
   try {
     pageItem.note = uuid;
   } catch(e) {
@@ -393,7 +429,10 @@ function _indexContainer(container) {
     var item = container.pageItems[i];
     try {
       if (item.note && item.note.length > 0) {
-        _uuidIndex[item.note] = item;
+        var uid = extractUUIDFromNote(item.note);
+        if (uid && !_uuidIndex[uid]) {
+          _uuidIndex[uid] = item;
+        }
       }
     } catch(e) {}
     try {
