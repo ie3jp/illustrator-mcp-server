@@ -1,5 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
+import { realpathSync, existsSync } from 'node:fs';
+import { dirname, basename, join } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 /**
@@ -328,7 +330,20 @@ export function register(server: McpServer): void {
        annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsxHeavy(jsxCode, params);
+      // macOS の /tmp は /private/tmp へのシンボリックリンク。
+      // Illustrator の exportFile() はシンボリックリンク経由のパスに書き込めない場合があるため、
+      // Node.js 側で実パスに解決してから渡す。
+      const resolvedParams = { ...params };
+      if (resolvedParams.output_path) {
+        const dir = dirname(resolvedParams.output_path);
+        if (existsSync(dir)) {
+          try {
+            const realDir = realpathSync(dir);
+            resolvedParams.output_path = join(realDir, basename(resolvedParams.output_path));
+          } catch (_) { /* 解決できなければ元のパスをそのまま使う */ }
+        }
+      }
+      const result = await executeJsxHeavy(jsxCode, resolvedParams);
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
