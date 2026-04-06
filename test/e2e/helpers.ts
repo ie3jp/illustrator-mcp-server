@@ -6,10 +6,27 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { writeFileSync } from 'fs';
 import { deflateSync } from 'zlib';
 
-// ── 定数 ──
+// ── ANSI カラー ──
 
-export const PASS = '\u2713';
-export const FAIL = '\u2717';
+const c = {
+  reset:   '\x1b[0m',
+  bold:    '\x1b[1m',
+  dim:     '\x1b[2m',
+  green:   '\x1b[32m',
+  red:     '\x1b[31m',
+  yellow:  '\x1b[33m',
+  cyan:    '\x1b[36m',
+  magenta: '\x1b[35m',
+  white:   '\x1b[37m',
+  gray:    '\x1b[90m',
+  bgGreen: '\x1b[42m',
+  bgRed:   '\x1b[41m',
+  bgCyan:  '\x1b[46m',
+  bgYellow: '\x1b[43m',
+  black:   '\x1b[30m',
+};
+
+// ── 定数 ──
 
 export const DOC_WIDTH = 800;
 export const DOC_HEIGHT = 600;
@@ -33,6 +50,46 @@ export interface TestResult {
 }
 
 export const results: TestResult[] = [];
+let phasePassCount = 0;
+let phaseFailCount = 0;
+
+// ── 表示ユーティリティ ──
+
+export function printHeader(): void {
+  console.log('');
+  console.log(`  ${c.bgCyan}${c.black}${c.bold} ILLUSTRATOR MCP ${c.reset}  ${c.bold}E2E Test Suite${c.reset}`);
+  console.log(`  ${c.gray}${'─'.repeat(46)}${c.reset}`);
+  console.log('');
+}
+
+export function printPhase(num: number, label: string): void {
+  // 前の Phase のサマリを出力（Phase 0 以降）
+  if (num > 0) printPhaseSummary();
+  phasePassCount = 0;
+  phaseFailCount = 0;
+  console.log('');
+  console.log(`  ${c.bgCyan}${c.black} ${num} ${c.reset} ${c.bold}${c.cyan}${label}${c.reset}`);
+  console.log('');
+}
+
+function printPhaseSummary(): void {
+  const total = phasePassCount + phaseFailCount;
+  if (total === 0) return;
+  const status = phaseFailCount === 0
+    ? `${c.green}${phasePassCount}/${total} passed${c.reset}`
+    : `${c.red}${phaseFailCount} failed${c.reset}${c.gray}, ${phasePassCount} passed${c.reset}`;
+  console.log(`${c.gray}     ${'·'.repeat(40)}  ${status}${c.reset}`);
+}
+
+export function printStatus(msg: string): void {
+  console.log(`  ${c.gray}${msg}${c.reset}`);
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 100) return `${c.green}${ms}ms${c.reset}`;
+  if (ms < 1000) return `${c.gray}${ms}ms${c.reset}`;
+  return `${c.yellow}${(ms / 1000).toFixed(1)}s${c.reset}`;
+}
 
 // ── クライアント ──
 
@@ -75,11 +132,9 @@ export async function test(name: string, fn: () => Promise<void>, retries = 1): 
       await fn();
       const duration = Date.now() - start;
       results.push({ name, status: 'pass', duration });
-      if (attempt > 0) {
-        console.log(`  ${PASS} ${name} (${duration}ms) [retry ${attempt}]`);
-      } else {
-        console.log(`  ${PASS} ${name} (${duration}ms)`);
-      }
+      phasePassCount++;
+      const retry = attempt > 0 ? ` ${c.yellow}[retry ${attempt}]${c.reset}` : '';
+      console.log(`     ${c.green}\u2713${c.reset} ${c.white}${name}${c.reset}  ${formatDuration(duration)}${retry}`);
       return;
     } catch (e) {
       lastError = e;
@@ -88,8 +143,9 @@ export async function test(name: string, fn: () => Promise<void>, retries = 1): 
   const duration = Date.now() - start;
   const message = lastError instanceof Error ? (lastError as Error).message : String(lastError);
   results.push({ name, status: 'fail', message, duration });
-  console.log(`  ${FAIL} ${name} (${duration}ms)`);
-  console.log(`    -> ${message}`);
+  phaseFailCount++;
+  console.log(`     ${c.red}\u2717 ${name}${c.reset}  ${formatDuration(duration)}`);
+  console.log(`       ${c.red}${c.dim}\u2514 ${message}${c.reset}`);
 }
 
 // ── アサーション ──
@@ -157,20 +213,37 @@ function crc32(buf: Buffer): number {
 
 // ── 結果レポート ──
 
-export function printResults(): void {
+export function printResults(startTime: number): void {
+  // 最後の Phase サマリ
+  printPhaseSummary();
+
   const passed = results.filter((r) => r.status === 'pass').length;
   const failed = results.filter((r) => r.status === 'fail').length;
   const skipped = results.filter((r) => r.status === 'skip').length;
+  const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
 
-  console.log('\n' + '='.repeat(50));
-  console.log(`結果: ${passed} passed, ${failed} failed, ${skipped} skipped / ${results.length} total`);
+  console.log('');
+  console.log(`  ${c.gray}${'━'.repeat(50)}${c.reset}`);
+  console.log('');
+
+  if (failed === 0) {
+    console.log(`  ${c.bgGreen}${c.black}${c.bold} PASS ${c.reset}  ${c.green}${c.bold}All ${passed} tests passed${c.reset}  ${c.gray}(${elapsed}s)${c.reset}`);
+  } else {
+    console.log(`  ${c.bgRed}${c.black}${c.bold} FAIL ${c.reset}  ${c.red}${c.bold}${failed} failed${c.reset}${c.gray}, ${passed} passed, ${results.length} total${c.reset}  ${c.gray}(${elapsed}s)${c.reset}`);
+  }
+  if (skipped > 0) {
+    console.log(`         ${c.yellow}${skipped} skipped${c.reset}`);
+  }
 
   if (failed > 0) {
-    console.log('\n失敗したテスト:');
+    console.log('');
+    console.log(`  ${c.red}${c.bold}Failures:${c.reset}`);
     for (const r of results.filter((r) => r.status === 'fail')) {
-      console.log(`  ${FAIL} ${r.name}: ${r.message}`);
+      console.log(`  ${c.red}\u2717 ${r.name}${c.reset}`);
+      console.log(`    ${c.dim}${r.message}${c.reset}`);
     }
   }
 
+  console.log('');
   process.exit(failed > 0 ? 1 : 0);
 }

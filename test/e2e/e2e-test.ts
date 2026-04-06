@@ -13,7 +13,9 @@ import {
   assert,
   assertClose,
   generateTestPng,
-  results,
+  printHeader,
+  printPhase,
+  printStatus,
   printResults,
   DOC_WIDTH,
   DOC_HEIGHT,
@@ -25,23 +27,22 @@ import {
   TEST_IMG_PATH_EMBEDDED,
   TEST_IMG_PLACE_SIZE_PT,
   TEST_IMG_EXPECTED_DPI,
-  PASS,
-  FAIL,
 } from './helpers.js';
 
 async function main(): Promise<void> {
-  console.log('\n🔧 Illustrator MCP Server — E2E Test\n');
-  console.log('サーバーに接続中...');
+  const startTime = Date.now();
+  printHeader();
+  printStatus('Connecting to server...');
 
   let client;
   try {
     client = await createClient();
   } catch (e) {
-    console.error('サーバー接続失敗:', e);
+    console.error('  \x1b[31mConnection failed:\x1b[0m', e);
     process.exit(1);
   }
 
-  console.log('接続完了\n');
+  printStatus('Connected\n');
 
   // UUID を Phase 間で受け渡すための変数
   let rectUuid = '';
@@ -57,12 +58,9 @@ async function main(): Promise<void> {
   mkdirSync(TMP_DIR, { recursive: true });
   generateTestPng(TEST_IMG_PATH_LINKED, TEST_IMG_WIDTH, TEST_IMG_HEIGHT);
   generateTestPng(TEST_IMG_PATH_EMBEDDED, TEST_IMG_WIDTH, TEST_IMG_HEIGHT);
-  console.log(`テスト画像生成: ${TEST_IMG_WIDTH}x${TEST_IMG_HEIGHT}px PNG → ${TMP_DIR}/`);
+  printStatus(`Test images: ${TEST_IMG_WIDTH}x${TEST_IMG_HEIGHT}px PNG → ${TMP_DIR}/`);
 
-  // ============================================================
-  // Phase 0: セットアップ — 新規ドキュメント作成 + テストオブジェクト配置
-  // ============================================================
-  console.log('── Phase 0: セットアップ ──');
+  printPhase(0, 'Setup');
 
   await test('create_document (RGB, 800x600)', async () => {
     const result = await callTool(client, 'create_document', {
@@ -76,10 +74,22 @@ async function main(): Promise<void> {
     assert(result.colorMode === 'RGB', `colorMode should be RGB, got ${result.colorMode}`);
   });
 
+  // ── デザインパレット ──
+  // Primary: Coral Red #FF6B6B — rect fill (must stay rgb 255,0,0 for replace_color test)
+  // Secondary: Soft Teal #4ECDC4 — ellipse
+  // Accent: Warm Amber #FFB347 — line stroke
+  // Curve: Deep Violet #7C3AED — bezier path
+  // BG shapes use the 800x600 artboard with 40px margin grid
+
+  const M = 40; // margin
+  const COL2 = DOC_WIDTH / 2 + M / 2; // second column start
+
   await test('create_rectangle → __e2e_rect', async () => {
     const result = await callTool(client, 'create_rectangle', {
-      x: 50, y: 50, width: 200, height: 150,
+      x: M, y: M, width: 240, height: 160,
       fill: { type: 'rgb', r: 255, g: 0, b: 0 },
+      stroke: { color: { type: 'rgb', r: 200, g: 50, b: 50 }, width: 1 },
+      corner_radius: 12,
       name: '__e2e_rect',
       layer_name: 'TestLayer-Main',
     }) as any;
@@ -87,21 +97,20 @@ async function main(): Promise<void> {
     rectUuid = result.uuid;
   });
 
-  // 座標検証 (refactor-verify)
   await test('verify rectangle position via find_objects', async () => {
     const r = await callTool(client, 'find_objects', { name: '__e2e_rect' }) as any;
     assert(r.count === 1, `should find 1 rect, got ${r.count}`);
     const obj = r.objects[0];
-    assertClose(obj.bounds.x, 50, 'rect x');
-    assertClose(obj.bounds.y, 50, 'rect y');
-    assertClose(obj.bounds.width, 200, 'rect width');
-    assertClose(obj.bounds.height, 150, 'rect height');
+    assertClose(obj.bounds.x, M, 'rect x');
+    assertClose(obj.bounds.y, M, 'rect y');
+    assertClose(obj.bounds.width, 240, 'rect width');
+    assertClose(obj.bounds.height, 160, 'rect height');
   });
 
   await test('create_ellipse → __e2e_ellipse', async () => {
     const result = await callTool(client, 'create_ellipse', {
-      x: 300, y: 50, width: 150, height: 150,
-      fill: { type: 'rgb', r: 0, g: 255, b: 0 },
+      x: 320, y: M, width: 160, height: 160,
+      fill: { type: 'rgb', r: 78, g: 205, b: 196 },
       name: '__e2e_ellipse',
       layer_name: 'TestLayer-Main',
     }) as any;
@@ -109,18 +118,17 @@ async function main(): Promise<void> {
     ellipseUuid = result.uuid;
   });
 
-  // 座標検証 (refactor-verify)
   await test('verify ellipse position', async () => {
     const r = await callTool(client, 'find_objects', { name: '__e2e_ellipse' }) as any;
     assert(r.count === 1, 'should find 1');
-    assertClose(r.objects[0].bounds.x, 300, 'ellipse x');
-    assertClose(r.objects[0].bounds.y, 50, 'ellipse y');
+    assertClose(r.objects[0].bounds.x, 320, 'ellipse x');
+    assertClose(r.objects[0].bounds.y, M, 'ellipse y');
   });
 
   await test('create_line → __e2e_line', async () => {
     const result = await callTool(client, 'create_line', {
-      x1: 50, y1: 250, x2: 400, y2: 250,
-      stroke: { color: { type: 'rgb', r: 0, g: 0, b: 255 }, width: 2 },
+      x1: M, y1: 230, x2: DOC_WIDTH - M, y2: 230,
+      stroke: { color: { type: 'rgb', r: 255, g: 179, b: 71 }, width: 2 },
       name: '__e2e_line',
       layer_name: 'TestLayer-Main',
     }) as any;
@@ -130,8 +138,8 @@ async function main(): Promise<void> {
 
   await test('create_text_frame → __e2e_text', async () => {
     const result = await callTool(client, 'create_text_frame', {
-      x: 50, y: 300, contents: 'E2E Test テスト',
-      font_size: 24,
+      x: M, y: 260, contents: 'E2E Test Suite',
+      font_size: 28,
       name: '__e2e_text',
       layer_name: 'TestLayer-Text',
     }) as any;
@@ -139,16 +147,15 @@ async function main(): Promise<void> {
     textUuid = result.uuid;
   });
 
-  // ベジェ曲線パス (refactor-verify の bezier handles 版)
   await test('create_path → __e2e_path (bezier)', async () => {
     const result = await callTool(client, 'create_path', {
       anchors: [
-        { x: 100, y: 300, right_handle: { x: 150, y: 280 }, point_type: 'smooth' },
-        { x: 200, y: 350, left_handle: { x: 170, y: 370 }, right_handle: { x: 230, y: 330 }, point_type: 'smooth' },
-        { x: 300, y: 300, left_handle: { x: 270, y: 320 }, point_type: 'smooth' },
+        { x: 520, y: M + 20, right_handle: { x: 580, y: M }, point_type: 'smooth' },
+        { x: 640, y: M + 80, left_handle: { x: 600, y: M + 100 }, right_handle: { x: 680, y: M + 60 }, point_type: 'smooth' },
+        { x: 760, y: M + 20, left_handle: { x: 720, y: M + 40 }, point_type: 'smooth' },
       ],
       closed: false,
-      stroke: { color: { type: 'rgb', r: 128, g: 0, b: 128 }, width: 2 },
+      stroke: { color: { type: 'rgb', r: 124, g: 58, b: 237 }, width: 3 },
       fill: { type: 'none' },
       name: '__e2e_path',
       layer_name: 'TestLayer-Main',
@@ -163,11 +170,10 @@ async function main(): Promise<void> {
     assert(r.objects[0].uuid === pathUuid, 'UUID should match');
   });
 
-  // 画像の配置（リンク）
   await test('place_image → __e2e_linked_image (linked)', async () => {
     const result = await callTool(client, 'place_image', {
       file_path: TEST_IMG_PATH_LINKED,
-      x: 50, y: 400,
+      x: 520, y: 140,
       name: '__e2e_linked_image',
       layer_name: 'TestLayer-Main',
       embed: false,
@@ -177,11 +183,10 @@ async function main(): Promise<void> {
     linkedImageUuid = result.uuid;
   });
 
-  // 画像の配置（埋め込み）
   await test('place_image → __e2e_embedded_image (embedded)', async () => {
     const result = await callTool(client, 'place_image', {
       file_path: TEST_IMG_PATH_EMBEDDED,
-      x: 200, y: 400,
+      x: 650, y: 140,
       name: '__e2e_embedded_image',
       layer_name: 'TestLayer-Main',
       embed: true,
@@ -191,11 +196,10 @@ async function main(): Promise<void> {
     embeddedImageUuid = result.uuid;
   });
 
-  // レイヤー自動作成の検証 (resolveTargetLayer from refactor-verify)
   await test('create_text_frame on new layer (resolveTargetLayer)', async () => {
     const r = await callTool(client, 'create_text_frame', {
-      x: 50, y: 450, contents: 'Layer auto-create test',
-      font_size: 18,
+      x: M, y: 310, contents: 'Auto-created layer',
+      font_size: 14,
       name: '__e2e_auto_layer_text',
       layer_name: 'AutoCreatedLayer',
     }) as any;
@@ -209,6 +213,7 @@ async function main(): Promise<void> {
   });
 
   // ダミーテキスト（check_text_consistency 検証用）
+  // 2列レイアウトで配置
   const dummyTextCases = [
     { contents: 'Lorem ipsum dolor sit amet', name: '__e2e_dummy_lorem', label: 'Lorem ipsum' },
     { contents: 'テキストが入ります', name: '__e2e_dummy_hairu', label: 'テキストが入ります' },
@@ -222,14 +227,21 @@ async function main(): Promise<void> {
     { contents: '△△△', name: '__e2e_dummy_sankaku', label: '△△△ placeholder' },
   ];
   const dummyTextUuids: Record<string, string> = {};
+  const dummyBaseY = 350;
+  const dummyLineH = 22;
+  const dummyPerCol = 5;
 
   for (let di = 0; di < dummyTextCases.length; di++) {
     const dc = dummyTextCases[di];
+    const col = di < dummyPerCol ? 0 : 1;
+    const row = di % dummyPerCol;
+    const dx = col === 0 ? M : COL2;
+    const dy = dummyBaseY + row * dummyLineH;
     await test(`create_text_frame → ${dc.name} ("${dc.contents}")`, async () => {
       const result = await callTool(client, 'create_text_frame', {
-        x: 50, y: 350 + di * 20,
+        x: dx, y: dy,
         contents: dc.contents,
-        font_size: 12,
+        font_size: 11,
         name: dc.name,
         layer_name: 'TestLayer-Text',
       }) as any;
@@ -241,7 +253,7 @@ async function main(): Promise<void> {
   // ============================================================
   // Phase 1: 読み取り系
   // ============================================================
-  console.log('\n── Phase 1: 読み取り系 ──');
+  printPhase(1, 'Read');
 
   await test('get_document_info → 800x600, RGB', async () => {
     const result = await callTool(client, 'get_document_info') as any;
@@ -358,13 +370,13 @@ async function main(): Promise<void> {
   // --- GrayColor 挙動検証 ---
   await test('GrayColor: create gray=0/100 rects, verify colorToObject output', async () => {
     const g0 = await callTool(client, 'create_rectangle', {
-      x: 650, y: 50, width: 20, height: 20,
+      x: 520, y: 260, width: 20, height: 20,
       fill: { type: 'gray', value: 0 },
       name: '__e2e_gray0',
     }) as any;
     assert(typeof g0.uuid === 'string', 'gray=0 rect should have uuid');
     const g100 = await callTool(client, 'create_rectangle', {
-      x: 680, y: 50, width: 20, height: 20,
+      x: 550, y: 260, width: 20, height: 20,
       fill: { type: 'gray', value: 100 },
       name: '__e2e_gray100',
     }) as any;
@@ -373,19 +385,19 @@ async function main(): Promise<void> {
     // colorToObject 経由で gray 値を読み戻す
     const colors = await callTool(client, 'get_colors') as any;
     const grayFills = (colors.usedFillColors || []).filter((c: any) => c.type === 'gray');
-    console.log(`    [debug] GrayColor fills: ${JSON.stringify(grayFills)}`);
+    console.log(`       \x1b[90m\u2502 GrayColor fills: ${JSON.stringify(grayFills)}\x1b[0m`);
 
     // check_contrast で gray→RGB 変換を確認
     const contrast = await callTool(client, 'check_contrast', {
       color1: { type: 'gray', value: 0 },
       color2: { type: 'gray', value: 100 },
     }) as any;
-    console.log(`    [debug] gray=0 rgb=${JSON.stringify(contrast.color1_rgb)}, gray=100 rgb=${JSON.stringify(contrast.color2_rgb)}`);
+    console.log(`       \x1b[90m\u2502 gray=0 rgb=${JSON.stringify(contrast.color1_rgb)}, gray=100 rgb=${JSON.stringify(contrast.color2_rgb)}\x1b[0m`);
     if (contrast.color1_rgb) {
       if (contrast.color1_rgb.r > 200) {
-        console.log('    [RESULT] gray=0 → WHITE (ink convention). preflight isWhiteColor should check gray===0');
+        console.log('       \x1b[90m\u2514 gray=0 \u2192 WHITE (ink convention)\x1b[0m');
       } else {
-        console.log('    [RESULT] gray=0 → BLACK (doc convention). check_contrast formula should not invert');
+        console.log('       \x1b[90m\u2514 gray=0 \u2192 BLACK (doc convention)\x1b[0m');
       }
     }
     assert(typeof contrast.contrastRatio === 'number', 'should compute contrast');
@@ -610,7 +622,7 @@ async function main(): Promise<void> {
   // ============================================================
   // Phase 2: 操作系
   // ============================================================
-  console.log('\n── Phase 2: 操作系 ──');
+  printPhase(2, 'Modify');
 
   // --- granular modify_object tests (refactor-verify) ---
 
@@ -1001,7 +1013,7 @@ async function main(): Promise<void> {
   // ============================================================
   // Phase 3: 書き出し
   // ============================================================
-  console.log('\n── Phase 3: 書き出し ──');
+  printPhase(3, 'Export');
 
   await test('export SVG (artboard:0)', async () => {
     const result = await callTool(client, 'export', {
@@ -1135,7 +1147,7 @@ async function main(): Promise<void> {
   // ============================================================
   // Phase 4: ユーティリティ
   // ============================================================
-  console.log('\n── Phase 4: ユーティリティ ──');
+  printPhase(4, 'Utility');
 
   await test('preflight_check', async () => {
     const result = await callTool(client, 'preflight_check') as any;
@@ -1247,7 +1259,7 @@ async function main(): Promise<void> {
   // ============================================================
   // Phase 5: 新規ツール
   // ============================================================
-  console.log('\n── Phase 5: 新規ツール ──');
+  printPhase(5, 'Extended Tools');
 
   // --- list_fonts ---
 
@@ -1578,7 +1590,7 @@ async function main(): Promise<void> {
   // ============================================================
   // Phase 6: テキスト & エスケーピング (refactor-verify)
   // ============================================================
-  console.log('\n── Phase 6: テキスト & エスケーピング ──');
+  printPhase(6, 'Text & Escaping');
 
   // --- 特殊文字のエスケーピング ---
 
@@ -1872,7 +1884,7 @@ create visually appealing and effective compositions.
   // ============================================================
   // Phase 7: クリーンアップ — ドキュメントを閉じ、一時ファイルを削除
   // ============================================================
-  console.log('\n── Phase 7: クリーンアップ ──');
+  printPhase(7, 'Cleanup');
 
   await test('close_document (save: false)', async () => {
     const result = await callTool(client, 'close_document', { save: false }) as any;
@@ -1904,26 +1916,8 @@ create visually appealing and effective compositions.
     rmSync(TMP_DIR, { recursive: true, force: true });
   });
 
-  // ============================================================
-  // 結果サマリ
-  // ============================================================
-  const passed = results.filter(r => r.status === 'pass').length;
-  const failed = results.filter(r => r.status === 'fail').length;
-  const skipped = results.filter(r => r.status === 'skip').length;
-
-  console.log('\n' + '='.repeat(50));
-  console.log(`結果: ${passed} passed, ${failed} failed, ${skipped} skipped / ${results.length} total`);
-
-  if (failed > 0) {
-    console.log('\n失敗したテスト:');
-    for (const r of results.filter(r => r.status === 'fail')) {
-      console.log(`  ${FAIL} ${r.name}: ${r.message}`);
-    }
-  }
-  console.log('');
-
   await client.close();
-  process.exit(failed > 0 ? 1 : 0);
+  printResults(startTime);
 }
 
 main();
