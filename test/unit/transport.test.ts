@@ -164,7 +164,7 @@ describe('writePowerShellScript', () => {
     const ps1 = path.join(tmpDir, 'run-visible.ps1');
     await writePowerShellScript(ps1, '/tmp/script.jsx', { activate: true });
     const content = await fs.readFile(ps1, 'utf-8');
-    expect(content).toContain('$ai.Visible = $true');
+    expect(content).toContain('AppActivate("Adobe Illustrator")');
   });
 
   it('Windows パスのバックスラッシュをスラッシュに変換する', async () => {
