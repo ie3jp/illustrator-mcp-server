@@ -11,8 +11,8 @@ import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUC
  * modify_object — オブジェクトのプロパティ変更
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — position, width, height, opacity, locked, hidden, name
  *
- * 注意: rotation の絶対角度指定は atan2(mValueB, mValueA) で現在角度を算出するため、
- * skew/非等倍スケールされたオブジェクトでは不正確になる場合がある。
+ * 注意: rotation の累積角度は item.note のメタデータ (::rot=N) に記録される。
+ * Illustrator UI で直接回転した場合はこの値と実際の角度がずれる。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -32,10 +32,10 @@ if (preflight) {
     } else {
       var props = params.properties;
       var errors = [];
+      var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
       if (props.position) {
         try {
-          var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
           var pos = webToAiPoint(props.position.x, props.position.y, coordSystem, abRect);
           item.position = pos;
         } catch(e) { errors.push("position: " + e.message); }
@@ -71,18 +71,25 @@ if (preflight) {
 
       if (typeof props.rotation === "number") {
         try {
-          if (props.rotation_mode === "absolute") {
-            // 現在の回転角を Matrix から算出し、差分を rotate() に渡す
-            var m = item.matrix;
-            var currentRad = Math.atan2(m.mValueB, m.mValueA);
-            var currentDeg = currentRad * 180 / Math.PI;
+          var rotMode = props.rotation_mode || "delta";
+          if (rotMode === "absolute") {
+            // note メタデータから現在の累積回転角度を読み取り、差分を適用
+            var noteStr = item.note || "";
+            var currentDeg = parseFloat(getNoteMeta(noteStr, "rot")) || 0;
             var delta = props.rotation - currentDeg;
-            item.rotate(delta);
+            if (Math.abs(delta) > 0.001) {
+              item.rotate(delta);
+            }
+            setNoteMeta(item, "rot", String(Math.round(props.rotation * 1000) / 1000));
           } else {
             item.rotate(props.rotation);
+            // delta 回転時も累積角度を更新
+            var noteStr2 = item.note || "";
+            var prevDeg = parseFloat(getNoteMeta(noteStr2, "rot")) || 0;
+            setNoteMeta(item, "rot", String(Math.round((prevDeg + props.rotation) * 1000) / 1000));
           }
         }
-        catch(e) { errors.push("rotation: " + e.message); }
+        catch(e) { errors.push("rotation: " + e.message + " (line: " + (e.line || "?") + ")"); }
       }
 
       if (typeof props.name === "string") {
