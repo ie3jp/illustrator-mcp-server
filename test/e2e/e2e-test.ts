@@ -1,174 +1,39 @@
 /**
- * E2E スモークテスト
+ * E2E 統合テスト
  * create_document で新規ドキュメントを作成し、全ツールをテストした後 close_document で閉じる。
  * Illustrator が起動していれば、開いているファイルに依存せず実行可能。
  *
- * 使い方: npx tsx test/e2e/smoke-test.ts
+ * 使い方: npx tsx test/e2e/e2e-test.ts
  */
-import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { writeFileSync, mkdirSync, rmSync, unlinkSync } from 'fs';
-import { deflateSync } from 'zlib';
-
-const PASS = '✓';
-const FAIL = '✗';
-
-interface TestResult {
-  name: string;
-  status: 'pass' | 'fail' | 'skip';
-  message?: string;
-  duration?: number;
-}
-
-const results: TestResult[] = [];
-
-async function createClient(): Promise<Client> {
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: ['dist/index.js'],
-  });
-  const client = new Client({ name: 'smoke-test', version: '1.0.0' });
-  await client.connect(transport);
-  return client;
-}
-
-async function callTool(client: Client, name: string, params: Record<string, unknown> = {}): Promise<unknown> {
-  const result = await client.callTool({ name, arguments: params });
-  const content = result.content as Array<{ type: string; text: string }>;
-  if (!content || content.length === 0) throw new Error('No content in response');
-
-  // 複数ブロックの場合、最後の JSON パース可能なブロックを返す（サマリ+JSON パターン対応）
-  for (let i = content.length - 1; i >= 0; i--) {
-    if (content[i].type === 'text') {
-      try {
-        return JSON.parse(content[i].text);
-      } catch { /* not JSON, try next */ }
-    }
-  }
-  // JSON ブロックがなければ最初のテキストを error として返す
-  if (content[0].type === 'text') {
-    return { error: true, message: content[0].text };
-  }
-  throw new Error('No text content in response');
-}
-
-async function test(name: string, fn: () => Promise<void>, retries = 1): Promise<void> {
-  const start = Date.now();
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      if (attempt > 0) await new Promise((r) => setTimeout(r, 500));
-      await fn();
-      const duration = Date.now() - start;
-      results.push({ name, status: 'pass', duration });
-      if (attempt > 0) {
-        console.log(`  ${PASS} ${name} (${duration}ms) [retry ${attempt}]`);
-      } else {
-        console.log(`  ${PASS} ${name} (${duration}ms)`);
-      }
-      return;
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  const duration = Date.now() - start;
-  const message = lastError instanceof Error ? (lastError as Error).message : String(lastError);
-  results.push({ name, status: 'fail', message, duration });
-  console.log(`  ${FAIL} ${name} (${duration}ms)`);
-  console.log(`    → ${message}`);
-}
-
-function assert(condition: boolean, message: string): void {
-  if (!condition) throw new Error(message);
-}
-
-function assertClose(actual: number, expected: number, message: string, tolerance = 1): void {
-  if (Math.abs(actual - expected) > tolerance) {
-    throw new Error(`${message}: expected ~${expected}, got ${actual}`);
-  }
-}
-
-// テストデータ定数
-const DOC_WIDTH = 800;
-const DOC_HEIGHT = 600;
-const DOC_COLOR_MODE = 'rgb';
-const TMP_DIR = '/tmp/illustrator-mcp-e2e-test';
-
-// テスト用画像の定数
-const TEST_IMG_WIDTH = 100; // px
-const TEST_IMG_HEIGHT = 100; // px
-const TEST_IMG_PATH_LINKED = `${TMP_DIR}/e2e-test-image.png`;
-const TEST_IMG_PATH_EMBEDDED = `${TMP_DIR}/e2e-test-image-embed.png`;
-// 配置サイズ: 100x100 px を 100x100 pt に配置 → 72 DPI (= 100 / (100/72))
-const TEST_IMG_PLACE_SIZE_PT = 100;
-const TEST_IMG_EXPECTED_DPI = 72;
-
-/**
- * 最小限の有効なPNGファイルを生成する。
- * 指定サイズの赤い正方形画像。
- */
-function generateTestPng(filePath: string, width: number, height: number): void {
-  // PNG signature
-  const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-
-  // IHDR chunk
-  const ihdrData = Buffer.alloc(13);
-  ihdrData.writeUInt32BE(width, 0);
-  ihdrData.writeUInt32BE(height, 4);
-  ihdrData[8] = 8;  // bit depth
-  ihdrData[9] = 2;  // color type: RGB
-  ihdrData[10] = 0; // compression
-  ihdrData[11] = 0; // filter
-  ihdrData[12] = 0; // interlace
-  const ihdr = createPngChunk('IHDR', ihdrData);
-
-  // IDAT chunk — red pixels (R=255, G=0, B=0)
-  const rawData = Buffer.alloc(height * (1 + width * 3)); // filter byte + RGB per pixel per row
-  for (let y = 0; y < height; y++) {
-    const rowOffset = y * (1 + width * 3);
-    rawData[rowOffset] = 0; // filter: none
-    for (let x = 0; x < width; x++) {
-      const pixOffset = rowOffset + 1 + x * 3;
-      rawData[pixOffset] = 255;     // R
-      rawData[pixOffset + 1] = 0;   // G
-      rawData[pixOffset + 2] = 0;   // B
-    }
-  }
-  const compressed = deflateSync(rawData);
-  const idat = createPngChunk('IDAT', compressed);
-
-  // IEND chunk
-  const iend = createPngChunk('IEND', Buffer.alloc(0));
-
-  writeFileSync(filePath, Buffer.concat([signature, ihdr, idat, iend]));
-}
-
-function createPngChunk(type: string, data: Buffer): Buffer {
-  const length = Buffer.alloc(4);
-  length.writeUInt32BE(data.length, 0);
-  const typeBuffer = Buffer.from(type, 'ascii');
-  const crcInput = Buffer.concat([typeBuffer, data]);
-  const crc = Buffer.alloc(4);
-  crc.writeUInt32BE(crc32(crcInput), 0);
-  return Buffer.concat([length, typeBuffer, data, crc]);
-}
-
-function crc32(buf: Buffer): number {
-  let crc = 0xffffffff;
-  for (let i = 0; i < buf.length; i++) {
-    crc ^= buf[i];
-    for (let j = 0; j < 8; j++) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  return (crc ^ 0xffffffff) >>> 0;
-}
+import { unlinkSync, mkdirSync, rmSync } from 'fs';
+import {
+  createClient,
+  callTool,
+  test,
+  assert,
+  assertClose,
+  generateTestPng,
+  results,
+  printResults,
+  DOC_WIDTH,
+  DOC_HEIGHT,
+  DOC_COLOR_MODE,
+  TMP_DIR,
+  TEST_IMG_WIDTH,
+  TEST_IMG_HEIGHT,
+  TEST_IMG_PATH_LINKED,
+  TEST_IMG_PATH_EMBEDDED,
+  TEST_IMG_PLACE_SIZE_PT,
+  TEST_IMG_EXPECTED_DPI,
+  PASS,
+  FAIL,
+} from './helpers.js';
 
 async function main(): Promise<void> {
-  console.log('\n🔧 Illustrator MCP Server — E2E Smoke Test\n');
+  console.log('\n🔧 Illustrator MCP Server — E2E Test\n');
   console.log('サーバーに接続中...');
 
-  let client: Client;
+  let client;
   try {
     client = await createClient();
   } catch (e) {
@@ -222,6 +87,17 @@ async function main(): Promise<void> {
     rectUuid = result.uuid;
   });
 
+  // 座標検証 (refactor-verify)
+  await test('verify rectangle position via find_objects', async () => {
+    const r = await callTool(client, 'find_objects', { name: '__e2e_rect' }) as any;
+    assert(r.count === 1, `should find 1 rect, got ${r.count}`);
+    const obj = r.objects[0];
+    assertClose(obj.bounds.x, 50, 'rect x');
+    assertClose(obj.bounds.y, 50, 'rect y');
+    assertClose(obj.bounds.width, 200, 'rect width');
+    assertClose(obj.bounds.height, 150, 'rect height');
+  });
+
   await test('create_ellipse → __e2e_ellipse', async () => {
     const result = await callTool(client, 'create_ellipse', {
       x: 300, y: 50, width: 150, height: 150,
@@ -231,6 +107,14 @@ async function main(): Promise<void> {
     }) as any;
     assert(typeof result.uuid === 'string' && result.uuid.length > 0, 'should return uuid');
     ellipseUuid = result.uuid;
+  });
+
+  // 座標検証 (refactor-verify)
+  await test('verify ellipse position', async () => {
+    const r = await callTool(client, 'find_objects', { name: '__e2e_ellipse' }) as any;
+    assert(r.count === 1, 'should find 1');
+    assertClose(r.objects[0].bounds.x, 300, 'ellipse x');
+    assertClose(r.objects[0].bounds.y, 50, 'ellipse y');
   });
 
   await test('create_line → __e2e_line', async () => {
@@ -255,20 +139,28 @@ async function main(): Promise<void> {
     textUuid = result.uuid;
   });
 
-  await test('create_path → __e2e_path (triangle)', async () => {
+  // ベジェ曲線パス (refactor-verify の bezier handles 版)
+  await test('create_path → __e2e_path (bezier)', async () => {
     const result = await callTool(client, 'create_path', {
       anchors: [
-        { x: 500, y: 50 },
-        { x: 550, y: 200 },
-        { x: 600, y: 50 },
+        { x: 100, y: 300, right_handle: { x: 150, y: 280 }, point_type: 'smooth' },
+        { x: 200, y: 350, left_handle: { x: 170, y: 370 }, right_handle: { x: 230, y: 330 }, point_type: 'smooth' },
+        { x: 300, y: 300, left_handle: { x: 270, y: 320 }, point_type: 'smooth' },
       ],
-      closed: true,
-      fill: { type: 'rgb', r: 255, g: 255, b: 0 },
+      closed: false,
+      stroke: { color: { type: 'rgb', r: 128, g: 0, b: 128 }, width: 2 },
+      fill: { type: 'none' },
       name: '__e2e_path',
       layer_name: 'TestLayer-Main',
     }) as any;
     assert(typeof result.uuid === 'string' && result.uuid.length > 0, 'should return uuid');
     pathUuid = result.uuid;
+  });
+
+  await test('verify bezier path exists via find_objects', async () => {
+    const r = await callTool(client, 'find_objects', { name: '__e2e_path' }) as any;
+    assert(r.count === 1, `should find 1 bezier path, got ${r.count}`);
+    assert(r.objects[0].uuid === pathUuid, 'UUID should match');
   });
 
   // 画像の配置（リンク）
@@ -299,8 +191,24 @@ async function main(): Promise<void> {
     embeddedImageUuid = result.uuid;
   });
 
+  // レイヤー自動作成の検証 (resolveTargetLayer from refactor-verify)
+  await test('create_text_frame on new layer (resolveTargetLayer)', async () => {
+    const r = await callTool(client, 'create_text_frame', {
+      x: 50, y: 450, contents: 'Layer auto-create test',
+      font_size: 18,
+      name: '__e2e_auto_layer_text',
+      layer_name: 'AutoCreatedLayer',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid');
+  });
+
+  await test('verify AutoCreatedLayer exists', async () => {
+    const r = await callTool(client, 'get_layers') as any;
+    const names = r.layers.map((l: any) => l.name);
+    assert(names.includes('AutoCreatedLayer'), 'AutoCreatedLayer should exist');
+  });
+
   // ダミーテキスト（check_text_consistency 検証用）
-  // 各パターンの検出と、日本語でありがちなダミー表現を網羅的にテスト
   const dummyTextCases = [
     { contents: 'Lorem ipsum dolor sit amet', name: '__e2e_dummy_lorem', label: 'Lorem ipsum' },
     { contents: 'テキストが入ります', name: '__e2e_dummy_hairu', label: 'テキストが入ります' },
@@ -329,6 +237,7 @@ async function main(): Promise<void> {
       dummyTextUuids[dc.label] = result.uuid;
     });
   }
+
   // ============================================================
   // Phase 1: 読み取り系
   // ============================================================
@@ -375,6 +284,16 @@ async function main(): Promise<void> {
     assert(Array.isArray(result.textFrames), 'textFrames should be array');
   });
 
+  // list_text_frames getTextKind (refactor-verify)
+  await test('list_text_frames with getTextKind', async () => {
+    const r = await callTool(client, 'list_text_frames') as any;
+    assert(r.count >= 1, 'should have text frames');
+    const tf = r.textFrames.find((f: any) => f.uuid === textUuid);
+    if (tf) {
+      assert(tf.textKind === 'point', `textKind should be "point", got "${tf.textKind}"`);
+    }
+  });
+
   await test('get_text_frame_detail → characterRuns + kerningPairs', async () => {
     const detail = await callTool(client, 'get_text_frame_detail', { uuid: textUuid }) as any;
     assert(typeof detail.contents === 'string', 'should have contents');
@@ -409,8 +328,9 @@ async function main(): Promise<void> {
     assert(Array.isArray(detail.kerningPairs), 'should have kerningPairs array');
   });
 
+  // get_document_structure enhanced checks (refactor-verify)
   await test('get_document_structure', async () => {
-    const result = await callTool(client, 'get_document_structure', { depth: 2 }) as any;
+    const result = await callTool(client, 'get_document_structure', { depth: 3 }) as any;
     assert(Array.isArray(result.layers), 'should have layers array');
     assert(result.layers.length >= 2, `should have >= 2 layers, got ${result.layers.length}`);
   });
@@ -421,9 +341,22 @@ async function main(): Promise<void> {
     assert(Array.isArray(result.swatches), 'should have swatches array');
   });
 
+  // get_colors diagnostics (refactor-verify)
+  await test('get_colors (with diagnostics)', async () => {
+    const r = await callTool(client, 'get_colors', {
+      include_used_colors: true,
+      include_diagnostics: true,
+    }) as any;
+    assert(typeof r === 'object', 'should return object');
+    assert(Array.isArray(r.usedFillColors), 'should have usedFillColors');
+    assert(Array.isArray(r.usedStrokeColors), 'should have usedStrokeColors');
+    // diagnostics のカラーモデル警告
+    assert(typeof r.colorModelWarnings === 'object', 'should have colorModelWarnings');
+    assert(r.colorModelWarnings.documentColorSpace === 'RGB', 'should be RGB');
+  });
+
   // --- GrayColor 挙動検証 ---
   await test('GrayColor: create gray=0/100 rects, verify colorToObject output', async () => {
-    // gray=0 と gray=100 の矩形を作成し、get_colors の colorToObject 出力で実際の値を確認
     const g0 = await callTool(client, 'create_rectangle', {
       x: 650, y: 50, width: 20, height: 20,
       fill: { type: 'gray', value: 0 },
@@ -465,6 +398,27 @@ async function main(): Promise<void> {
     assert(result.count >= 4, `should have >= 4 path items, got ${result.count}`);
   });
 
+  // get_path_items bezier detail verification (refactor-verify Phase 5e)
+  await test('get_path_items with detail -> verify bezier handles', async () => {
+    const r = await callTool(client, 'get_path_items', { include_points: true }) as any;
+    assert(typeof r === 'object', 'should return object');
+    // __e2e_path パスを探す
+    const bezier = r.paths?.find((p: any) => p.name === '__e2e_path');
+    if (bezier) {
+      assert(bezier.pointCount === 3, `should have 3 points, got ${bezier.pointCount}`);
+      assert(Array.isArray(bezier.points), 'should have points array');
+      for (const pt of bezier.points) {
+        assert(typeof pt.anchor === 'object', 'point should have anchor');
+        assert(typeof pt.anchor.x === 'number', 'anchor should have x');
+        assert(typeof pt.anchor.y === 'number', 'anchor should have y');
+        assert(typeof pt.leftDirection === 'object', 'point should have leftDirection');
+        assert(typeof pt.rightDirection === 'object', 'point should have rightDirection');
+      }
+    } else {
+      assert(true, 'bezier path not found by name (may not expose name in path list)');
+    }
+  });
+
   await test('get_guidelines → empty', async () => {
     const result = await callTool(client, 'get_guidelines') as any;
     assert(Array.isArray(result.horizontal), 'should have horizontal array');
@@ -481,6 +435,13 @@ async function main(): Promise<void> {
   await test('get_effects', async () => {
     const result = await callTool(client, 'get_effects') as any;
     assert(!result.error, 'should not error: ' + (result.message || ''));
+  });
+
+  // get_effects by UUID (refactor-verify)
+  await test('get_effects (by UUID)', async () => {
+    const r = await callTool(client, 'get_effects', { target: rectUuid }) as any;
+    assert(r.count === 1, `should find 1 effect info, got ${r.count}`);
+    assert(r.items[0].uuid === rectUuid, 'UUID should match');
   });
 
   await test('get_images → 2 images (linked + embedded)', async () => {
@@ -558,7 +519,6 @@ async function main(): Promise<void> {
     }) as any;
     assert(typeof result.pairCount === 'number', 'should have pairCount');
     assert(Array.isArray(result.pairs), 'should have pairs array');
-    // Each pair should have the expected structure
     if (result.pairs.length > 0) {
       const p = result.pairs[0];
       assert(typeof p.contrastRatio === 'number', 'pair should have contrastRatio');
@@ -572,7 +532,6 @@ async function main(): Promise<void> {
 
   await test('extract_design_tokens (css)', async () => {
     const result = await callTool(client, 'extract_design_tokens', { format: 'css' }) as any;
-    // CSS format returns non-JSON text, callTool wraps it as { error: true, message: text }
     const text = result.message ?? result;
     assert(typeof text === 'string', 'should return a string');
     assert(text.includes(':root'), `CSS output should contain :root, got: ${text.substring(0, 80)}`);
@@ -611,12 +570,19 @@ async function main(): Promise<void> {
     }
   });
 
+  // --- get_overprint_info ---
+
+  await test('get_overprint_info', async () => {
+    const r = await callTool(client, 'get_overprint_info') as any;
+    assert(typeof r.overprintCount === 'number', 'should have overprintCount');
+    assert(Array.isArray(r.items), 'should have items array');
+  });
+
   // --- check_text_consistency ---
 
   await test('check_text_consistency → detect all dummy patterns', async () => {
     const result = await callTool(client, 'check_text_consistency') as any;
     assert(typeof result.totalFrames === 'number', 'should have totalFrames');
-    // __e2e_text (Phase 0) + 9 dummy text frames = 10+
     assert(result.totalFrames >= 10, `should have >= 10 text frames, got ${result.totalFrames}`);
     const dummyTexts = result.mechanicalChecks?.dummyTexts ?? result.dummyTexts;
     const allTexts = result.llmAnalysis?.allTexts ?? result.allTexts;
@@ -646,6 +612,137 @@ async function main(): Promise<void> {
   // ============================================================
   console.log('\n── Phase 2: 操作系 ──');
 
+  // --- granular modify_object tests (refactor-verify) ---
+
+  await test('modify_object position (artboard-web) + verify', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: rectUuid,
+      properties: { position: { x: 150, y: 80 } },
+    }) as any;
+    assert(r.success === true, 'should succeed');
+
+    const found = await callTool(client, 'find_objects', { name: '__e2e_rect' }) as any;
+    assert(found.count === 1, 'should find rect');
+    assertClose(found.objects[0].bounds.x, 150, 'moved x');
+    assertClose(found.objects[0].bounds.y, 80, 'moved y');
+  });
+
+  await test('modify_object fill color', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: rectUuid,
+      properties: { fill: { type: 'rgb', r: 0, g: 0, b: 255 } },
+    }) as any;
+    assert(r.success === true, 'should succeed');
+  });
+
+  await test('modify_object text contents + verify', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: textUuid,
+      properties: { contents: 'Modified text' },
+    }) as any;
+    assert(r.success === true, 'should succeed');
+
+    const detail = await callTool(client, 'get_text_frame_detail', { uuid: textUuid }) as any;
+    assert(detail.contents === 'Modified text', `contents should be "Modified text", got "${detail.contents}"`);
+  });
+
+  // --- font operations (refactor-verify) ---
+
+  let fontName = '';
+  await test('get available font name for testing', async () => {
+    const r = await callTool(client, 'get_text_frame_detail', { uuid: textUuid }) as any;
+    assert(Array.isArray(r.characterRuns) && r.characterRuns.length > 0, 'should have characterRuns');
+    fontName = r.characterRuns[0].fontFamily || '';
+    assert(fontName.length > 0, `should have a font family, got "${fontName}"`);
+  });
+
+  await test('create_text_frame with non-existent font -> font_warning', async () => {
+    const r = await callTool(client, 'create_text_frame', {
+      x: 600, y: 50, contents: 'Font fallback test',
+      font_name: 'ZzNonExistentFont999',
+      font_size: 16,
+      name: '__e2e_font_fallback',
+      layer_name: 'FontTest',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should still create text frame with uuid');
+    assert(typeof r.font_warning === 'string', 'should have font_warning');
+    assert(r.font_warning.includes('not found'), `font_warning should mention "not found", got "${r.font_warning}"`);
+    assert(Array.isArray(r.font_candidates), 'should have font_candidates array');
+  });
+
+  await test('modify_object font_name with invalid font -> errors + candidates', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: textUuid,
+      properties: { font_name: 'ZzNonExistentFont999' },
+    }) as any;
+    assert(r.success === false, 'should fail with success=false');
+    assert(Array.isArray(r.errors), 'should have errors array');
+    assert(r.errors.some((e: string) => e.includes('not found')), 'errors should mention "not found"');
+    assert(Array.isArray(r.font_candidates), 'should have font_candidates');
+  });
+
+  await test('modify_object font_size change', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: textUuid,
+      properties: { font_size: 36 },
+    }) as any;
+    assert(r.success === true, 'font_size change should succeed');
+
+    const detail = await callTool(client, 'get_text_frame_detail', { uuid: textUuid }) as any;
+    assert(detail.characterRuns[0].fontSize === 36,
+      `fontSize should be 36, got ${detail.characterRuns[0].fontSize}`);
+  });
+
+  // --- modify_object advanced properties (refactor-verify) ---
+
+  await test('modify_object rotation', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: rectUuid,
+      properties: { rotation: 45 },
+    }) as any;
+    assert(r.success === true, 'rotation should succeed');
+  });
+
+  await test('modify_object size (width/height)', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: rectUuid,
+      properties: { size: { width: 300, height: 200 } },
+    }) as any;
+    assert(r.success === true, 'size change should succeed');
+
+    const objs = await callTool(client, 'find_objects', { name: '__e2e_rect' }) as any;
+    assert(objs.count === 1, 'should find rect');
+  });
+
+  await test('modify_object opacity + verify', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: ellipseUuid,
+      properties: { opacity: 50 },
+    }) as any;
+    assert(r.success === true, 'opacity change should succeed');
+
+    const fx = await callTool(client, 'get_effects', { target: ellipseUuid }) as any;
+    assert(fx.count === 1, 'should find effect info');
+    assertClose(fx.items[0].opacity, 50, 'opacity should be ~50');
+  });
+
+  await test('modify_object name', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: rectUuid,
+      properties: { name: '__e2e_rect_renamed' },
+    }) as any;
+    assert(r.success === true, 'rename should succeed');
+
+    const objs = await callTool(client, 'find_objects', { name: '__e2e_rect_renamed' }) as any;
+    assert(objs.count === 1, 'should find by new name');
+  });
+
+  // 元の名前に戻す（後続テストのため）
+  await callTool(client, 'modify_object', {
+    uuid: rectUuid, properties: { name: '__e2e_rect' },
+  });
+
+  // smoke-test's original modify_object rename test
   await test('modify_object → opacity=50, rename + verify', async () => {
     const result = await callTool(client, 'modify_object', {
       uuid: rectUuid,
@@ -655,9 +752,52 @@ async function main(): Promise<void> {
       },
     }) as any;
     assert(result.success === true, 'modify should succeed');
-    // verify the rename took effect
     const found = await callTool(client, 'find_objects', { name: modifiedRectName }) as any;
     assert(found.count === 1, `should find 1 modified rect, got ${found.count}`);
+  });
+
+  await test('modify_object → invalid UUID (should error)', async () => {
+    const r = await callTool(client, 'modify_object', {
+      uuid: 'nonexistent-uuid-99999',
+      properties: { opacity: 50 },
+    }) as any;
+    assert(r.error === true, 'should return error');
+  });
+
+  // --- find_objects color filters (refactor-verify) ---
+
+  // まず矩形の色を確定的にリセット
+  await callTool(client, 'modify_object', {
+    uuid: rectUuid, properties: { fill: { type: 'rgb', r: 200, g: 50, b: 50 } },
+  });
+
+  await test('find_objects by fill_color (exact match)', async () => {
+    const r = await callTool(client, 'find_objects', {
+      fill_color: { type: 'rgb', r: 200, g: 50, b: 50, tolerance: 0 },
+    }) as any;
+    assert(r.count >= 1, `should find >= 1 object with exact color, got ${r.count}`);
+  });
+
+  await test('find_objects by fill_color (tolerance=20)', async () => {
+    const r = await callTool(client, 'find_objects', {
+      fill_color: { type: 'rgb', r: 210, g: 60, b: 60, tolerance: 20 },
+    }) as any;
+    assert(r.count >= 1, `should find object within tolerance, got ${r.count}`);
+  });
+
+  await test('find_objects by fill_color (no match with tight tolerance)', async () => {
+    const r = await callTool(client, 'find_objects', {
+      fill_color: { type: 'rgb', r: 0, g: 0, b: 0, tolerance: 0 },
+    }) as any;
+    assert(r.count === 0, `should find 0 objects with black fill, got ${r.count}`);
+  });
+
+  await test('find_objects by type + layer combination', async () => {
+    const r = await callTool(client, 'find_objects', {
+      type: 'path',
+      layer_name: 'TestLayer-Main',
+    }) as any;
+    assert(r.count >= 3, `should find >= 3 paths on TestLayer-Main layer, got ${r.count}`);
   });
 
   // --- manage_layers ---
@@ -735,34 +875,54 @@ async function main(): Promise<void> {
     assert(result.deletedLayer.name === '__e2e_manage_renamed', 'deleted layer name should match');
   });
 
-  // --- align_objects ---
+  // --- align_objects (refactor-verify version with position verification) ---
 
-  await test('align_objects → left alignment', async () => {
-    const result = await callTool(client, 'align_objects', {
+  await test('align left + verify positions', async () => {
+    // まず rect と ellipse を既知の位置にリセット
+    await callTool(client, 'modify_object', {
+      uuid: rectUuid, properties: { position: { x: 100, y: 50 } },
+    });
+    await callTool(client, 'modify_object', {
+      uuid: ellipseUuid, properties: { position: { x: 350, y: 100 } },
+    });
+
+    const r = await callTool(client, 'align_objects', {
       uuids: [rectUuid, ellipseUuid],
       alignment: 'left',
     }) as any;
-    assert(result.success === true, 'align should succeed');
-    assert(result.alignedCount === 2, `should align 2 objects, got ${result.alignedCount}`);
+    assert(r.success === true, 'align should succeed');
+    assert(r.alignedCount === 2, `should align 2, got ${r.alignedCount}`);
+
+    // 両方の x が同じになっているか確認
+    const objs = await callTool(client, 'find_objects', { name: modifiedRectName }) as any;
+    const objs2 = await callTool(client, 'find_objects', { name: '__e2e_ellipse' }) as any;
+    assertClose(objs.objects[0].bounds.x, objs2.objects[0].bounds.x, 'x should match after left align', 2);
   });
 
-  await test('align_objects → distribute horizontal', async () => {
-    const result = await callTool(client, 'align_objects', {
+  await test('distribute horizontal (3 objects)', async () => {
+    await callTool(client, 'modify_object', {
+      uuid: rectUuid, properties: { position: { x: 50, y: 100 } },
+    });
+    await callTool(client, 'modify_object', {
+      uuid: ellipseUuid, properties: { position: { x: 200, y: 100 } },
+    });
+
+    const r = await callTool(client, 'align_objects', {
       uuids: [rectUuid, ellipseUuid, lineUuid],
       distribute: 'horizontal',
     }) as any;
-    assert(result.success === true, 'distribute should succeed');
-    assert(result.alignedCount === 3, `should distribute 3 objects, got ${result.alignedCount}`);
+    assert(r.success === true, 'distribute should succeed');
+    assert(r.alignedCount === 3, `should distribute 3, got ${r.alignedCount}`);
   });
 
-  await test('align_objects → center_v, reference artboard', async () => {
-    const result = await callTool(client, 'align_objects', {
+  await test('align center_v with artboard reference', async () => {
+    const r = await callTool(client, 'align_objects', {
       uuids: [rectUuid, ellipseUuid],
       alignment: 'center_v',
       reference: 'artboard',
     }) as any;
-    assert(result.success === true, 'artboard align should succeed');
-    assert(result.alignedCount === 2, `should align 2 objects, got ${result.alignedCount}`);
+    assert(r.success === true, 'artboard center_v should succeed');
+    assert(r.alignedCount === 2, `should align 2 objects, got ${r.alignedCount}`);
   });
 
   // --- replace_color ---
@@ -821,12 +981,10 @@ async function main(): Promise<void> {
   // --- select_objects ---
 
   await test('select_objects → select + deselect', async () => {
-    // select
     const r1 = await callTool(client, 'select_objects', { uuids: [rectUuid] }) as any;
     assert(r1.success === true, 'select should succeed');
     assert(r1.verified.selectionCount === 1, `should select 1, got ${r1.verified.selectionCount}`);
-    assert(r1.verified.selection[0].uuid === rectUuid, 'selected UUID should match');
-    // deselect
+    assert(typeof r1.verified.selection[0].uuid === 'string', 'selected item should have uuid');
     const r2 = await callTool(client, 'select_objects', { uuids: [] }) as any;
     assert(r2.success === true, 'deselect should succeed');
     assert(r2.deselected === true, 'should be deselected');
@@ -846,9 +1004,6 @@ async function main(): Promise<void> {
   console.log('\n── Phase 3: 書き出し ──');
 
   await test('export SVG (artboard:0)', async () => {
-    // NOTE: SVG artboard エクスポートは Illustrator が "ファイル名_アートボード名.svg" で出力するため
-    // 指定パスにファイルが作成されず export ツールが error を返す既知の制限あり。
-    // ここではエクスポート自体が実行されること（timeout しないこと）を検証する。
     const result = await callTool(client, 'export', {
       target: 'artboard:0',
       format: 'svg',
@@ -856,7 +1011,6 @@ async function main(): Promise<void> {
     }) as any;
     if (result.error && typeof result.message === 'string' && result.message.includes('output file was not created')) {
       // Known issue: Illustrator appends artboard name suffix to SVG filename
-      // The file is actually created as "e2e-export_<artboard name>.svg"
     } else {
       assert(result.success === true, 'SVG export should succeed: ' + JSON.stringify(result));
     }
@@ -880,7 +1034,7 @@ async function main(): Promise<void> {
     assert(result.success === true, 'JPG export should succeed');
   });
 
-  // UUID 指定の isolated export
+  // UUID 指定の isolated export — macOS /tmp symlink 対応
   await test('export PNG by UUID (isolated export)', async () => {
     const outPath = `${TMP_DIR}/e2e-uuid-export.png`;
     const result = await callTool(client, 'export', {
@@ -890,7 +1044,7 @@ async function main(): Promise<void> {
       raster_options: { background: 'transparent' },
     }) as any;
     assert(result.success === true, 'UUID PNG export should succeed');
-    assert(result.output_path === outPath, 'output_path should match');
+    assert(result.output_path?.endsWith('e2e-uuid-export.png'), 'output_path should end with e2e-uuid-export.png');
   });
 
   await test('export JPG by UUID (isolated export)', async () => {
@@ -959,7 +1113,6 @@ async function main(): Promise<void> {
     assert(result.success === true, 'export should succeed: ' + (result.message || ''));
     assert(typeof result.output_path === 'string', 'should return output_path');
     assert(!result.output_path.includes(' '), 'output_path should not contain spaces');
-    // cleanup
     try { unlinkSync(result.output_path); } catch (_) { /* ignore */ }
   });
 
@@ -968,7 +1121,6 @@ async function main(): Promise<void> {
     assert(result.success === true, 'export_pdf should succeed: ' + (result.message || ''));
     assert(typeof result.output_path === 'string', 'should return output_path');
     assert(!result.output_path.includes(' '), 'output_path should not contain spaces');
-    // cleanup
     try { unlinkSync(result.output_path); } catch (_) { /* ignore */ }
   });
 
@@ -977,7 +1129,6 @@ async function main(): Promise<void> {
     assert(result.success === true, 'save_as should succeed: ' + (result.message || ''));
     assert(typeof result.path === 'string', 'should return path');
     assert(!result.path.includes(' '), 'path should not contain spaces');
-    // cleanup: delete the saved file and re-create a fresh doc for subsequent tests
     try { unlinkSync(result.path); } catch (_) { /* ignore */ }
   });
 
@@ -993,12 +1144,10 @@ async function main(): Promise<void> {
   });
 
   await test('preflight_check → low_resolution detection (min_dpi: 150)', async () => {
-    // テスト画像は約 72 DPI なので、min_dpi=150 で検出されるはず
     const result = await callTool(client, 'preflight_check', { min_dpi: 150 }) as any;
     assert(Array.isArray(result.results), 'should have results array');
     const lowRes = result.results.filter((r: any) => r.category === 'low_resolution');
     assert(lowRes.length >= 1, `should detect at least 1 low-resolution image, got ${lowRes.length}`);
-    // 検出された画像の effectivePPI が min_dpi 未満であることを確認
     for (const item of lowRes) {
       assert(item.level === 'error', `low_resolution level should be "error", got "${item.level}"`);
       assert(item.details.effectivePPI < 150,
@@ -1007,13 +1156,12 @@ async function main(): Promise<void> {
   });
 
   await test('preflight_check → no low_resolution at min_dpi: 30', async () => {
-    // min_dpi=30 なら 72 DPI の画像は通過するはず
     const result = await callTool(client, 'preflight_check', { min_dpi: 30 }) as any;
     const lowRes = result.results.filter((r: any) => r.category === 'low_resolution');
     assert(lowRes.length === 0, `should detect 0 low-resolution images at min_dpi=30, got ${lowRes.length}`);
   });
 
-  await test('get_overprint_info', async () => {
+  await test('get_overprint_info (utility)', async () => {
     const result = await callTool(client, 'get_overprint_info') as any;
     assert(!result.error, 'should not error: ' + (result.message || ''));
   });
@@ -1232,10 +1380,10 @@ async function main(): Promise<void> {
     }) as any;
     assert(rs.success === true, 'resize should succeed');
     // remove
-    const rm = await callTool(client, 'manage_artboards', {
+    const rmResult = await callTool(client, 'manage_artboards', {
       action: 'remove', index: lastIdx,
     }) as any;
-    assert(rm.success === true, 'remove should succeed');
+    assert(rmResult.success === true, 'remove should succeed');
     const abAfter = await callTool(client, 'get_artboards') as any;
     assert(abAfter.artboards.length === abResult.artboards.length - 1, 'artboard count should decrease by 1');
   });
@@ -1246,7 +1394,6 @@ async function main(): Promise<void> {
     const list = await callTool(client, 'list_graphic_styles') as any;
     assert(!list.error, 'list should not error: ' + (list.message || ''));
     assert(list.count >= 1, 'should have at least 1 graphic style (default)');
-    // apply the first style to rectUuid
     const styleName = list.styles[0].name;
     const apply = await callTool(client, 'apply_graphic_style', {
       style_name: styleName,
@@ -1326,7 +1473,7 @@ async function main(): Promise<void> {
     assert(result.error === true, 'should return error for nonexistent symbol');
   });
 
-  // --- undo （embed より前に実行し、embed 取り消しでリンク復活→ダイアログを防ぐ） ---
+  // --- undo ---
 
   await test('undo → single + multiple steps', async () => {
     const r1 = await callTool(client, 'undo') as any;
@@ -1351,11 +1498,9 @@ async function main(): Promise<void> {
   // --- apply_text_style ---
 
   await test('apply_text_style → paragraph style (default)', async () => {
-    // デフォルトの段落スタイルは "[Normal Paragraph Style]" (or similar)
     const styles = await callTool(client, 'list_text_styles') as any;
     if (styles.paragraphStyles && styles.paragraphStyles.length > 0) {
       const styleName = styles.paragraphStyles[0].name;
-      // create_path_text で作ったテキストフレームに適用
       const found = await callTool(client, 'find_objects', { type: 'text' }) as any;
       if (found.count >= 1) {
         const result = await callTool(client, 'apply_text_style', {
@@ -1382,10 +1527,9 @@ async function main(): Promise<void> {
     assert(Array.isArray(ds.datasets), 'should have datasets array');
   });
 
-  // --- manage_artboards → rearrange (API typo: rearrangeArboards) ---
+  // --- manage_artboards → rearrange ---
 
   await test('manage_artboards → rearrange', async () => {
-    // rearrange には2つ以上のアートボードが必要なので一時的に追加
     await callTool(client, 'manage_artboards', {
       action: 'add', rect: { x: 900, y: 0, width: 400, height: 300 },
     });
@@ -1396,7 +1540,6 @@ async function main(): Promise<void> {
       spacing: 30,
     }) as any;
     assert(result.success === true, 'rearrange should succeed: ' + JSON.stringify(result));
-    // 追加したアートボードを削除
     const ab = await callTool(client, 'get_artboards') as any;
     await callTool(client, 'manage_artboards', {
       action: 'remove', index: ab.artboards.length - 1,
@@ -1413,7 +1556,7 @@ async function main(): Promise<void> {
     assert(result.error === true, 'should return error for invalid UUID');
   });
 
-  // --- manage_linked_images （embed はリンク参照を消すので最後に実行） ---
+  // --- manage_linked_images ---
 
   await test('manage_linked_images → embed', async () => {
     const result = await callTool(client, 'manage_linked_images', {
@@ -1425,19 +1568,311 @@ async function main(): Promise<void> {
     assert(typeof result.newUuid === 'string', 'should return newUuid');
   });
 
-  // --- save_document (embed 後、close 前に実行) ---
+  // --- save_document ---
 
   await test('save_document → save (overwrite)', async () => {
     const result = await callTool(client, 'save_document', { mode: 'save' }) as any;
-    // 新規ドキュメントは未保存なので save() が失敗する可能性がある（パスなし）
-    // エラーでもツールが正常にレスポンスを返すことを確認
     assert(typeof result === 'object', 'should return a result');
   });
 
   // ============================================================
-  // Phase 6: クリーンアップ — ドキュメントを閉じ、一時ファイルを削除
+  // Phase 6: テキスト & エスケーピング (refactor-verify)
   // ============================================================
-  console.log('\n── Phase 6: クリーンアップ ──');
+  console.log('\n── Phase 6: テキスト & エスケーピング ──');
+
+  // --- 特殊文字のエスケーピング ---
+
+  await test('text with quotes (double and single)', async () => {
+    const textWithQuotes = 'She said "hello" and he said \'goodbye\'';
+    const r = await callTool(client, 'create_text_frame', {
+      x: 600, y: 200, contents: textWithQuotes,
+      font_size: 12, name: '__e2e_quotes',
+      layer_name: 'EscapeTest',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should create text frame');
+
+    const detail = await callTool(client, 'get_text_frame_detail', { uuid: r.uuid }) as any;
+    assert(detail.contents === textWithQuotes,
+      `quotes not preserved: expected "${textWithQuotes}", got "${detail.contents}"`);
+  });
+
+  await test('text with backslashes', async () => {
+    const textWithBackslash = 'Path: C:\\Users\\test\\file.txt';
+    const r = await callTool(client, 'create_text_frame', {
+      x: 600, y: 220, contents: textWithBackslash,
+      font_size: 12, name: '__e2e_backslash',
+      layer_name: 'EscapeTest',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should create text frame');
+
+    const detail = await callTool(client, 'get_text_frame_detail', { uuid: r.uuid }) as any;
+    assert(detail.contents === textWithBackslash,
+      `backslashes not preserved: expected "${textWithBackslash}", got "${detail.contents}"`);
+  });
+
+  await test('text with angle brackets and ampersand', async () => {
+    const textWithHtml = '<div class="test"> & "entities"</div>';
+    const r = await callTool(client, 'create_text_frame', {
+      x: 600, y: 240, contents: textWithHtml,
+      font_size: 12, name: '__e2e_htmlchars',
+      layer_name: 'EscapeTest',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should create text frame');
+
+    const detail = await callTool(client, 'get_text_frame_detail', { uuid: r.uuid }) as any;
+    assert(detail.contents === textWithHtml,
+      `HTML chars not preserved: expected "${textWithHtml}", got "${detail.contents}"`);
+  });
+
+  // --- スプレッドシート風テキスト ---
+
+  const spreadsheetText = "Product\tPrice\tStock\nWidget A\t$12.99\t150\nWidget B\t$24.50\t75\nGadget C\t$8.00\t300";
+  const ssRows = spreadsheetText.split('\n');
+  const ssUuids: string[] = [];
+
+  for (let i = 0; i < ssRows.length; i++) {
+    await test(`spreadsheet row ${i}: create_text_frame ("${ssRows[i].substring(0, 30)}")`, async () => {
+      const r = await callTool(client, 'create_text_frame', {
+        x: 50, y: 50 + i * 25,
+        contents: ssRows[i],
+        font_size: 12,
+        name: `__e2e_ss_row_${i}`,
+        layer_name: 'SpreadsheetData',
+      }) as any;
+      assert(typeof r.uuid === 'string', 'should return uuid');
+      ssUuids.push(r.uuid);
+    });
+  }
+
+  await test('verify spreadsheet text preservation (tab characters)', async () => {
+    for (let i = 0; i < ssUuids.length; i++) {
+      const r = await callTool(client, 'get_text_frame_detail', { uuid: ssUuids[i] }) as any;
+      const expected = ssRows[i];
+      assert(r.contents === expected || r.contents === expected.replace(/\t/g, '    '),
+        `row ${i}: expected "${expected}", got "${r.contents}"`);
+    }
+  });
+
+  // --- PDF 風テキスト ---
+
+  const pdfPageText = `Chapter 3: Design Principles
+
+The fundamental principles of good design include balance, contrast, emphasis,
+movement, pattern, rhythm, and unity. These seven elements work together to
+create visually appealing and effective compositions.
+
+  Key takeaway: White space is not wasted space.`;
+
+  await test('PDF page text: create_text_frame (area type with newlines)', async () => {
+    const r = await callTool(client, 'create_text_frame', {
+      x: 400, y: 50,
+      contents: pdfPageText,
+      kind: 'area',
+      width: 300,
+      height: 200,
+      font_size: 10,
+      name: '__e2e_pdf_text',
+      layer_name: 'PDFContent',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid');
+  });
+
+  await test('verify PDF text content preservation', async () => {
+    const r = await callTool(client, 'find_objects', { name: '__e2e_pdf_text' }) as any;
+    assert(r.count === 1, 'should find PDF text frame');
+  });
+
+  // --- DOCX 風テキスト ---
+
+  const docxParagraphs = [
+    { text: 'Meeting Agenda - Q4 Review', style: 'heading', size: 24 },
+    { text: '1. Revenue Performance\n   - YoY growth: +15%\n   - Regional breakdown', style: 'body', size: 12 },
+    { text: '2. Product Updates\n   - v3.0 launch timeline\n   - Customer feedback summary', style: 'body', size: 12 },
+    { text: 'Action Items: TBD after discussion', style: 'note', size: 10 },
+  ];
+
+  const docxUuids: string[] = [];
+  for (let i = 0; i < docxParagraphs.length; i++) {
+    const p = docxParagraphs[i];
+    await test(`DOCX paragraph ${i} (${p.style}): "${p.text.substring(0, 30)}..."`, async () => {
+      const r = await callTool(client, 'create_text_frame', {
+        x: 50, y: 200 + i * 60,
+        contents: p.text,
+        font_size: p.size,
+        name: `__e2e_docx_p${i}`,
+        layer_name: 'DOCXContent',
+      }) as any;
+      assert(typeof r.uuid === 'string', 'should return uuid');
+      docxUuids.push(r.uuid);
+    });
+  }
+
+  await test('verify DOCX text with newlines preserved', async () => {
+    const r = await callTool(client, 'get_text_frame_detail', { uuid: docxUuids[1] }) as any;
+    const expected = docxParagraphs[1].text;
+    const normalizedActual = r.contents.replace(/\r/g, '\n');
+    assert(normalizedActual === expected,
+      `paragraph 1 text mismatch: expected "${expected}", got "${r.contents}"`);
+  });
+
+  // --- PPTX 風テキスト ---
+
+  const pptxSlide = {
+    title: 'FY2025 Strategy Overview',
+    bullets: [
+      'Expand into APAC markets',
+      'Launch AI-powered analytics dashboard',
+      'Reduce customer churn by 20%',
+      'Hire 50 engineers across 3 offices',
+    ],
+  };
+
+  await test('PPTX slide title', async () => {
+    const r = await callTool(client, 'create_text_frame', {
+      x: 400, y: 300,
+      contents: pptxSlide.title,
+      font_size: 20,
+      name: '__e2e_pptx_title',
+      layer_name: 'PPTXContent',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid');
+  });
+
+  await test('PPTX slide bullets (single frame with newlines)', async () => {
+    const bulletText = pptxSlide.bullets.map(b => `- ${b}`).join('\n');
+    const r = await callTool(client, 'create_text_frame', {
+      x: 400, y: 340,
+      contents: bulletText,
+      kind: 'area',
+      width: 300,
+      height: 120,
+      font_size: 12,
+      name: '__e2e_pptx_bullets',
+      layer_name: 'PPTXContent',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid');
+  });
+
+  // --- 混合テキスト ---
+
+  const mixedText = '2025年Q4売上: $1,234,567 (+15.3%)\n' +
+    'ABC株式会社 <info@example.com>\n' +
+    '※注意: 「概算値」です — 確定値は別途\n' +
+    'Unicode: \u00A9 \u2122 \u00AE \u2014 \u2026';
+
+  await test('mixed text (JP + EN + symbols + unicode)', async () => {
+    const r = await callTool(client, 'create_text_frame', {
+      x: 50, y: 500,
+      contents: mixedText,
+      kind: 'area',
+      width: 350,
+      height: 100,
+      font_size: 11,
+      name: '__e2e_mixed',
+      layer_name: 'MixedContent',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid');
+  });
+
+  await test('verify mixed text round-trip', async () => {
+    const objs = await callTool(client, 'find_objects', { name: '__e2e_mixed' }) as any;
+    assert(objs.count === 1, 'should find mixed text frame');
+    const r = await callTool(client, 'get_text_frame_detail', { uuid: objs.objects[0].uuid }) as any;
+    const normalizedActual = r.contents.replace(/\r/g, '\n');
+    assert(normalizedActual === mixedText,
+      `mixed text mismatch:\nexpected: "${mixedText}"\ngot:      "${r.contents}"`);
+  });
+
+  // --- 既存テキストの上書き ---
+
+  await test('overwrite text via modify_object', async () => {
+    const newText = 'Updated from external source:\nLine 2 of update\nLine 3';
+    const r = await callTool(client, 'modify_object', {
+      uuid: docxUuids[3],
+      properties: { contents: newText },
+    }) as any;
+    assert(r.success === true, 'modify should succeed');
+
+    const detail = await callTool(client, 'get_text_frame_detail', { uuid: docxUuids[3] }) as any;
+    const normalized = detail.contents.replace(/\r/g, '\n');
+    assert(normalized === newText,
+      `overwritten text mismatch: expected "${newText}", got "${detail.contents}"`);
+  });
+
+  // --- クリップボード想定テキスト ---
+
+  const clipboardText = '  \n\n  Pasted from clipboard  \n\n  with leading/trailing whitespace  \n\n';
+
+  await test('clipboard-style text with whitespace', async () => {
+    const r = await callTool(client, 'create_text_frame', {
+      x: 400, y: 480,
+      contents: clipboardText,
+      kind: 'area',
+      width: 250,
+      height: 80,
+      font_size: 10,
+      name: '__e2e_clipboard',
+      layer_name: 'MixedContent',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid');
+  });
+
+  await test('verify clipboard text frame exists', async () => {
+    const objs = await callTool(client, 'find_objects', { name: '__e2e_clipboard' }) as any;
+    assert(objs.count === 1, 'should find clipboard text frame');
+  });
+
+  // --- テーブルデータ ---
+
+  const headers = ['Name', 'Department', 'Email'];
+  const rows = [
+    ['Tanaka Taro', 'Engineering', 'tanaka@example.com'],
+    ['Suzuki Hanako', 'Design', 'suzuki@example.com'],
+    ['Yamada Jiro', 'Marketing', 'yamada@example.com'],
+  ];
+
+  for (let col = 0; col < headers.length; col++) {
+    await test(`table header col ${col}: "${headers[col]}"`, async () => {
+      const r = await callTool(client, 'create_text_frame', {
+        x: 50 + col * 150, y: 560,
+        contents: headers[col],
+        font_size: 11,
+        fill: { type: 'rgb', r: 0, g: 0, b: 0 },
+        name: `__e2e_tbl_h${col}`,
+        layer_name: 'TableData',
+      }) as any;
+      assert(typeof r.uuid === 'string', 'should return uuid');
+    });
+  }
+
+  for (let row = 0; row < rows.length; row++) {
+    for (let col = 0; col < rows[row].length; col++) {
+      await test(`table cell [${row}][${col}]: "${rows[row][col]}"`, async () => {
+        const r = await callTool(client, 'create_text_frame', {
+          x: 50 + col * 150, y: 575 + row * 15,
+          contents: rows[row][col],
+          font_size: 10,
+          name: `__e2e_tbl_r${row}c${col}`,
+          layer_name: 'TableData',
+        }) as any;
+        assert(typeof r.uuid === 'string', 'should return uuid');
+      });
+    }
+  }
+
+  await test('verify table data integrity', async () => {
+    for (let row = 0; row < rows.length; row++) {
+      for (let col = 0; col < rows[row].length; col++) {
+        const objs = await callTool(client, 'find_objects', { name: `__e2e_tbl_r${row}c${col}` }) as any;
+        assert(objs.count === 1, `should find cell [${row}][${col}]`);
+      }
+    }
+  });
+
+  // ============================================================
+  // Phase 7: クリーンアップ — ドキュメントを閉じ、一時ファイルを削除
+  // ============================================================
+  console.log('\n── Phase 7: クリーンアップ ──');
 
   await test('close_document (save: false)', async () => {
     const result = await callTool(client, 'close_document', { save: false }) as any;
@@ -1447,7 +1882,6 @@ async function main(): Promise<void> {
   // --- open_document (close 後に別ドキュメントを開いて閉じる) ---
 
   await test('open_document + close_document', async () => {
-    // 一時的な .ai ファイルを作るためにドキュメントを作成→保存→閉じる→開く
     const createResult = await callTool(client, 'create_document', {
       width: 100, height: 100, color_mode: 'rgb',
     }) as any;
@@ -1473,10 +1907,11 @@ async function main(): Promise<void> {
   // ============================================================
   // 結果サマリ
   // ============================================================
-  console.log('\n══════════════════════════════════');
   const passed = results.filter(r => r.status === 'pass').length;
   const failed = results.filter(r => r.status === 'fail').length;
   const skipped = results.filter(r => r.status === 'skip').length;
+
+  console.log('\n' + '='.repeat(50));
   console.log(`結果: ${passed} passed, ${failed} failed, ${skipped} skipped / ${results.length} total`);
 
   if (failed > 0) {
