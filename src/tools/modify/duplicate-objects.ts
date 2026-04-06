@@ -59,8 +59,21 @@ if (preflight) {
           }
         }
 
-        var uuid = ensureUUID(dup);
-        results.push({ sourceUuid: params.uuids[i], newUuid: uuid, verified: verifyItem(dup) });
+        // 複製は元オブジェクトの note(UUID含む)を継承するため、新しいUUIDを強制割り当て
+        var newUuid = generateUUID();
+        try {
+          var dupNote = dup.note || "";
+          var oldUuid = extractUUIDFromNote(dupNote);
+          if (oldUuid) {
+            // UUID部分だけ置換し、メタデータ(::key=value)は保持
+            dup.note = newUuid + dupNote.substring(36);
+          } else {
+            dup.note = newUuid;
+          }
+        } catch(e) {
+          // note 書き込み不可の場合はそのまま
+        }
+        results.push({ sourceUuid: params.uuids[i], newUuid: newUuid, verified: verifyItem(dup) });
       }
 
       writeResultFile(RESULT_PATH, {
