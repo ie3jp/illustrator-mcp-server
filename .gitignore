@@ -8,5 +8,6 @@ dist/
 *.mcpb
 docs/*
 !docs/images/
+docs/images/*.ai
 CLAUDE.md
 *.skill

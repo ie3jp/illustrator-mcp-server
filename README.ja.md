@@ -434,8 +434,6 @@ Color Bars
 <img src="docs/images/example-twilight-geometry.png" width="720" alt="Twilight Geometry — Claude と illustrator-mcp-server で生成した幾何学的抽象風景画" />
 
 > 使用ツール: `create_document`, `manage_layers` ×4, `create_rectangle` ×2, `create_gradient` ×2, `create_path` ×11, `create_ellipse` ×14, `create_line` ×4, `create_text_frame` ×2, `modify_object`, `set_z_order`, `export`
->
-> ソースファイル: [example-twilight-geometry.ai](docs/images/example-twilight-geometry.ai)
 
 ---
 
