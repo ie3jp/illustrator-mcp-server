@@ -6,6 +6,7 @@ dist/
 .DS_Store
 .mcpregistry_*
 *.mcpb
-docs/
+docs/*
+!docs/images/
 CLAUDE.md
 *.skill

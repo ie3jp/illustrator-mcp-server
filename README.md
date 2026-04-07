@@ -17,6 +17,25 @@ Control Illustrator directly from AI assistants like Claude — extract design i
 
 ---
 
+## 🎨 Gallery
+
+All artwork below was created entirely by Claude through natural language conversation — no manual Illustrator operation involved.
+
+<table>
+<tr>
+<td align="center"><img src="docs/images/example-event-poster.png" width="300" alt="Event poster — SYNC TOKYO 2026" /><br><b>Event Poster</b></td>
+<td align="center"><img src="docs/images/example-logo-concepts.png" width="300" alt="Logo concepts — Slow Drip Coffee Co." /><br><b>Logo Concepts</b></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/example-business-card.png" width="300" alt="Business card — KUMO Studio" /><br><b>Business Card</b></td>
+<td align="center"><img src="docs/images/example-twilight-geometry.png" width="300" alt="Twilight Geometry — abstract geometric landscape" /><br><b>Twilight Geometry</b></td>
+</tr>
+</table>
+
+> See [detailed breakdowns](#example-smpte-test-pattern) below for prompts, tool usage, and artboard structure.
+
+---
+
 > [!TIP]
 > Developing and maintaining this tool takes time and resources.
 > If it helps your workflow, your support means a lot — [☕ buy me a coffee!](https://ko-fi.com/cyocun)

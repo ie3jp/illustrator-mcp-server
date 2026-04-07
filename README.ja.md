@@ -15,6 +15,25 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 ---
 
+## 🎨 ギャラリー
+
+以下の作品はすべて、Claude との自然言語の会話だけで制作されています。Illustrator の手動操作は一切行っていません。
+
+<table>
+<tr>
+<td align="center"><img src="docs/images/example-event-poster.png" width="300" alt="イベントポスター — SYNC TOKYO 2026" /><br><b>イベントポスター</b></td>
+<td align="center"><img src="docs/images/example-logo-concepts.png" width="300" alt="ロゴコンセプト — Slow Drip Coffee Co." /><br><b>ロゴコンセプト</b></td>
+</tr>
+<tr>
+<td align="center"><img src="docs/images/example-business-card.png" width="300" alt="名刺 — KUMO Studio" /><br><b>名刺</b></td>
+<td align="center"><img src="docs/images/example-twilight-geometry.png" width="300" alt="Twilight Geometry — 幾何学的抽象風景画" /><br><b>Twilight Geometry</b></td>
+</tr>
+</table>
+
+> 詳しいプロンプトや使用ツールは[作例の詳細](#作例-smpte-テストパターン)をご覧ください。
+
+---
+
 > [!TIP]
 > このツールの開発・維持には費用がかかっています。
 > 役に立ったらぜひ応援お願いします — [☕ コーヒー奢ってください!](https://ko-fi.com/cyocun)
