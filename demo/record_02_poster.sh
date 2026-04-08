@@ -27,7 +27,7 @@ trap 'kill $RECORD_PID 2>/dev/null; wait $RECORD_PID 2>/dev/null; echo "Recordin
 sleep 2
 
 # --- Type prompt into Claude Desktop ---
-PROMPT='Design an A3 poster for a fictional tech×art festival "SYNC TOKYO 2026" — futuristic but warm. Use English for all text. Use CMYK color mode. Save the .ai file when done. Check that the layout actually works — verify text alignment, spacing, and balance. If anything looks off, fix it before finalizing. Add crop marks (trim marks) as the final step.
+PROMPT='Design an A3 poster for a fictional tech×art festival "SYNC TOKYO 2026" — futuristic but warm. Use English for all text. Use CMYK color mode. Save the .ai file when done. Then visually inspect your own design — take a screenshot or export to check the actual result. Fix any layout mistakes, overlapping text, or misalignment you find. Add crop marks (trim marks) as the final step.
 
 For fonts, choose bold/heavy weights — nothing thin or light.
 
@@ -44,7 +44,7 @@ set inputText to "$(echo "$PROMPT" | sed 's/"/\\"/g')"
 tell application "System Events"
     repeat with c in (characters of inputText)
         keystroke c
-        delay 0.015
+        delay 0.002
     end repeat
     delay 0.5
     keystroke return

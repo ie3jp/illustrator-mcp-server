@@ -27,7 +27,7 @@ trap 'kill $RECORD_PID 2>/dev/null; wait $RECORD_PID 2>/dev/null; echo "Recordin
 sleep 2
 
 # --- Type prompt into Claude Desktop ---
-PROMPT='Design three logo concepts for a fictional craft coffee brand "Slow Drip" — each with a different approach. Use English for all text. Use RGB color mode. Save the .ai file when done. Check that the layout actually works. If anything looks off, fix it before finalizing.
+PROMPT='Design three logo concepts for a fictional craft coffee brand "Slow Drip" — each with a different approach. Use English for all text. Use RGB color mode. Save the .ai file when done. Then visually inspect your own design — take a screenshot or export to check the actual result. Fix any layout mistakes, overlapping text, or misalignment you find.
 
 For fonts, choose bold/heavy weights — nothing thin or light.
 
@@ -44,7 +44,7 @@ set inputText to "$(echo "$PROMPT" | sed 's/"/\\"/g')"
 tell application "System Events"
     repeat with c in (characters of inputText)
         keystroke c
-        delay 0.015
+        delay 0.002
     end repeat
     delay 0.5
     keystroke return

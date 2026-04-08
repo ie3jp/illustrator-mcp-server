@@ -29,7 +29,7 @@ sleep 2
 # --- Type prompt into Claude Desktop ---
 PROMPT='Design a business card for a fictional design studio called "KUMO Studio." Minimal and refined aesthetic. Use English for all text on the card. Include some made-up contact info.
 
-Use CMYK color mode. Save the .ai file when done. Check that the layout actually works — verify text alignment, spacing, and balance. If anything looks off, fix it before finalizing. Add crop marks (trim marks) as the final step.
+Use CMYK color mode. Save the .ai file when done. Then visually inspect your own design — take a screenshot or export to check the actual result. Fix any layout mistakes, overlapping text, or misalignment you find. Add crop marks (trim marks) as the final step.
 
 For fonts, choose bold/heavy weights — nothing thin or light.
 
@@ -46,7 +46,7 @@ set inputText to "$(echo "$PROMPT" | sed 's/"/\\"/g')"
 tell application "System Events"
     repeat with c in (characters of inputText)
         keystroke c
-        delay 0.015
+        delay 0.002
     end repeat
     delay 0.5
     keystroke return
