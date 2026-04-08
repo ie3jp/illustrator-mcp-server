@@ -183,7 +183,7 @@ export const coordinateSystemSchema = z
   .enum(['artboard-web', 'document'])
   .optional()
   .describe(
-    'Coordinate system. Default: artboard-web (top-left origin, Y-down). Use set_workflow to switch to document coordinates if needed.',
+    'Coordinate system. artboard-web (default): origin at active artboard top-left, Y-down. document: Illustrator native coords, origin at bottom-left, Y-up. Note: the user can change the ruler origin, so always call get_artboards first to confirm artboard position and bounds before placing objects.',
   );
 
 // --- Workflow detection ---

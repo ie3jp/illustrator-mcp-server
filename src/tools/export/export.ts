@@ -1,6 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { realpathSync, existsSync } from 'node:fs';
+import { realpathSync, existsSync, readFileSync } from 'node:fs';
 import { dirname, basename, join } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
@@ -345,7 +345,34 @@ export function register(server: McpServer): void {
         }
       }
       const result = await executeJsxHeavy(jsxCode, resolvedParams);
-      return formatToolResult(result);
+      const textResult = formatToolResult(result);
+
+      // PNG/JPG: ファイルを読み込んでbase64画像としても返す
+      if (
+        result &&
+        typeof result === 'object' &&
+        (result as Record<string, unknown>).success &&
+        (result as Record<string, unknown>).output_path &&
+        (params.format === 'png' || params.format === 'jpg')
+      ) {
+        const outputPath = (result as Record<string, unknown>).output_path as string;
+        try {
+          if (existsSync(outputPath)) {
+            const imageData = readFileSync(outputPath).toString('base64');
+            const mimeType = params.format === 'png' ? 'image/png' : 'image/jpeg';
+            return {
+              content: [
+                ...textResult.content,
+                { type: 'image' as const, data: imageData, mimeType },
+              ],
+            };
+          }
+        } catch {
+          // 画像読み込みに失敗してもテキスト結果は返す
+        }
+      }
+
+      return textResult;
     },
   );
 }
