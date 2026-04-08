@@ -27,24 +27,28 @@ trap 'kill $RECORD_PID 2>/dev/null; wait $RECORD_PID 2>/dev/null; echo "Recordin
 sleep 2
 
 # --- Type prompt into Claude Desktop ---
-PROMPT='Design an A3 poster for a fictional tech×art festival "SYNC TOKYO 2026" — futuristic but warm. Use English for all text. Use CMYK color mode. Save the .ai file when done. Then visually inspect your own design — take a screenshot or export to check the actual result. Fix any layout mistakes, overlapping text, or misalignment you find. Add crop marks (trim marks) as the final step.
-
-For fonts, choose bold/heavy weights — nothing thin or light.
-
-When aligning text, especially left-aligned text, use optical alignment rather than purely mathematical alignment. Align to where the text visually appears to start, not where the bounding box sits.
-
-Please respond in English throughout. Do not ask for confirmation — just proceed on your own judgment.'
-
-osascript <<APPLESCRIPT
+osascript <<'APPLESCRIPT'
 tell application "System Events" to key code 102
 delay 0.5
 tell application "Claude" to activate
 delay 1
-set inputText to "$(echo "$PROMPT" | sed 's/"/\\"/g')"
+set paraList to { ¬
+    "Design an A3 poster for a fictional tech×art festival \"SYNC TOKYO 2026\" — futuristic but warm. Use English for all text. Use CMYK color mode. Save the .ai file when done. Then visually inspect your own design — take a screenshot or export to check the actual result. Fix any layout mistakes, overlapping text, or misalignment you find. Add crop marks (trim marks) as the final step.", ¬
+    "For fonts, choose bold/heavy weights — nothing thin or light.", ¬
+    "When aligning text, especially left-aligned text, use optical alignment rather than purely mathematical alignment. Align to where the text visually appears to start, not where the bounding box sits.", ¬
+    "Please respond in English throughout. Do not ask for confirmation — just proceed on your own judgment."}
 tell application "System Events"
-    repeat with c in (characters of inputText)
-        keystroke c
-        delay 0.002
+    repeat with i from 1 to count of paraList
+        if i > 1 then
+            keystroke return using shift down
+            delay 0.01
+            keystroke return using shift down
+            delay 0.01
+        end if
+        repeat with c in (characters of (item i of paraList))
+            keystroke c
+            delay 0.002
+        end repeat
     end repeat
     delay 0.5
     keystroke return

@@ -32,91 +32,107 @@
 - **Product Hunt** — 出すのは問題ないがMCP系のupvoteは全体的に低調。やるなら「ついで」の温度感で
 - **デザイン系メディア寄稿** — CreatorZine等
 
-## デモ動画の録画（CLI）
+## デモ動画の録画
 
-macOS標準の `screencapture` でCLIから録画できる。ウィンドウ配置も `osascript` で制御可能。
+### 概要
+Claude Desktop + Illustrator を左右に並べ、プロンプト自動入力→MCP経由でIllustratorを操作する様子を録画する。
 
-### ワークフロー
-1. `osascript` でIllustratorのウィンドウを固定位置・サイズに設定
-2. `screencapture` で同じ矩形を動画録画
-3. 撮り直し時も同一フレームで再現可能
+### 3パターンのデモ
 
-### コマンド例
+| # | スクリプト | 内容 | カラー |
+|---|-----------|------|--------|
+| 1 | `demo/record_01_business_card.sh` | 名刺 "KUMO Studio" | CMYK |
+| 2 | `demo/record_02_poster.sh` | A3ポスター "SYNC TOKYO 2026" | CMYK |
+| 3 | `demo/record_03_logo.sh` | ロゴ3案 "Slow Drip" | RGB |
+
+### 録画の実行手順
+
 ```bash
-# ウィンドウ配置
-osascript -e 'tell application "System Events" to tell process "Illustrator"
-  set position of window 1 to {100, 100}
-  set size of window 1 to {1280, 720}
-end tell'
+# 0. 事前準備
+#    - Claude Desktop と Illustrator を起動しておく
+#    - Claude Desktop で新しいチャットを開いておく
+#    - 前回の .mov ファイルが残っていたら削除する（上書きできないため）
 
-# 録画（30秒で自動停止、クリック表示）
-screencapture -V 30 -R 100,100,1280,720 -k output.mov
+# 1. スクリプト実行（ウィンドウ配置→録画開始→タイピング→送信を一括）
+bash demo/record_01_business_card.sh
+
+# 2. Claude Desktop が作業完了するまで待つ
+#    - スクロールが止まったら End キーで最下部に飛ばす
+#    - Continue ボタンが出たら手動で押す
+
+# 3. 完了したら Ctrl+C で録画停止
+
+# 4. 次のパターンは新しいチャットで繰り返し
+bash demo/record_02_poster.sh
+bash demo/record_03_logo.sh
 ```
 
-### 主要オプション
-- `-R x,y,w,h` — 録画範囲の矩形指定
-- `-V seconds` — 秒数指定で自動停止（`-v` だとCtrl+Cで手動停止）
-- `-k` — クリックを表示
-- `-g` — マイク音声も録る
+### スクリプトの中身
 
-### 備考
-- docsのautoPrompt用デモ録画に使う想定
-- OpenScreen（`~/Dropbox/__playground/openScreen`）はElectron製GUIアプリでCLI非対応。ズーム演出等の加工が必要な場合はGUIで使う
+各スクリプトは以下を自動実行する:
+1. Claude Desktop（左）+ Illustrator（右）をサブディスプレイ上に配置
+2. `screencapture -v` でサブディスプレイを録画開始（バックグラウンド）
+3. 英数キーでIME切替 → プロンプトを1文字ずつタイピング（delay 0.002）→ Cmd+Enter で送信
 
-## 2アプリ並列キャプチャ（録画用）
+### ウィンドウ配置（サブディスプレイ EV2785, 1280x720）
 
-Claude DesktopとIllustratorを左右に並べて1画面で録画する。
-
-### コマンド例
 ```bash
-# 左にClaude Desktop、右にIllustrator を並べる
+# AppleScript座標: サブが上にあるため Y が負の値
 osascript -e '
 tell application "System Events"
     tell process "Claude"
-        set position of window 1 to {0, 0}
-        set size of window 1 to {960, 1080}
+        set position of window 1 to {0, -720}
+        set size of window 1 to {640, 720}
     end tell
     tell process "Illustrator"
-        set position of window 1 to {960, 0}
-        set size of window 1 to {960, 1080}
+        set position of window 1 to {640, -720}
+        set size of window 1 to {640, 720}
     end tell
 end tell'
-
-# 両方をまとめて録画（1920x1080）
-screencapture -V 60 -R 0,0,1920,1080 -k demo.mov
 ```
 
-### 備考
-- ディスプレイ解像度に合わせて座標・サイズを調整する
-- フルスクリーン録画（`-R` 省略）も可能だが、メニューバーやDockが映るので矩形指定の方がクリーン
+- ディスプレイ配置が変わったら座標の再取得が必要（`NSScreen` で確認）
+- Illustrator は AppleScript の `set position` で負のY座標を受け付けないことがある。その場合は手動でサブに移動してからスクリプトを実行する
 
-## Claude Desktop 自動タイピングスクリプト（録画用）
+### 自動タイピング
 
-macOS AppleScript で Claude Desktop の入力欄に1文字ずつタイピング風に入力する。
-
-### 使い方
 ```bash
 osascript -e '
 tell application "System Events" to key code 102
 delay 0.5
-set inputText to "ここにテキスト"
 tell application "Claude" to activate
 delay 1
+set inputText to "ここにプロンプト"
 tell application "System Events"
     repeat with c in (characters of inputText)
         keystroke c
-        delay 0.05
+        delay 0.002
     end repeat
-end tell
-'
+    delay 0.5
+    keystroke return using command down
+end tell'
 ```
 
-### ポイント
 - `key code 102`（英数キー）でIMEを英語に切り替えてから入力
-- `delay 0.05` でタイピング速度を調整（小さいほど速い）
-- 日本語テキストは未対応（クリップボード経由の別方式が必要）
-- 送信まで自動化するなら末尾に `keystroke return` を追加
+- `delay 0.002` でタイピング速度を調整（小さいほど速い）
+- 日本語テキストは未対応（`keystroke` はASCIIのみ。クリップボード経由の別方式が必要）
+- 改行は `keystroke return using shift down`（Shift+Enter）。通常の Enter は送信になるため
+- 送信は `keystroke return`（Enter）
 - アクセシビリティ権限が必要（System Preferences → Privacy & Security → Accessibility）
+
+### screencapture オプション
+- `-R x,y,w,h` — 録画範囲の矩形指定
+- `-V seconds` — 秒数指定で自動停止（`-v` だとCtrl+Cで手動停止）
+- `-k` — クリックを表示
+- `-g` — マイク音声も録る
+- 同名ファイルが既に存在すると録画失敗する。事前に削除すること
+
+### スクロール
+- Claude Desktop の自動スクロールが止まった場合は `End` キーで最下部に飛ばせる
+
+### 注意事項
+- OpenScreen（`~/Dropbox/__playground/openScreen`）はElectron製GUIアプリでCLI非対応。ズーム演出等の加工が必要な場合はGUIで使う
+- Illustrator の英語化は `application.xml` の `installedLanguages` を `en_US` に変更（sudo必要、要再起動）。ただし効かない場合あり
 
 ## データ (2026-03)
 - npm月間DL: 933 (3/23リリース)
