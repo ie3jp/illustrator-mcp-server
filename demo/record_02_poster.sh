@@ -1,8 +1,8 @@
 #!/bin/bash
-# Demo recording: Pattern 2 - A3 Poster "SYNC TOKYO 2026"
+# Demo: Pattern 2 - A3 Poster "SYNC TOKYO 2026"
+# Arranges windows and types prompt into Claude Desktop.
+# Start capture_start.sh separately before running this.
 set -euo pipefail
-
-OUTPUT="${1:-demo_02_poster.mov}"
 
 # --- Sub display (EV2785): AppleScript coords (0, -720), size=1280x720 ---
 # --- Arrange windows ---
@@ -19,12 +19,6 @@ tell application "System Events"
 end tell'
 
 sleep 1
-
-# --- Start recording in background ---
-screencapture -v -R 0,-720,1280,720 -k "$OUTPUT" &
-RECORD_PID=$!
-trap 'kill $RECORD_PID 2>/dev/null; wait $RECORD_PID 2>/dev/null; echo "Recording saved: $OUTPUT"' INT TERM
-sleep 2
 
 # --- Type prompt into Claude Desktop ---
 osascript <<'APPLESCRIPT'
@@ -55,5 +49,4 @@ tell application "System Events"
 end tell
 APPLESCRIPT
 
-echo "Recording in progress. Press Ctrl+C to stop when the task is done."
-wait $RECORD_PID
+echo "Prompt sent. Waiting for Claude Desktop to finish..."
