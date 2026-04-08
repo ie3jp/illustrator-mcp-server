@@ -293,7 +293,7 @@ export function register(server: McpServer): void {
     'export',
     {
       title: 'Export',
-      description: 'Export objects, groups, artboards, or selection. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Export objects, groups, artboards, or selection. For PNG/JPG, the exported image is returned as base64 in the response — you can view it directly without reading the file from disk. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         target: z
           .string()
