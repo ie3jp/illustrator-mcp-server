@@ -63,6 +63,61 @@ screencapture -V 30 -R 100,100,1280,720 -k output.mov
 - docsのautoPrompt用デモ録画に使う想定
 - OpenScreen（`~/Dropbox/__playground/openScreen`）はElectron製GUIアプリでCLI非対応。ズーム演出等の加工が必要な場合はGUIで使う
 
+## 2アプリ並列キャプチャ（録画用）
+
+Claude DesktopとIllustratorを左右に並べて1画面で録画する。
+
+### コマンド例
+```bash
+# 左にClaude Desktop、右にIllustrator を並べる
+osascript -e '
+tell application "System Events"
+    tell process "Claude"
+        set position of window 1 to {0, 0}
+        set size of window 1 to {960, 1080}
+    end tell
+    tell process "Illustrator"
+        set position of window 1 to {960, 0}
+        set size of window 1 to {960, 1080}
+    end tell
+end tell'
+
+# 両方をまとめて録画（1920x1080）
+screencapture -V 60 -R 0,0,1920,1080 -k demo.mov
+```
+
+### 備考
+- ディスプレイ解像度に合わせて座標・サイズを調整する
+- フルスクリーン録画（`-R` 省略）も可能だが、メニューバーやDockが映るので矩形指定の方がクリーン
+
+## Claude Desktop 自動タイピングスクリプト（録画用）
+
+macOS AppleScript で Claude Desktop の入力欄に1文字ずつタイピング風に入力する。
+
+### 使い方
+```bash
+osascript -e '
+tell application "System Events" to key code 102
+delay 0.5
+set inputText to "ここにテキスト"
+tell application "Claude" to activate
+delay 1
+tell application "System Events"
+    repeat with c in (characters of inputText)
+        keystroke c
+        delay 0.05
+    end repeat
+end tell
+'
+```
+
+### ポイント
+- `key code 102`（英数キー）でIMEを英語に切り替えてから入力
+- `delay 0.05` でタイピング速度を調整（小さいほど速い）
+- 日本語テキストは未対応（クリップボード経由の別方式が必要）
+- 送信まで自動化するなら末尾に `keystroke return` を追加
+- アクセシビリティ権限が必要（System Preferences → Privacy & Security → Accessibility）
+
 ## データ (2026-03)
 - npm月間DL: 933 (3/23リリース)
 - 紹介するたびにスパイクが出る → 定期的に違う切り口で露出するのが効果的
