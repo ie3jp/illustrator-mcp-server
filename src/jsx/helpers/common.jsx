@@ -515,6 +515,21 @@ function iterateAllItems(container, callback) {
  * @param {Array} [artboardRect] - アートボード矩形（artboard-web時に必要）
  * @returns {Object} アイテムのスナップショット
  */
+function checkArtboardBounds(item, artboardRect) {
+  if (!artboardRect) return null;
+  var gb = item.geometricBounds; // [left, top, right, bottom]
+  var abL = artboardRect[0], abT = artboardRect[1], abR = artboardRect[2], abB = artboardRect[3];
+  var itemL = gb[0], itemT = gb[1], itemR = gb[2], itemB = gb[3];
+  // fully inside
+  if (itemL >= abL && itemR <= abR && itemT <= abT && itemB >= abB) return null;
+  // fully outside
+  if (itemR <= abL || itemL >= abR || itemB >= abT || itemT <= abB) {
+    return "WARNING: This object is completely outside the artboard. It will not be visible in the final output. Check your coordinates — in artboard-web mode, (0,0) is the top-left of the artboard and Y increases downward.";
+  }
+  // partially outside
+  return "WARNING: This object extends beyond the artboard edges. Parts of it may be clipped in the final output.";
+}
+
 function verifyItem(item, coordSystem, artboardRect) {
   var snap = {
     name: item.name || "",
@@ -543,6 +558,9 @@ function verifyItem(item, coordSystem, artboardRect) {
 
   snap.layer = getParentLayerName(item);
   snap.visible = item.hidden !== true;
+
+  var boundsWarning = checkArtboardBounds(item, artboardRect);
+  if (boundsWarning) snap.warning = boundsWarning;
 
   return snap;
 }
