@@ -158,6 +158,8 @@ if (preflight) {
           detectionMethod = "detected from Illustrator locale";
         }
 
+        var bleedNote = "IMPORTANT — Bleed (塗り足し): Any design element that touches or crosses the trim edge (the original artboard boundary) MUST extend at least 3mm (8.5pt) beyond it on all affected sides. This prevents white edges after cutting. Do NOT scale or move elements — instead, extend/duplicate fills and background elements outward. The trim line is the original artboard rectangle (" + origAbRect[0] + ", " + origAbRect[1] + ", " + origAbRect[2] + ", " + origAbRect[3] + " in document coordinates).";
+
         writeResultFile(RESULT_PATH, {
           success: true,
           mode: "artboard",
@@ -173,9 +175,10 @@ if (preflight) {
             width: newAbRect[2] - newAbRect[0],
             height: newAbRect[1] - newAbRect[3]
           },
+          bleed_required: bleedNote,
           description: (resolvedStyle === "japanese")
-            ? "Japanese crop marks created. Artboard expanded to include all marks."
-            : "Western crop marks created. Artboard expanded to include all marks."
+            ? "Japanese crop marks created. Artboard expanded to include all marks. See bleed_required for next steps."
+            : "Western crop marks created. Artboard expanded to include all marks. See bleed_required for next steps."
         });
         }
       }
