@@ -14,8 +14,9 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — overprintFill, overprintStroke
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PlacedItem/ — file, matrix
  *
- * 既知の問題: isWhiteColor の GrayColor 判定 (gray===100) は
- * リファレンス記載（0=黒, 100=白）に基づくが、check-contrast.ts 等の変換式と矛盾あり。要検証。
+ * GrayColor.gray の解釈: 0=白(インクなし), 100=黒(フルインク)。
+ * Adobe公式リファレンス (docsforadobe.dev) は「0=black, 100=white」と記載しているが誤り。
+ * Illustrator 2026 (v30) で実機検証済み (2026-04)。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -48,8 +49,8 @@ if (preflight) {
         } else if (color.typename === "RGBColor") {
           if (color.red === 255 && color.green === 255 && color.blue === 255) return true;
         } else if (color.typename === "GrayColor") {
-          // GrayColor.gray はインク量: 0=白(インクなし), 100=黒(フルインク)
-          // E2Eテストで確認済み。リファレンスの "0=black, 100=white" 記載は誤り。
+          // GrayColor.gray: 0=白(インクなし), 100=黒(フルインク)
+          // Adobe公式リファレンスの「0=black, 100=white」記載は誤り (Illustrator 2026 実機検証済み)
           if (color.gray === 0) return true;
         }
       } catch(e) {}

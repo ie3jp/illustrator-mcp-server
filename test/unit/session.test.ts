@@ -23,8 +23,8 @@ describe('session state', () => {
     mockExecuteJsx.mockReset();
   });
 
-  it('resolveCoordinateSystem auto-detects from document when no session set', async () => {
-    // Simulate a CMYK print document
+  it('resolveCoordinateSystem always defaults to artboard-web regardless of color mode', async () => {
+    // Even CMYK print documents should default to artboard-web
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -32,7 +32,7 @@ describe('session state', () => {
       rasterEffectResolution: 300,
       colorProfile: 'Japan Color 2001 Coated',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
   });
 
   it('resolveCoordinateSystem auto-detects artboard-web for RGB document', async () => {
@@ -66,7 +66,7 @@ describe('session state', () => {
   });
 
   it('cache persists when same document, re-detects on document switch', async () => {
-    // First call: CMYK document — full detection
+    // First call: CMYK document — always artboard-web
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -74,13 +74,13 @@ describe('session state', () => {
       rasterEffectResolution: 300,
       colorProfile: '',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
 
     // Second call: cache validation returns same documentKey — cache hit
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document'); // cached
+    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web'); // cached
 
     // Third call: cache validation returns different documentKey — re-detects
     mockExecuteJsx.mockResolvedValueOnce({
@@ -127,12 +127,12 @@ describe('session state', () => {
 
     // 1 (initial detection) + 1 (cache key validation) = 2 calls
     expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
-    expect(first).toBe('document');
-    expect(second).toBe('document');
+    expect(first).toBe('artboard-web');
+    expect(second).toBe('artboard-web');
   });
 
   it('invalidateAutoDetectCache forces re-detection on next call', async () => {
-    // First: CMYK doc (1 JSX call for full detection)
+    // First: CMYK doc — still artboard-web
     mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -140,7 +140,7 @@ describe('session state', () => {
       rasterEffectResolution: 300,
       colorProfile: '',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
     expect(mockExecuteJsx).toHaveBeenCalledTimes(1);
 
     // Invalidate cache (simulates create_document / close_document)
@@ -189,7 +189,7 @@ describe('detectWorkflow', () => {
       colorProfile: 'Japan Color 2001 Coated',
     });
     expect(hint.detectedWorkflow).toBe('print');
-    expect(hint.recommendedCoordinateSystem).toBe('document');
+    expect(hint.recommendedCoordinateSystem).toBe('artboard-web');
   });
 
   it('detects video: RGB + px + 150dpi', () => {

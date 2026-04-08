@@ -6,8 +6,8 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * check_contrast — WCAG コントラスト比チェック
  *
- * 既知の問題: GrayColor の gray プロパティの解釈がリファレンス（0=黒, 100=白）と
- * インク量解釈（0=白, 100=黒）で矛盾あり。現在のコードはインク量解釈を使用。
+ * GrayColor.gray の解釈: 0=白(インクなし), 100=黒(フルインク)。
+ * Adobe公式リファレンスの「0=black, 100=white」記載は誤り (Illustrator 2026 実機検証済み, 2026-04)。
  */
 const jsxCode = `
 var preflight = preflightChecks();

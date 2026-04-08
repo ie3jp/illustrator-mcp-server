@@ -183,7 +183,7 @@ export const coordinateSystemSchema = z
   .enum(['artboard-web', 'document'])
   .optional()
   .describe(
-    'Coordinate system. Omit to auto-detect from document (CMYK→document, RGB→artboard-web). Override via set_workflow.',
+    'Coordinate system. Default: artboard-web (top-left origin, Y-down). Use set_workflow to switch to document coordinates if needed.',
   );
 
 // --- Workflow detection ---
@@ -278,8 +278,11 @@ export function detectWorkflow(signals: DocumentSignals): WorkflowHint {
     if (isWebProfile && colorProfile) reasons.push(colorProfile);
   }
 
-  const recommendedCoordinateSystem: CoordinateSystem =
-    detectedWorkflow === 'print' ? 'document' : 'artboard-web';
+  // 座標系は常に artboard-web をデフォルトにする。
+  // LLM は左上原点・Y下向きで座標を考えるため、ワークフローによる自動切替は
+  // アートボード外への配置ミスを引き起こす。document 座標が必要な場合は
+  // set_workflow で明示的に切り替える。
+  const recommendedCoordinateSystem: CoordinateSystem = 'artboard-web';
 
   return {
     detectedWorkflow,
