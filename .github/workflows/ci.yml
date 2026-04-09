@@ -41,12 +41,8 @@ jobs:
           ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-      - name: Upgrade npm for OIDC trusted publishing
-        run: npm install -g npm@latest
-        env:
-          npm_config_cache: /tmp/npm-cache
 
       - name: Verify package version matches tag
         env:
