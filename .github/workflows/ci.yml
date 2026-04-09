@@ -44,7 +44,6 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: 'https://registry.npmjs.org'
-      - run: npm install -g npm@latest
 
       - name: Verify package version matches tag
         env:
