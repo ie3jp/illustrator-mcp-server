@@ -96,7 +96,13 @@ if (preflight) {
       var layout = layoutMap[params.layout] || DocumentArtboardLayout.GridByRow;
       var rowsOrCols = params.rows_or_cols || 1;
       var spacing = (typeof params.spacing === "number") ? params.spacing : 20;
-      doc.rearrangeArtboards(layout, rowsOrCols, spacing, true);
+      var prevInteraction = app.userInteractionLevel;
+      app.userInteractionLevel = UserInteractionLevel.DONTDISPLAYALERTS;
+      try {
+        doc.rearrangeArtboards(layout, rowsOrCols, spacing, true);
+      } finally {
+        app.userInteractionLevel = prevInteraction;
+      }
       var rearrangedInfo = [];
       for (var rai = 0; rai < doc.artboards.length; rai++) {
         rearrangedInfo.push({ index: rai, name: doc.artboards[rai].name, rect: doc.artboards[rai].artboardRect });
