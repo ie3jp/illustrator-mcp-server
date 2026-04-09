@@ -1,7 +1,7 @@
 # リリース手順
 
 - npmへの直接publishは禁止。必ずCI（GitHub Actions）経由でリリースする
-- 手順: バージョンbump → コミット → タグ作成・push → CIが自動でnpm publish → GitHub Releaseを作成
+- 手順: バージョンbump → コミット → タグ作成・push → CIが自動でnpm publish → GitHub Releaseを作成 → mcpbファイルをリリースにアップロード（`gh release upload vX.Y.Z illustrator-mcp-server.mcpb`）
 - `npm publish` をローカルで実行しない
 - GitHub Releaseのノートは以下のフォーマットで日英併記する:
   - セクション: `### 新機能 / New Features`、`### 改善 / Improvements`、`### バグ修正 / Bug Fixes`、`### ドキュメント / Docs`、`### その他 / Other`（該当があるもののみ）
