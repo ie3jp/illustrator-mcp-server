@@ -360,9 +360,20 @@ export function register(server: McpServer): void {
           if (existsSync(outputPath)) {
             const imageData = readFileSync(outputPath).toString('base64');
             const mimeType = params.format === 'png' ? 'image/png' : 'image/jpeg';
+            const visualCheckNote = {
+              type: 'text' as const,
+              text: JSON.stringify({
+                visual_check_hint:
+                  'Now review the exported image visually — not just numerically. ' +
+                  'Text alignment can look off even when coordinates are mathematically correct, ' +
+                  'because bounding boxes include invisible padding. ' +
+                  'If text appears misaligned, adjust by visual impression rather than exact numbers.',
+              }),
+            };
             return {
               content: [
                 ...textResult.content,
+                visualCheckNote,
                 { type: 'image' as const, data: imageData, mimeType },
               ],
             };
