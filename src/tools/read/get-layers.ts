@@ -77,7 +77,7 @@ if (preflight) {
       layers.push(traverseLayer(doc.layers[i]));
     }
 
-    writeResultFile(RESULT_PATH, { layers: layers });
+    writeResultFile(RESULT_PATH, { coordinateSystem: coordSystem, layers: layers });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "get_layers: " + e.message, line: e.line });
   }

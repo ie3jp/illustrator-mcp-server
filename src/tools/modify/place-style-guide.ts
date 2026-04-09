@@ -772,6 +772,7 @@ if (preflight) {
 
       writeResultFile(RESULT_PATH, {
         success: true,
+        coordinateSystem: params.coordinate_system,
         placedCount: placedCount,
         sections: {
           colors: colorList.length,

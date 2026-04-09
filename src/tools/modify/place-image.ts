@@ -77,11 +77,12 @@ if (preflight) {
 
       writeResultFile(RESULT_PATH, {
         uuid: uuid,
+        coordinateSystem: coordSystem,
         type: params.embed ? "embedded" : "linked",
         filePath: filePath,
         widthPt: widthPt,
         heightPt: heightPt,
-        verified: verifyItem(resultItem)
+        verified: verifyItem(resultItem, coordSystem, abRect)
       });
     }
   } catch (e) {

@@ -183,7 +183,7 @@ export const coordinateSystemSchema = z
   .enum(['artboard-web', 'document'])
   .optional()
   .describe(
-    'Coordinate system. artboard-web (default): origin at active artboard top-left, Y-down. document: Illustrator native coords, origin at bottom-left, Y-up. Note: the user can change the ruler origin, so always call get_artboards first to confirm artboard position and bounds before placing objects.',
+    'Coordinate system. Auto-detected from document by default (CMYK/print → document, RGB/web → artboard-web). artboard-web: origin at active artboard top-left, Y-down. document: Illustrator native coords, origin at bottom-left, Y-up. Call get_document_info to check which system is active.',
   );
 
 // --- Workflow detection ---
@@ -278,11 +278,12 @@ export function detectWorkflow(signals: DocumentSignals): WorkflowHint {
     if (isWebProfile && colorProfile) reasons.push(colorProfile);
   }
 
-  // 座標系は常に artboard-web をデフォルトにする。
-  // LLM は左上原点・Y下向きで座標を考えるため、ワークフローによる自動切替は
-  // アートボード外への配置ミスを引き起こす。document 座標が必要な場合は
-  // set_workflow で明示的に切り替える。
-  const recommendedCoordinateSystem: CoordinateSystem = 'artboard-web';
+  // 座標系はワークフローに応じて自動選択する。
+  // 印刷ドキュメント（CMYK）は document 座標（Y上、左下原点）= デザイナーの標準。
+  // Web/Video は artboard-web（Y下、左上原点）= LLM が扱いやすい座標系。
+  // set_workflow で明示的にオーバーライド可能。
+  const recommendedCoordinateSystem: CoordinateSystem =
+    detectedWorkflow === 'print' ? 'document' : 'artboard-web';
 
   return {
     detectedWorkflow,

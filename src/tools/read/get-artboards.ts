@@ -63,7 +63,7 @@ if (preflight) {
       artboards.push(info);
     }
 
-    writeResultFile(RESULT_PATH, { artboards: artboards });
+    writeResultFile(RESULT_PATH, { coordinateSystem: coordSystem, artboards: artboards });
     } // end if (!hasError)
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to get artboard info: " + e.message, line: e.line });

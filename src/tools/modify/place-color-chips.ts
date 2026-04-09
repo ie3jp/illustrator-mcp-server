@@ -172,6 +172,7 @@ if (preflight) {
       }
       writeResultFile(RESULT_PATH, {
         success: true,
+        coordinateSystem: params.coordinate_system || "artboard-web",
         chipCount: placedCount,
         layerName: layerName,
         position: position,

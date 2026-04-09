@@ -56,7 +56,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(line);
-    writeResultFile(RESULT_PATH, { uuid: uuid, verified: verifyItem(line, coordSystem, abRect) });
+    writeResultFile(RESULT_PATH, { uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(line, coordSystem, abRect) });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create line: " + e.message, line: e.line });
   }

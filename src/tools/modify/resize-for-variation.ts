@@ -131,6 +131,7 @@ if (preflight) {
 
         writeResultFile(RESULT_PATH, {
           success: true,
+          coordinateSystem: params.coordinate_system || "artboard-web",
           sourceArtboard: srcIdx,
           createdCount: createdArtboards.length,
           artboards: createdArtboards,

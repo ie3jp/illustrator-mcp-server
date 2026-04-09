@@ -48,7 +48,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(rect);
-    writeResultFile(RESULT_PATH, { uuid: uuid, verified: verifyItem(rect, coordSystem, abRect) });
+    writeResultFile(RESULT_PATH, { uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(rect, coordSystem, abRect) });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create rectangle: " + e.message, line: e.line });
   }

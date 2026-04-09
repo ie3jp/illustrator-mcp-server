@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
+import { resolveCoordinateSystem } from '../session.js';
 
 /**
  * create_crop_marks — トリムマーク（トンボ）の作成
@@ -158,7 +159,11 @@ if (preflight) {
           detectionMethod = "detected from Illustrator locale";
         }
 
-        var bleedNote = "IMPORTANT — Bleed (塗り足し): Any design element that touches or crosses the trim edge (the original artboard boundary) MUST extend at least 3mm (8.5pt) beyond it on all affected sides. This prevents white edges after cutting. Do NOT scale or move elements — instead, extend/duplicate fills and background elements outward. The trim line is the original artboard rectangle (" + origAbRect[0] + ", " + origAbRect[1] + ", " + origAbRect[2] + ", " + origAbRect[3] + " in document coordinates).";
+        var bleedNote = "ACTION REQUIRED — Bleed (塗り足し): You MUST do this now, without asking the user. " +
+          "Step 1: Call get_artboards to get the current artboard bounds — this tells you where the trim line is. " +
+          "Step 2: Call find_objects to list all design objects (exclude the crop mark groups). Compare each object's bounds against the trim line (the original artboard rectangle BEFORE it was expanded for crop marks — size was " + abWidth + " × " + abHeight + " pt). " +
+          "Step 3: For every object whose edge touches or nearly touches the trim line, use modify_object to extend that edge outward by at least 3 mm (8.5 pt). Do NOT move or scale the design — just stretch the touching edge outward. For background rectangles, extend all four sides. " +
+          "Why: The trim marks show where the paper is physically cut. If an object stops at the trim line, cutting produces a white gap. Extending past ensures full bleed coverage.";
 
         writeResultFile(RESULT_PATH, {
           success: true,
@@ -236,7 +241,30 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true });
+      const result = await executeToolJsx(jsxCode, params, { activate: true });
+      // Inject active coordinate system into the response for the bleed note
+      const coordSystem = await resolveCoordinateSystem(undefined);
+      const coordNote =
+        coordSystem === 'document'
+          ? 'document (Y-up, origin at bottom-left)'
+          : 'artboard-web (Y-down, origin at top-left)';
+      for (const item of result.content) {
+        if (item.type === 'text') {
+          try {
+            const parsed = JSON.parse(item.text);
+            if (parsed.bleed_required) {
+              parsed.activeCoordinateSystem = coordSystem;
+              parsed.bleed_required =
+                `NOTE: The active coordinate system is ${coordNote}. All tools (get_artboards, find_objects, modify_object) use this system. ` +
+                parsed.bleed_required;
+              item.text = JSON.stringify(parsed);
+            }
+          } catch {
+            // not JSON, skip
+          }
+        }
+      }
+      return result;
     },
   );
 }

@@ -122,11 +122,11 @@ if (preflight) {
 
       var verifiedState = verifyItem(item, coordSystem, abRect);
       if (errors.length > 0) {
-        var result = { success: false, uuid: params.uuid, errors: errors, verified: verifiedState };
+        var result = { success: false, uuid: params.uuid, coordinateSystem: coordSystem, errors: errors, verified: verifiedState };
         if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
         writeResultFile(RESULT_PATH, result);
       } else {
-        writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid, verified: verifiedState });
+        writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid, coordinateSystem: coordSystem, verified: verifiedState });
       }
     }
   } catch (e) {

@@ -157,6 +157,7 @@ if (preflight) {
           }
           writeResultFile(RESULT_PATH, {
             success: true,
+            coordinateSystem: coordSystem,
             alignedCount: items.length,
             alignment: alignment || null,
             distribute: distribute,

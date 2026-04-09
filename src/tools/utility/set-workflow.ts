@@ -28,7 +28,7 @@ export function register(server: McpServer): void {
         'Set the session-level workflow and default coordinate system. ' +
         'Call this after confirming the user\'s intent (web, print, or video). ' +
         'Once set, all tools that omit coordinate_system will use the session default. ' +
-        'Use clear: true to reset to the default behavior (artboard-web).',
+        'Use clear: true to reset to auto-detection from document (CMYK/print → document coords, RGB/web → artboard-web).',
       inputSchema: {
         workflow: z
           .enum(['web', 'print', 'video'])

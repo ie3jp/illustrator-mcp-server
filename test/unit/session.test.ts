@@ -23,8 +23,7 @@ describe('session state', () => {
     mockExecuteJsx.mockReset();
   });
 
-  it('resolveCoordinateSystem always defaults to artboard-web regardless of color mode', async () => {
-    // Even CMYK print documents should default to artboard-web
+  it('resolveCoordinateSystem auto-detects document for CMYK print documents', async () => {
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -32,7 +31,7 @@ describe('session state', () => {
       rasterEffectResolution: 300,
       colorProfile: 'Japan Color 2001 Coated',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('document');
   });
 
   it('resolveCoordinateSystem auto-detects artboard-web for RGB document', async () => {
@@ -66,7 +65,7 @@ describe('session state', () => {
   });
 
   it('cache persists when same document, re-detects on document switch', async () => {
-    // First call: CMYK document — always artboard-web
+    // First call: CMYK document — auto-detects document coords
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -74,15 +73,15 @@ describe('session state', () => {
       rasterEffectResolution: 300,
       colorProfile: '',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('document');
 
     // Second call: cache validation returns same documentKey — cache hit
     mockExecuteJsx.mockResolvedValue({
       documentKey: '/path/to/print-doc.ai',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web'); // cached
+    expect(await resolveCoordinateSystem(undefined)).toBe('document'); // cached
 
-    // Third call: cache validation returns different documentKey — re-detects
+    // Third call: cache validation returns different documentKey — re-detects as web
     mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/web-doc.ai',
     }).mockResolvedValueOnce({
@@ -107,7 +106,7 @@ describe('session state', () => {
   });
 
   it('cache hit validates documentKey via lightweight JSX', async () => {
-    // First call: full detection (1 JSX call)
+    // First call: full detection (1 JSX call) — CMYK → document
     mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -127,12 +126,12 @@ describe('session state', () => {
 
     // 1 (initial detection) + 1 (cache key validation) = 2 calls
     expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
-    expect(first).toBe('artboard-web');
-    expect(second).toBe('artboard-web');
+    expect(first).toBe('document');
+    expect(second).toBe('document');
   });
 
   it('invalidateAutoDetectCache forces re-detection on next call', async () => {
-    // First: CMYK doc — still artboard-web
+    // First: CMYK doc → document
     mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/print-doc.ai',
       colorMode: 'CMYK',
@@ -140,13 +139,13 @@ describe('session state', () => {
       rasterEffectResolution: 300,
       colorProfile: '',
     });
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    expect(await resolveCoordinateSystem(undefined)).toBe('document');
     expect(mockExecuteJsx).toHaveBeenCalledTimes(1);
 
     // Invalidate cache (simulates create_document / close_document)
     invalidateAutoDetectCache();
 
-    // Now return RGB doc (1 JSX call for full detection, no cache to validate)
+    // Now return RGB doc → artboard-web
     mockExecuteJsx.mockResolvedValueOnce({
       documentKey: '/path/to/web-doc.ai',
       colorMode: 'RGB',
@@ -181,7 +180,7 @@ describe('detectWorkflow', () => {
     expect(hint.recommendedCoordinateSystem).toBe('artboard-web');
   });
 
-  it('detects print: CMYK + mm + 300dpi + Japan Color', () => {
+  it('detects print: CMYK + mm + 300dpi + Japan Color → document coords', () => {
     const hint = detectWorkflow({
       colorMode: 'CMYK',
       rulerUnits: 'mm',
@@ -189,7 +188,7 @@ describe('detectWorkflow', () => {
       colorProfile: 'Japan Color 2001 Coated',
     });
     expect(hint.detectedWorkflow).toBe('print');
-    expect(hint.recommendedCoordinateSystem).toBe('artboard-web');
+    expect(hint.recommendedCoordinateSystem).toBe('document');
   });
 
   it('detects video: RGB + px + 150dpi', () => {
