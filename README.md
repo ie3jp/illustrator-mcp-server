@@ -360,9 +360,25 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 |---|---|
 | `preflight_check` | Pre-press check (RGB mixing, broken links, low resolution, white overprint, transparency+overprint interaction, PDF/X compliance, etc.) |
 | `check_text_consistency` | Text consistency check (placeholder detection, notation variation patterns, full text listing for LLM analysis) |
-| `set_workflow` | Set workflow mode (web/print) to configure default coordinate system |
+| `set_workflow` | Set workflow mode (web/print) to override auto-detected coordinate system |
 
 </details>
+
+---
+
+## Coordinate System
+
+The server automatically detects the coordinate system from the document:
+
+| Document type | Coordinate system | Origin | Y axis |
+|---|---|---|---|
+| CMYK / Print | `document` | Bottom-left | Up |
+| RGB / Web | `artboard-web` | Top-left of artboard | Down |
+
+- **CMYK documents** use Illustrator's native coordinate system, matching what print designers expect
+- **RGB documents** use a web-style coordinate system that is easier for AI to work with
+- Use `set_workflow` to override the auto-detected coordinate system if needed
+- All tool responses include a `coordinateSystem` field indicating which system is active
 
 ---
 
@@ -508,7 +524,7 @@ npm test
 npx tsx test/e2e/smoke-test.ts
 ```
 
-The E2E test creates a fresh document, places test objects, runs 106 test cases across 6 phases covering all registered tools, and cleans up automatically.
+The E2E test creates fresh documents (RGB + CMYK), places test objects, runs 182 test cases across 10 phases covering all registered tools and coordinate system auto-detection, and cleans up automatically.
 
 ---
 
