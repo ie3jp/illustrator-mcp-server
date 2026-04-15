@@ -1,4 +1,4 @@
-**[日本語版はこちら / Japanese version](README.ja.md)**
+**🇺🇸 English** | [🇯🇵 日本語](README.ja.md) | [🇨🇳 简体中文](README.zh-CN.md) | [🇰🇷 한국어](README.ko.md) | [🇪🇸 Español](README.es.md) | [🇩🇪 Deutsch](README.de.md) | [🇫🇷 Français](README.fr.md) | [🇵🇹 Português (BR)](README.pt-BR.md)
 
 # Illustrator MCP Server
 
