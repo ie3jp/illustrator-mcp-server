@@ -7,7 +7,7 @@ import { colorSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, WRITE_ANNOTATIONS } f
 /**
  * create_text_frame — テキストフレームの作成（ポイント/エリア）
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItems/ — TextFrameItems.pointText(), areaText()
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont, tracking
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -77,6 +77,10 @@ if (preflight) {
       charAttrs.size = params.font_size;
     }
 
+    if (typeof params.tracking === "number") {
+      charAttrs.tracking = params.tracking;
+    }
+
     if (typeof params.fill !== "undefined") {
       charAttrs.fillColor = createColor(params.fill);
     }
@@ -113,6 +117,14 @@ export function register(server: McpServer): void {
         height: z.number().optional().describe('Area text height'),
         font_name: z.string().optional().describe('Font name (partial match, e.g. "Arial", "Helvetica"). Use list_fonts to find exact PostScript names.'),
         font_size: z.number().optional().describe('Font size (pt)'),
+        tracking: z
+          .number()
+          .min(-1000)
+          .max(10000)
+          .optional()
+          .describe(
+            'Letter spacing (tracking) in 1/1000 em, applied to the whole frame. 0 = none, positive = looser, negative = tighter. Same units and range as the tracking field in Illustrator\'s Character panel.',
+          ),
         fill: colorSchema.describe('Text color'),
         layer_name: z.string().optional().describe('Target layer name'),
         name: z.string().optional().describe('Object name'),

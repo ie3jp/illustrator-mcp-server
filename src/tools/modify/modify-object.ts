@@ -131,6 +131,14 @@ if (preflight) {
         } catch(e) { errors.push("font_size: " + e.message); }
       }
 
+      if (typeof props.tracking === "number") {
+        try {
+          for (var ri3 = 0; ri3 < item.textRanges.length; ri3++) {
+            item.textRanges[ri3].characterAttributes.tracking = props.tracking;
+          }
+        } catch(e) { errors.push("tracking: " + e.message); }
+      }
+
       // locked=true は他の変更を全て終えてから最後に適用する
       if (props.locked === true) {
         try { item.locked = true; }
@@ -187,6 +195,14 @@ export function register(server: McpServer): void {
             contents: z.string().optional().describe('Text contents (for text frames)'),
             font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),
             font_size: z.number().optional().describe('Font size (for text frames)'),
+            tracking: z
+              .number()
+              .min(-1000)
+              .max(10000)
+              .optional()
+              .describe(
+                'Letter spacing (tracking) in 1/1000 em, for text frames. 0 = none, positive = looser, negative = tighter. Same units and range as Illustrator\'s Character panel.',
+              ),
           })
           .describe('Properties to modify'),
         coordinate_system: coordinateSystemSchema,

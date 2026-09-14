@@ -540,6 +540,12 @@ function verifyItem(item, coordSystem, artboardRect) {
   if (item.typename === "TextFrame") {
     snap.contents = item.contents;
     snap.textKind = getTextKind(item);
+    // 文字属性は環境によって取得できないことがあるため個別に握りつぶす
+    try {
+      var ca = item.textRange.characterAttributes;
+      try { snap.fontSize = ca.size; } catch (eSize) {}
+      try { snap.tracking = ca.tracking; } catch (eTrack) {}
+    } catch (eAttr) {}
   }
 
   try {

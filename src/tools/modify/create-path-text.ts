@@ -51,6 +51,10 @@ if (preflight) {
         charAttrs.size = params.font_size;
       }
 
+      if (typeof params.tracking === "number") {
+        charAttrs.tracking = params.tracking;
+      }
+
       var uuid = ensureUUID(tf);
       var resultData = { success: true, uuid: uuid, verified: verifyItem(tf) };
       if (fontCandidates !== null) {
@@ -82,6 +86,14 @@ export function register(server: McpServer): void {
             'Font name (partial match, e.g. "Arial"). Use list_fonts to find exact PostScript names.',
           ),
         font_size: z.number().optional().describe('Font size (pt)'),
+        tracking: z
+          .number()
+          .min(-1000)
+          .max(10000)
+          .optional()
+          .describe(
+            'Letter spacing (tracking) in 1/1000 em. 0 = none, positive = looser, negative = tighter. Same units and range as Illustrator\'s Character panel.',
+          ),
         layer_name: z.string().optional().describe('Target layer name'),
         name: z.string().optional().describe('Object name'),
       },
