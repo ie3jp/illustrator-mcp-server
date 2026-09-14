@@ -331,6 +331,7 @@ export function register(server: McpServer): void {
         frames: TextFrame[];
         error?: boolean;
         message?: string;
+        warnings?: unknown[];
       };
 
       if (result.error) {
@@ -350,6 +351,9 @@ export function register(server: McpServer): void {
           _reliability: 'ai-assisted — may miss errors or produce false positives. Clearly distinguish AI-based findings from mechanical checks when reporting to the user.',
           allTexts: analysis.allTexts,
         },
+        ...(result.warnings && result.warnings.length > 0
+          ? { warnings: result.warnings }
+          : {}),
       });
     },
   );

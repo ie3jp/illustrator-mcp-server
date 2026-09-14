@@ -134,6 +134,11 @@ interface FontEntry {
   fontSize: number;
 }
 
+function appendWarnings(output: string, warnings?: unknown[]): string {
+  if (!warnings || warnings.length === 0) return output;
+  return `${output}\n\nWarnings:\n${warnings.map((warning) => `- ${String(warning)}`).join('\n')}`;
+}
+
 function formatTokens(
   format: string,
   colors: Array<{ hex: string; original: ColorObj; count: number }>,
@@ -225,6 +230,7 @@ export function register(server: McpServer): void {
         objectBounds: Array<{ left: number; top: number; right: number; bottom: number }>;
         error?: boolean;
         message?: string;
+        warnings?: unknown[];
       };
 
       if (result.error) {
@@ -300,21 +306,27 @@ export function register(server: McpServer): void {
         .sort((a, b) => a - b);
 
       const output = formatTokens(params.format ?? 'css', sortedColors, sortedFonts, commonSpacings);
+      const responseOutput = appendWarnings(output, result.warnings);
 
       if (params.output_path) {
         try {
           await fs.writeFile(params.output_path, output, 'utf-8');
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err);
-          return { content: [{ type: 'text', text: `Failed to write file: ${msg}` }] };
+          return {
+            content: [{
+              type: 'text',
+              text: appendWarnings(`Failed to write file: ${msg}`, result.warnings),
+            }],
+          };
         }
         return {
-          content: [{ type: 'text', text: output + `\n\nSaved to: ${params.output_path}` }],
+          content: [{ type: 'text', text: responseOutput + `\n\nSaved to: ${params.output_path}` }],
         };
       }
 
       return {
-        content: [{ type: 'text', text: output }],
+        content: [{ type: 'text', text: responseOutput }],
       };
     },
   );

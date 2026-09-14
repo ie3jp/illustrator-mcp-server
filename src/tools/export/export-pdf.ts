@@ -3,6 +3,14 @@ import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+
+function requiresMenuCommandActivation(params: {
+  options?: { marks_style?: string; trim_marks?: boolean };
+}): boolean {
+  // JSX の日本式トンボ生成条件と同じ。どちらかを変更するときは必ず双方を更新する。
+  return params.options?.marks_style === 'japanese' && params.options.trim_marks === true;
+}
+
 /**
  * export_pdf — PDF 書き出し
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — Document.saveAs()
@@ -52,6 +60,7 @@ if (preflight) {
     var trimMarkGroups = [];
     var origAbRect = null;
     var abIdx = doc.artboards.getActiveArtboardIndex();
+    // TS の requiresMenuCommandActivation() と同期すること。
     if (options.marks_style === "japanese" && options.trim_marks === true) {
       try {
         app.preferences.setBooleanPreference("cropMarkStyle", true);
@@ -278,7 +287,7 @@ export function register(server: McpServer): void {
     'export_pdf',
     {
       title: 'Export PDF',
-      description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) during execution. The exported PDF should be verified by a human before final submission.',
+      description: 'Export print-ready PDF. Note: Illustrator will be activated (brought to foreground) only when generating Japanese trim marks. The exported PDF should be verified by a human before final submission.',
       inputSchema: {
         output_path: z.string().optional().describe('Output file path. If omitted, auto-generates in the same directory as the document (or ~/Desktop for unsaved documents)'),
         preset: z
@@ -306,8 +315,9 @@ export function register(server: McpServer): void {
       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
-      // トンボ設定でメニューコマンドを使うため前面化が必要
-      const result = await executeJsxHeavy(jsxCode, params, { activate: true });
+      const result = await executeJsxHeavy(jsxCode, params, {
+        activate: requiresMenuCommandActivation(params),
+      });
       const output = {
         ...result,
         _note: 'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',

@@ -8,10 +8,20 @@ import * as path from 'path';
 const jsxPath = path.resolve(__dirname, '../../src/jsx/helpers/common.jsx');
 const jsxCode = fs.readFileSync(jsxPath, 'utf-8');
 
-// ExtendScript のグローバルオブジェクトをモック
-const wrappedCode = `
+function loadHelpers(appVersion = '28.0') {
+  // ExtendScript のグローバルオブジェクトをモック
+  const wrappedCode = `
   // Mock ExtendScript globals
   var TextType = { POINTTEXT: 1, AREATEXT: 2, PATHTEXT: 3 };
+  var app = { version: ${JSON.stringify(appVersion)} };
+  var writtenFiles = {};
+
+  function File(filePath) {
+    this.encoding = '';
+    this.open = function() { return true; };
+    this.write = function(content) { writtenFiles[filePath] = content; };
+    this.close = function() {};
+  }
 
   ${jsxCode}
 
@@ -21,12 +31,29 @@ const wrappedCode = `
     getParentLayerName: getParentLayerName,
     getTextKind: getTextKind,
     iterateAllItems: iterateAllItems,
+    checkIllustratorVersion: checkIllustratorVersion,
+    writeResultFile: writeResultFile,
+    readWrittenResult: function(filePath) {
+      return jsonParse(writtenFiles[filePath]);
+    },
   };
 `;
 
-// eslint-disable-next-line no-new-func -- test-only: evaluating ES3 ExtendScript helpers in Node.js (same pattern as json-stringify.test.ts)
-const factory = new Function(wrappedCode); // NOSONAR
-const helpers = factory() as {
+  // eslint-disable-next-line no-new-func -- test-only: evaluating ES3 ExtendScript helpers in Node.js (same pattern as json-stringify.test.ts)
+  const factory = new Function(wrappedCode); // NOSONAR
+  return factory() as {
+    resolveTargetLayer: (doc: unknown, layerName: string | null) => unknown;
+    webToAiPoint: (x: number, y: number, coordSystem: string, artboardRect: number[] | null) => number[];
+    getParentLayerName: (item: unknown) => string;
+    getTextKind: (tf: unknown) => string;
+    iterateAllItems: (container: unknown, callback: (item: unknown) => void) => void;
+    checkIllustratorVersion: () => { error: boolean; message: string } | null;
+    writeResultFile: (filePath: string, result: unknown) => void;
+    readWrittenResult: (filePath: string) => unknown;
+  };
+}
+
+const helpers = loadHelpers() as {
   resolveTargetLayer: (doc: unknown, layerName: string | null) => unknown;
   webToAiPoint: (x: number, y: number, coordSystem: string, artboardRect: number[] | null) => number[];
   getParentLayerName: (item: unknown) => string;
@@ -49,6 +76,77 @@ describe('webToAiPoint', () => {
   it('returns original coords when artboard-web but no rect', () => {
     const result = helpers.webToAiPoint(100, 200, 'artboard-web', null);
     expect(result).toEqual([100, 200]);
+  });
+});
+
+describe('checkIllustratorVersion', () => {
+  it.each(['28.0', '29.1'])('v28 以上 (%s) は警告しない', (version) => {
+    const versionHelpers = loadHelpers(version);
+
+    expect(versionHelpers.checkIllustratorVersion()).toBeNull();
+    versionHelpers.writeResultFile('/result.json', { success: true });
+    expect(versionHelpers.readWrittenResult('/result.json')).toEqual({ success: true });
+  });
+
+  it.each(['24.0', '25.4', '26.0', '27.9'])('v24〜v27 (%s) は警告を1件付与する', (version) => {
+    const versionHelpers = loadHelpers(version);
+
+    expect(versionHelpers.checkIllustratorVersion()).toBeNull();
+    versionHelpers.writeResultFile('/result.json', { success: true });
+    const result = versionHelpers.readWrittenResult('/result.json') as { warnings: string[] };
+    expect(result.warnings).toHaveLength(1);
+    expect(result.warnings[0]).toContain('below the verified baseline');
+  });
+
+  it('v24 未満はエラーを返す', () => {
+    const versionHelpers = loadHelpers('23.9');
+
+    const result = versionHelpers.checkIllustratorVersion();
+    expect(result).toMatchObject({ error: true });
+    expect(result?.message).toContain('v24');
+  });
+
+  it('数値として解釈できないバージョンはエラーを返す', () => {
+    const versionHelpers = loadHelpers('unknown');
+
+    expect(versionHelpers.checkIllustratorVersion()).toMatchObject({ error: true });
+  });
+});
+
+describe('writeResultFile version warning', () => {
+  it('既存 warnings に追記し、上書きしない', () => {
+    const versionHelpers = loadHelpers('27.0');
+    versionHelpers.checkIllustratorVersion();
+
+    versionHelpers.writeResultFile('/result.json', { warnings: ['existing warning'] });
+
+    const result = versionHelpers.readWrittenResult('/result.json') as { warnings: string[] };
+    expect(result.warnings).toHaveLength(2);
+    expect(result.warnings[0]).toBe('existing warning');
+    expect(result.warnings[1]).toContain('below the verified baseline');
+  });
+
+  it('配列の結果には警告を付与しない', () => {
+    const versionHelpers = loadHelpers('27.0');
+    versionHelpers.checkIllustratorVersion();
+
+    versionHelpers.writeResultFile('/result.json', [{ success: true }]);
+
+    expect(versionHelpers.readWrittenResult('/result.json')).toEqual([{ success: true }]);
+  });
+
+  it('error: true の結果にも警告を付与する', () => {
+    const versionHelpers = loadHelpers('27.0');
+    versionHelpers.checkIllustratorVersion();
+
+    versionHelpers.writeResultFile('/result.json', { error: true, message: 'failed' });
+
+    const result = versionHelpers.readWrittenResult('/result.json') as {
+      error: boolean;
+      warnings: string[];
+    };
+    expect(result.error).toBe(true);
+    expect(result.warnings).toHaveLength(1);
   });
 });
 

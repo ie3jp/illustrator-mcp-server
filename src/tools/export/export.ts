@@ -5,6 +5,14 @@ import { dirname, basename, join } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+
+function requiresMenuCommandActivation(params: { target: string; format: string }): boolean {
+  // JSX の useIsolatedExport と同じ条件。どちらかを変更するときは必ず双方を更新する。
+  // UUID と断定できない値も安全側で UUID 候補として前面化する。
+  const isPotentialUUIDTarget = params.target !== 'selection' && !params.target.startsWith('artboard:');
+  return isPotentialUUIDTarget && (params.format === 'png' || params.format === 'jpg');
+}
+
 /**
  * export — SVG/PNG/JPG/WebP 書き出し
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — exportFile()
@@ -107,6 +115,7 @@ if (preflight) {
 
     if (targetType !== "error") {
       // UUID指定かつラスタ形式の場合、一時ドキュメントにコピーして書き出す
+      // TS の requiresMenuCommandActivation() と同期すること。
       var isUUIDTarget = (targetType === "selection" && target !== "selection");
       var useIsolatedExport = (isUUIDTarget && (format === "png" || format === "jpg"));
 
@@ -372,7 +381,7 @@ export function register(server: McpServer): void {
     'export',
     {
       title: 'Export',
-      description: 'Export objects, groups, artboards, or selection. Use target "artboard:all" to batch-export every artboard in one call. For single PNG/JPG exports, the exported image is returned as base64 in the response — you can view it directly without reading the file from disk ("artboard:all" returns file paths only). Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Export objects, groups, artboards, or selection. Use target "artboard:all" to batch-export every artboard in one call. For single PNG/JPG exports, the exported image is returned as base64 in the response — you can view it directly without reading the file from disk ("artboard:all" returns file paths only). Note: Illustrator will be activated (brought to foreground) when exporting a UUID target as PNG/JPG.',
       inputSchema: {
         target: z
           .string()
@@ -423,8 +432,9 @@ export function register(server: McpServer): void {
           } catch (_) { /* 解決できなければ元のパスをそのまま使う */ }
         }
       }
-      // executeMenuCommandSafe("copy"/"paste") を使うため前面化が必要
-      const result = await executeJsxHeavy(jsxCode, resolvedParams, { activate: true });
+      const result = await executeJsxHeavy(jsxCode, resolvedParams, {
+        activate: requiresMenuCommandActivation(resolvedParams),
+      });
       const textResult = formatToolResult(result);
 
       // PNG/JPG: ファイルを読み込んでbase64画像としても返す

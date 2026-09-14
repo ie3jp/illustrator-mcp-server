@@ -136,6 +136,7 @@ export interface JsxResult {
   error?: boolean;
   message?: string;
   line?: number;
+  warnings?: unknown[];
   [key: string]: unknown;
 }
 
@@ -269,6 +270,9 @@ async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
     const parts: string[] = [];
     if (result.message) parts.push(result.message as string);
     if (result.line != null) parts.push(`(JSX line ${result.line})`);
+    if (result.warnings instanceof Array && result.warnings.length > 0) {
+      parts.push(`Warnings: ${result.warnings.map((warning) => String(warning)).join(' | ')}`);
+    }
     throw new Error(parts.length > 0 ? parts.join(' ') : 'An unknown error occurred during JSX execution');
   }
   return result;

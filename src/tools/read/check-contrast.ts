@@ -211,6 +211,7 @@ export function register(server: McpServer): void {
         colorItems: ColorItem[];
         error?: boolean;
         message?: string;
+        warnings?: unknown[];
       };
 
       if (result.error) {
@@ -275,7 +276,13 @@ export function register(server: McpServer): void {
       });
       unique.sort((a, b) => a.contrastRatio - b.contrastRatio);
 
-      return formatToolResult({ pairCount: unique.length, pairs: unique });
+      return formatToolResult({
+        pairCount: unique.length,
+        pairs: unique,
+        ...(result.warnings && result.warnings.length > 0
+          ? { warnings: result.warnings }
+          : {}),
+      });
     },
   );
 }
