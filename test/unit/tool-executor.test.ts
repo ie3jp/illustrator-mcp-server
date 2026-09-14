@@ -88,9 +88,27 @@ describe('executeToolJsx', () => {
 
     const result = await executeToolJsx('heavy code;', { a: 1 }, { heavy: true });
 
-    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith('heavy code;', { a: 1 });
+    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith('heavy code;', { a: 1 }, { activate: false });
     expect(mockExecuteJsx).not.toHaveBeenCalled();
     expect(result.content[0].text).toContain('"heavy": "result"');
+  });
+
+  it('heavy: true でも既定では Illustrator を前面化しない', async () => {
+    mockExecuteJsxHeavy.mockResolvedValue({});
+
+    await executeToolJsx('heavy code;', {}, { heavy: true });
+
+    // 重い処理であることと前面化は別の関心事。
+    // 前面化が要るのは executeMenuCommand を使うツールだけ。
+    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith('heavy code;', {}, { activate: false });
+  });
+
+  it('heavy + activate を同時に指定できる', async () => {
+    mockExecuteJsxHeavy.mockResolvedValue({});
+
+    await executeToolJsx('heavy code;', {}, { heavy: true, activate: true });
+
+    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith('heavy code;', {}, { activate: true });
   });
 
   it('resolveCoordinate: true の場合は座標系を解決する', async () => {
@@ -136,7 +154,11 @@ describe('executeToolJsx', () => {
     const result = await executeToolJsx('code;', { x: 1 }, { heavy: true, resolveCoordinate: true });
 
     expect(mockResolveCoordinate).toHaveBeenCalled();
-    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith('code;', { x: 1, coordinate_system: 'document' });
+    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith(
+      'code;',
+      { x: 1, coordinate_system: 'document' },
+      { activate: false },
+    );
     expect(result.content[0].text).toContain('"combined": true');
   });
 

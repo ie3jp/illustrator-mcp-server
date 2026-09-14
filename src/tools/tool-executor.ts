@@ -24,9 +24,10 @@ export async function executeToolJsx(
     ? { ...baseParams, coordinate_system: await resolveCoordinateSystem(baseParams.coordinate_system as 'artboard-web' | 'document' | undefined) }
     : baseParams;
 
+  const activate = options?.activate ?? false;
   const result = options?.heavy
-    ? await executeJsxHeavy(jsxCode, resolvedParams)
-    : await executeJsx(jsxCode, resolvedParams, { activate: options?.activate ?? false });
+    ? await executeJsxHeavy(jsxCode, resolvedParams, { activate })
+    : await executeJsx(jsxCode, resolvedParams, { activate });
 
   return formatToolResult(result);
 }

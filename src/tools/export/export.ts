@@ -423,7 +423,8 @@ export function register(server: McpServer): void {
           } catch (_) { /* 解決できなければ元のパスをそのまま使う */ }
         }
       }
-      const result = await executeJsxHeavy(jsxCode, resolvedParams);
+      // executeMenuCommandSafe("copy"/"paste") を使うため前面化が必要
+      const result = await executeJsxHeavy(jsxCode, resolvedParams, { activate: true });
       const textResult = formatToolResult(result);
 
       // PNG/JPG: ファイルを読み込んでbase64画像としても返す

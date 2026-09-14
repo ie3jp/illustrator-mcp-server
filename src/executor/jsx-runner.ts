@@ -324,13 +324,22 @@ export async function executeJsx(
 }
 
 /**
- * 重い処理用の JSX 実行（タイムアウト延長 + Illustrator をフォアグラウンドに）
+ * 重い処理用の JSX 実行（タイムアウト延長）
+ *
+ * フォアグラウンド化は別の関心事なので options.activate で明示する。
+ * app.executeMenuCommand() は Illustrator が前面でないと失敗するため、
+ * メニューコマンドを使うツールだけが activate: true を指定すればよい。
+ * それ以外は前面化せず、ユーザーのフォーカスを奪わない。
  */
 export async function executeJsxHeavy(
   jsxCode: string,
   params?: unknown,
+  options?: { activate?: boolean },
 ): Promise<JsxResult> {
-  return executeJsx(jsxCode, params, { timeout: TIMEOUT_HEAVY, activate: true });
+  return executeJsx(jsxCode, params, {
+    timeout: TIMEOUT_HEAVY,
+    activate: options?.activate ?? false,
+  });
 }
 
 // ─── デバッグ用エクスポート ──────────────────────────────────────────────────

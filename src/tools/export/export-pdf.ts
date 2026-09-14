@@ -306,7 +306,8 @@ export function register(server: McpServer): void {
       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsxHeavy(jsxCode, params);
+      // トンボ設定でメニューコマンドを使うため前面化が必要
+      const result = await executeJsxHeavy(jsxCode, params, { activate: true });
       const output = {
         ...result,
         _note: 'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',
