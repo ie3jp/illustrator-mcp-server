@@ -99,6 +99,8 @@ class FakeDoc {
   };
   private activeAb = 0;
   private fs: FakeFs;
+  /** 実機の exportFile() と同じく、拡張子のないパスに拡張子を足して書く */
+  appendExtension = false;
 
   constructor(name: string, fs: FakeFs, artboardNames: string[] = ['Artboard 1']) {
     this.name = name;
@@ -123,8 +125,12 @@ class FakeDoc {
   }
 
   exportFile(file: { fsName: string }, type: string, opts: Record<string, unknown>) {
-    this.exports.push({ path: file.fsName, type, opts });
-    this.fs.set(file.fsName, Date.now());
+    let path = file.fsName;
+    if (this.appendExtension && !/\.[^./]+$/.test(path)) {
+      path += ({ SVG: '.svg', PNG24: '.png', JPEG: '.jpg' } as Record<string, string>)[type];
+    }
+    this.exports.push({ path, type, opts });
+    this.fs.set(path, Date.now());
   }
 
   close() { this.closed = true; }
@@ -222,6 +228,12 @@ describe('validateExportParams', () => {
   it('SVG の明示パスで非 ASCII ファイル名を拒否する（PNG は許可）', () => {
     expect(validateExportParams({ format: 'svg', output_path: '/tmp/ロゴ.svg' })).toMatch(/non-ASCII/);
     expect(validateExportParams({ format: 'png', output_path: '/tmp/ロゴ.png' })).toBeNull();
+  });
+
+  it('書き出し形式と違う拡張子は推測せず拒否する', async () => {
+    const res = await exportTool({ target: 'artboard:0', format: 'png', output_path: '/tmp/out.jpeg' });
+    expect(JSON.parse(res.content[0].text!).message).toMatch(/\.png/);
+    expect(mockExecuteJsxHeavy).not.toHaveBeenCalled();
   });
 
   it('dpi × scale の上限を超えたら拒否する', () => {
@@ -425,6 +437,33 @@ describe('export JSX (fake Illustrator)', () => {
     });
     expect(result.success).toBe(true);
     expect(result.files).toEqual(['/Users/test/Desktop/design_2_1-Artboard-1.png']);
+  });
+
+  it('自動命名の候補が尽きたら既存ファイルを上書きせずエラーにする', async () => {
+    const code = await captureJsxCode();
+    const fs: FakeFs = new Map([['/Users/test/Desktop/design.png', 0]]);
+    for (let n = 2; n < 1000; n++) fs.set(`/Users/test/Desktop/design_${n}.png`, 0);
+    const doc = new FakeDoc('design.ai', fs);
+    const { result } = runExportJsx(code, { params: { target: 'artboard:0', format: 'png' }, doc, fs });
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toMatch(/free file name/);
+    expect(doc.exports).toHaveLength(0);
+  });
+
+  it('拡張子のない output_path は拡張子を補ってから既存ファイルを確認する', async () => {
+    const fs: FakeFs = new Map([['/out/art.png', 0]]);
+    const doc = new FakeDoc('design.ai', fs);
+    doc.appendExtension = true;
+    const code = await captureJsxCode();
+    mockExecuteJsxHeavy.mockClear();
+    mockExecuteJsxHeavy.mockResolvedValue({ error: true });
+    await exportTool({ target: 'artboard:0', format: 'png', output_path: '/out/art' });
+    const sent = mockExecuteJsxHeavy.mock.calls[0][1] as Record<string, unknown>;
+    expect(sent.output_path).toBe('/out/art.png');
+    const { result } = runExportJsx(code, { params: sent, doc, fs });
+    expect(result.error).toBe(true);
+    expect(result.existing_files).toEqual(['/out/art.png']);
+    expect(doc.exports).toHaveLength(0);
   });
 
   it('アクティブアートボードを元に戻す', async () => {

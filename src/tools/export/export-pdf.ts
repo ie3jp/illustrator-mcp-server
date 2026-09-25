@@ -4,7 +4,7 @@ import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
 import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 import { CROP_MARKS_JSX } from '../crop-marks-shared.js';
-import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-path.js';
+import { checkAbsoluteOutputPath, normalizeOutputExtension, resolveOutputPath } from '../../utils/output-path.js';
 
 function requiresMenuCommandActivation(params: {
   options?: { marks_style?: string; trim_marks?: boolean };
@@ -302,7 +302,7 @@ export function register(server: McpServer): void {
         'When a preset is given, trim mark settings you do not specify are kept from the preset. ' +
         'Note: Illustrator will be activated (brought to foreground) only when generating Japanese trim marks. The exported PDF should be verified by a human before final submission.',
       inputSchema: {
-        output_path: z.string().optional().describe('Absolute output file path. If omitted, auto-generates a non-conflicting name in the same directory as the document (or ~/Desktop for unsaved documents)'),
+        output_path: z.string().optional().describe('Absolute output file path ending in .pdf (.pdf is added if omitted). If omitted, auto-generates a non-conflicting name in the same directory as the document (or ~/Desktop for unsaved documents)'),
         preset: z
           .string()
           .optional()
@@ -333,8 +333,11 @@ export function register(server: McpServer): void {
       if (resolvedParams.output_path !== undefined) {
         const pathError = checkAbsoluteOutputPath(resolvedParams.output_path, 'output_path');
         if (pathError) return formatToolResult({ error: true, message: pathError });
+        // saveAs() の拡張子の扱いは未確認。書き込み確認のパスとずれないよう .pdf に揃える
+        const normalized = normalizeOutputExtension(resolvedParams.output_path, 'pdf', 'output_path');
+        if (normalized.error !== undefined) return formatToolResult({ error: true, message: normalized.error });
         // シンボリックリンク経由のディレクトリ（macOS の /tmp 等）は実パスに解決してから渡す
-        resolvedParams.output_path = resolveOutputPath(resolvedParams.output_path);
+        resolvedParams.output_path = resolveOutputPath(normalized.path);
       }
       const result = await executeJsxHeavy(CROP_MARKS_JSX + jsxCode, resolvedParams, {
         activate: requiresMenuCommandActivation(params),

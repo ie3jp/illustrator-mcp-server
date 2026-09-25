@@ -5,7 +5,7 @@ import { basename } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
 import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
-import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-path.js';
+import { checkAbsoluteOutputPath, normalizeOutputExtension, resolveOutputPath } from '../../utils/output-path.js';
 
 /** dpi × scale の上限。エージェントの数値ミスで巨大画像を生成しないためのガード */
 export const MAX_EFFECTIVE_DPI = 2400;
@@ -224,10 +224,17 @@ if (preflight) {
       }
     }
 
-    // 明示パスの既存ファイルは overwrite: true のときだけ上書きする
-    if (!errorResult && explicitPath && params.overwrite !== true) {
+    // 明示パスの既存ファイルは overwrite: true のときだけ上書きする。
+    // 自動命名は候補が尽きると既存の名前のまま抜けるため、ここで必ず再確認する
+    if (!errorResult && (!explicitPath || params.overwrite !== true)) {
       var existing = findExistingOutputs(outputPath, format, target, doc.artboards);
-      if (existing.length > 0) {
+      if (existing.length > 0 && !explicitPath) {
+        errorResult = {
+          error: true,
+          message: "Could not find a free file name for the export (tried up to " + outputPath + "). Pass an explicit output_path.",
+          existing_files: existing
+        };
+      } else if (existing.length > 0) {
         errorResult = {
           error: true,
           message: "Output file already exists: " + existing.join(", ") + ". Pass overwrite: true to replace it, or choose another output_path.",
@@ -493,7 +500,7 @@ export function register(server: McpServer): void {
           .describe('UUID, "artboard:<index>", "artboard:all" (batch-export every artboard; filenames get "_<n>-<artboardName>" suffixes), or "selection". UUID and "selection" export only those objects, cropped to their visible bounds (they are duplicated into a temporary document; the clipboard and current selection are left untouched).'),
         // WebP は ExtendScript API が非対応
         format: z.enum(['svg', 'png', 'jpg']).describe('Export format'),
-        output_path: z.string().optional().describe('Absolute output file path (SVG file names must be ASCII). If omitted, auto-generates a non-conflicting name in the same directory as the document (or ~/Desktop for unsaved documents)'),
+        output_path: z.string().optional().describe('Absolute output file path (SVG file names must be ASCII). The extension must match format (.svg/.png/.jpg); it is added if omitted. If omitted, auto-generates a non-conflicting name in the same directory as the document (or ~/Desktop for unsaved documents)'),
         overwrite: coerceBoolean.optional().default(false).describe('Replace existing files at output_path (including "artboard:all" per-artboard files). Default false: returns an error listing the existing files'),
         scale: z.number().positive().optional().default(1).describe(`Scale factor for PNG/JPG (dpi × scale must be <= ${MAX_EFFECTIVE_DPI})`),
         svg_options: z
@@ -537,6 +544,12 @@ export function register(server: McpServer): void {
       // シンボリックリンク経由のディレクトリ（macOS の /tmp 等）は Node.js 側で実パスに解決してから渡す
       const resolvedParams = { ...params };
       if (resolvedParams.output_path) {
+        // artboard:all は batchOutputPath() が拡張子を付け替えるので対象外
+        if (params.target !== 'artboard:all') {
+          const normalized = normalizeOutputExtension(resolvedParams.output_path, params.format, 'output_path');
+          if (normalized.error !== undefined) return formatToolResult({ error: true, message: normalized.error });
+          resolvedParams.output_path = normalized.path;
+        }
         resolvedParams.output_path = resolveOutputPath(resolvedParams.output_path);
       }
       const result = await executeJsxHeavy(exportPathHelpersJsx + jsxCode, resolvedParams);

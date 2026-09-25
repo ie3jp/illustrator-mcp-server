@@ -75,6 +75,16 @@ describe('export_pdf output_path', () => {
     expect(executeJsxHeavy).not.toHaveBeenCalled();
   });
 
+  it('appends .pdf when the extension is missing and rejects another extension', async () => {
+    await capture(registerExportPdf)({ output_path: '/no-such-dir-for-test/print' });
+    const sent = vi.mocked(executeJsxHeavy).mock.calls[0][1] as { output_path: string };
+    expect(sent.output_path).toBe('/no-such-dir-for-test/print.pdf');
+    vi.mocked(executeJsxHeavy).mockClear();
+    const res = await capture(registerExportPdf)({ output_path: '/no-such-dir-for-test/print.ai' });
+    expect(res.content[0].text).toContain('.pdf');
+    expect(executeJsxHeavy).not.toHaveBeenCalled();
+  });
+
   it('passes the real path of a symlinked directory to Illustrator', async () => {
     await capture(registerExportPdf)({ output_path: join(linkDir, 'print.pdf') });
     const sent = vi.mocked(executeJsxHeavy).mock.calls[0][1] as { output_path: string };
