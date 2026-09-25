@@ -412,3 +412,25 @@ describe('get_document_structure JSX', () => {
     expect(g.childrenTruncated).toBeUndefined();
   });
 });
+
+// ─── get_document_info ─────────────────────────────────────────────
+
+describe('get_document_info JSX', () => {
+  it('reports Q (級) ruler units instead of "unknown"', () => {
+    const jsx = loadToolJsx('read/get-document-info.ts');
+    const rulerEnum =
+      'var RulerUnits = { Pixels: "RU_PX", Points: "RU_PT", Millimeters: "RU_MM", Centimeters: "RU_CM", Inches: "RU_IN", Picas: "RU_PICA", Qs: "RU_Q" };\n';
+    const doc = fakeDoc({
+      name: 'a.ai',
+      fullName: { fsName: '/tmp/a.ai' },
+      width: 500,
+      height: 500,
+      documentColorSpace: 'CMYK',
+      rulerUnits: 'RU_Q',
+      rasterEffectSettings: { resolution: 300 },
+    });
+    const result = runToolJsx(rulerEnum + jsx, doc, { coordinate_system: 'document' });
+    expect(result.error).toBeUndefined();
+    expect(result.rulerUnits).toBe('Q');
+  });
+});

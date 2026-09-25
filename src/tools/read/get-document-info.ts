@@ -65,6 +65,7 @@ if (preflight) {
       else if (ru === RulerUnits.Centimeters) rulerUnits = "cm";
       else if (ru === RulerUnits.Inches) rulerUnits = "in";
       else if (ru === RulerUnits.Picas) rulerUnits = "pica";
+      else if (ru === RulerUnits.Qs) rulerUnits = "Q";
     } catch (e) {
       rulerUnits = "unknown";
     }
