@@ -113,6 +113,8 @@ if (preflight) {
 
       try { info.name = item.name || ""; } catch (e) {}
       try { info.closed = item.closed; } catch (e) {}
+      // クリッピングマスクのマスクパスかどうか
+      try { if (item.clipping === true) info.clipping = true; } catch (e) {}
       try { info.opacity = item.opacity; } catch (e) {}
 
       // Extract rotation from transformation matrix, fallback to note metadata
@@ -183,7 +185,10 @@ if (preflight) {
 
     if (selectionOnly) {
       var sel = doc.selection;
-      if (sel && sel.length > 0) {
+      // テキスト編集中は selection が配列ではなく TextRange になる（パスは含まれない）
+      var selIsTextRange = false;
+      try { selIsTextRange = !!(sel && sel.typename); } catch (e) {}
+      if (sel && !selIsTextRange && sel.length > 0) {
         for (var i = 0; i < sel.length; i++) {
           if (sel[i].typename === "PathItem" && !sel[i].guides) {
             pathItems.push(extractPathInfo(sel[i]));
@@ -205,12 +210,13 @@ if (preflight) {
           message: "Layer '" + layerName + "' not found"
         });
       } else {
-        for (var j = 0; j < targetLayer.pathItems.length; j++) {
-          var pi = targetLayer.pathItems[j];
-          if (!pi.guides) {
-            pathItems.push(extractPathInfo(pi));
+        // Layer.pathItems はグループ・複合パス内部・サブレイヤーのパスを含まないため再帰的に辿る
+        // （Document.pathItems と同じ範囲になる）
+        iterateAllItems(targetLayer, function(it) {
+          if (it.typename === "PathItem" && !it.guides) {
+            pathItems.push(extractPathInfo(it));
           }
-        }
+        });
       }
     } else {
       for (var k = 0; k < doc.pathItems.length; k++) {
@@ -239,7 +245,7 @@ export function register(server: McpServer): void {
     'get_path_items',
     {
       title: 'Get Path Items',
-      description: 'Get path and shape data. Note: fill/stroke do not include per-attribute opacity; use the item-level opacity field for transparency.',
+      description: 'Get path and shape data, including paths inside groups and compound paths (clipping: true marks a clipping-mask path). Note: fill/stroke do not include per-attribute opacity; use the item-level opacity field for transparency.',
       inputSchema: {
         layer_name: z
           .string()

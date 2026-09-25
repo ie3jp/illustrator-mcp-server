@@ -12,7 +12,8 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFrameItem/ — contents, textRanges, paragraphs
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — size, textFont, tracking, Tsume, etc.
  *
- * 既知の制限: ParagraphAttributes.leading / .autoLeading は存在しないプロパティ（try/catch で回避中）。
+ * 行送り（leading / autoLeading）は CharacterAttributes、段落スタイルは TextRange.paragraphStyles から読む
+ * （ParagraphAttributes に leading / autoLeading / paragraphStyle は存在しない）。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -57,6 +58,16 @@ if (preflight) {
         }
         var bounds = getBounds(tf, coordSystem, boundsAbRect);
 
+        // 組み方向（縦組み / 横組み）
+        var orientation = "horizontal";
+        try { if (tf.orientation === TextOrientation.VERTICAL) orientation = "vertical"; } catch (e) {}
+
+        // スレッド連結（前後のフレーム）。連結がなければ null
+        var nextFrameUUID = null;
+        var previousFrameUUID = null;
+        try { if (tf.nextFrame) nextFrameUUID = ensureUUID(tf.nextFrame); } catch (e) {}
+        try { if (tf.previousFrame) previousFrameUUID = ensureUUID(tf.previousFrame); } catch (e) {}
+
         // 段落属性（各段落ごと）
         var paraAttrs = [];
         for (var pi = 0; pi < tf.paragraphs.length; pi++) {
@@ -66,6 +77,7 @@ if (preflight) {
             text: para.contents,
             leading: 0,
             autoLeading: false,
+            autoLeadingAmount: null,
             firstLineIndent: 0,
             leftIndent: 0,
             rightIndent: 0,
@@ -76,8 +88,10 @@ if (preflight) {
             paragraphStyle: ""
           };
 
-          try { paraInfo.leading = pa.leading; } catch (e) {}
-          try { paraInfo.autoLeading = pa.autoLeading; } catch (e) {}
+          // leading / autoLeading は文字属性（段落先頭文字の値）
+          try { paraInfo.leading = para.characterAttributes.leading; } catch (e) {}
+          try { paraInfo.autoLeading = para.characterAttributes.autoLeading; } catch (e) {}
+          try { paraInfo.autoLeadingAmount = pa.autoLeadingAmount; } catch (e) {}
           try { paraInfo.firstLineIndent = pa.firstLineIndent; } catch (e) {}
           try { paraInfo.leftIndent = pa.leftIndent; } catch (e) {}
           try { paraInfo.rightIndent = pa.rightIndent; } catch (e) {}
@@ -96,8 +110,8 @@ if (preflight) {
           } catch (e) {}
           try { paraInfo.hyphenation = pa.hyphenation; } catch (e) {}
           try {
-            if (pa.paragraphStyle) {
-              paraInfo.paragraphStyle = pa.paragraphStyle.name || "";
+            if (para.paragraphStyles.length > 0) {
+              paraInfo.paragraphStyle = para.paragraphStyles[0].name || "";
             }
           } catch (e) {}
 
@@ -152,15 +166,14 @@ if (preflight) {
           try { info.verticalScale = cca.verticalScale; } catch (e2) {}
           try { info.rotation = cca.rotation; } catch (e2) {}
 
-          // ランキー生成: 属性が同一なら前のランに結合
+          // ランキー生成: 属性が同一なら前のランに結合。
+          // 色は全成分（特色名・濃度・グラデーションの分岐点など）を含めて比較する
           var key = info.fontFamily + "|" + info.fontStyle + "|" + info.fontSize
             + "|" + info.tracking + "|" + info.kerningMethod
             + "|" + info.akiLeft + "|" + info.akiRight + "|" + info.tsume + "|" + info.proportionalMetrics
             + "|" + info.baselineShift + "|" + info.horizontalScale + "|" + info.verticalScale
             + "|" + info.rotation
-            + "|" + (info.color.type === "rgb" ? info.color.r + "," + info.color.g + "," + info.color.b
-                   : info.color.type === "cmyk" ? info.color.c + "," + info.color.m + "," + info.color.y + "," + info.color.k
-                   : info.color.type);
+            + "|" + jsonStringify(info.color);
 
           if (key === prevKey && currentRun) {
             currentRun.text += ch.contents;
@@ -207,6 +220,9 @@ if (preflight) {
           width: bounds.width,
           height: bounds.height,
           textKind: textKind,
+          orientation: orientation,
+          nextFrameUUID: nextFrameUUID,
+          previousFrameUUID: previousFrameUUID,
           zIndex: getZIndex(tf),
           artboardIndex: itemAbIdx,
           coordinateSystem: coordSystem,
@@ -228,7 +244,7 @@ export function register(server: McpServer): void {
     {
       title: 'Get Text Frame Detail',
       description:
-        'Get detailed text frame attributes including per-character runs (font, tracking, akiLeft/akiRight, tsume, proportionalMetrics), kerning pairs with manual kerning values (1/1000 em), and paragraph attributes. Returns cssHints for web/CSS reproduction. Note: paragraph leading/autoLeading may return 0 in some ExtendScript versions due to missing API support.',
+        'Get detailed text frame attributes including per-character runs (font, tracking, akiLeft/akiRight, tsume, proportionalMetrics), kerning pairs with manual kerning values (1/1000 em), paragraph attributes (leading, autoLeading, paragraph style), orientation (horizontal/vertical) and threaded-frame links (nextFrameUUID/previousFrameUUID). Returns cssHints for web/CSS reproduction.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target text frame'),
         coordinate_system: coordinateSystemSchema,
@@ -257,13 +273,10 @@ export function register(server: McpServer): void {
           css['letter-spacing'] = `${(tracking / 1000).toFixed(3)}em`;
         }
 
-        const tsume = run.tsume as number;
-        const propMetrics = run.proportionalMetrics as boolean;
-        const featureFlags: string[] = [];
-        if (tsume > 0) featureFlags.push('"palt"');
-        if (propMetrics) featureFlags.push('"palt"');
-        if (featureFlags.length > 0) {
-          css['font-feature-settings'] = [...new Set(featureFlags)].join(', ');
+        // proportionalMetrics（プロポーショナルメトリクス）は palt に対応する。
+        // tsume（ツメ = 文字前後の空きを詰める率 %）は palt とは別物で CSS に直接の対応がない
+        if (run.proportionalMetrics === true) {
+          css['font-feature-settings'] = '"palt"';
         }
 
         const baselineShift = run.baselineShift as number;
@@ -355,9 +368,17 @@ export function register(server: McpServer): void {
       // tsume / proportionalMetrics
       const hasTsume = runs.some((r) => (r.tsume as number) > 0);
       const hasPropMetrics = runs.some((r) => r.proportionalMetrics === true);
-      if (hasTsume || hasPropMetrics) {
+      if (hasPropMetrics) {
         cssRules.push('font-feature-settings: "palt"');
-        notes.push('プロポーショナルメトリクスまたはツメが有効。CSSではfont-feature-settings: "palt"で再現。');
+        notes.push('プロポーショナルメトリクスが有効。CSSではfont-feature-settings: "palt"で再現。');
+      }
+      if (hasTsume) {
+        notes.push('ツメ（文字前後の空きを詰める率）が設定されている。CSSに直接の対応はない（"palt" とは別物）。近似するなら letter-spacing の負値で調整。');
+      }
+
+      // 縦組み
+      if (result.orientation === 'vertical') {
+        cssRules.push('writing-mode: vertical-rl');
       }
 
       // paragraphs
@@ -368,7 +389,10 @@ export function register(server: McpServer): void {
           cssRules.push(`text-align: ${para.justification}`);
         }
         const leading = para.leading as number;
-        if (leading > 0 && fontSize > 0) {
+        const autoLeadingAmount = para.autoLeadingAmount as number | null;
+        if (para.autoLeading === true && typeof autoLeadingAmount === 'number' && autoLeadingAmount > 0) {
+          cssRules.push(`line-height: ${(autoLeadingAmount / 100).toFixed(2)}`);
+        } else if (leading > 0 && fontSize > 0) {
           cssRules.push(`line-height: ${(leading / fontSize).toFixed(2)}`);
         }
       }

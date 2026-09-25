@@ -20,11 +20,48 @@ if (preflight) {
     var layerName = (params && params.layer_name) ? params.layer_name : null;
     var doc = app.activeDocument;
 
+    // 子アイテムのコレクション。CompoundPathItem は pageItems を持たず pathItems のみ
+    function getChildCollection(container) {
+      if (container.typename === "CompoundPathItem") return container.pathItems;
+      return container.pageItems;
+    }
+
+    // クリッピングマスクのマスクパスか（複合パスは内部パスの clipping を見る）
+    function isClippingPath(item) {
+      try {
+        if (item.typename === "PathItem") return item.clipping === true;
+        if (item.typename === "CompoundPathItem" && item.pathItems.length > 0) {
+          return item.pathItems[0].clipping === true;
+        }
+      } catch(e) {}
+      return false;
+    }
+
+    // info.children を設定する。深度上限で打ち切った場合は「子なし」と区別できるよう
+    // childrenTruncated: true と childCount（実際の子の数）を付ける
+    function attachChildren(info, container, currentDepth, coordSys) {
+      if (currentDepth >= maxDepth) {
+        info.children = [];
+        var count = 0;
+        try { count = getChildCollection(container).length; } catch(e) {}
+        if (count > 0) {
+          info.childrenTruncated = true;
+          info.childCount = count;
+        }
+        return;
+      }
+      try {
+        info.children = buildChildTree(container, currentDepth, coordSys);
+      } catch(e) {
+        info.children = [];
+      }
+    }
+
     function buildChildTree(container, currentDepth, coordSys) {
       var children = [];
-      if (currentDepth >= maxDepth) { return children; }
-      for (var i = 0; i < container.pageItems.length; i++) {
-        var child = container.pageItems[i];
+      var coll = getChildCollection(container);
+      for (var i = 0; i < coll.length; i++) {
+        var child = coll[i];
         var childUuid = ensureUUID(child);
         var childType = getItemType(child);
         var abIdx = getArtboardIndexForItem(child);
@@ -37,12 +74,9 @@ if (preflight) {
           bounds: childBounds
         };
         try { childInfo.name = child.name || ""; } catch(e) {}
+        if (isClippingPath(child)) childInfo.clipping = true;
         if (childType === "group" || childType === "compound-path") {
-          try {
-            childInfo.children = buildChildTree(child, currentDepth + 1, coordSys);
-          } catch(e) {
-            childInfo.children = [];
-          }
+          attachChildren(childInfo, child, currentDepth + 1, coordSys);
         }
         children.push(childInfo);
       }
@@ -69,8 +103,23 @@ if (preflight) {
       // Already wrote error above; skip rest
     } else {
 
+    // 収集対象。Document.groupItems / compoundPathItems はネストしたものも含むが、
+    // Layer のコレクションはグループ内・サブレイヤー内を含まないため、レイヤー指定時は再帰的に集める
+    var groupSource;
+    var cpSource;
+    if (sourceLayer) {
+      groupSource = [];
+      cpSource = [];
+      iterateAllItems(sourceLayer, function(it) {
+        if (it.typename === "GroupItem") groupSource.push(it);
+        else if (it.typename === "CompoundPathItem") cpSource.push(it);
+      });
+    } else {
+      groupSource = doc.groupItems;
+      cpSource = doc.compoundPathItems;
+    }
+
     // Collect groups
-    var groupSource = sourceLayer ? sourceLayer.groupItems : doc.groupItems;
     for (var g = 0; g < groupSource.length; g++) {
       var group = groupSource[g];
       var uuid = ensureUUID(group);
@@ -93,16 +142,11 @@ if (preflight) {
         children: []
       };
       try { info.name = group.name || ""; } catch(e) {}
-      try {
-        info.children = buildChildTree(group, 0, coordSystem);
-      } catch(e) {
-        info.children = [];
-      }
+      attachChildren(info, group, 0, coordSystem);
       results.push(info);
     }
 
     // Collect compound paths
-    var cpSource = sourceLayer ? sourceLayer.compoundPathItems : doc.compoundPathItems;
     for (var c = 0; c < cpSource.length; c++) {
       var cp = cpSource[c];
       var cpUuid = ensureUUID(cp);
@@ -120,21 +164,8 @@ if (preflight) {
         children: []
       };
       try { cpInfo.name = cp.name || ""; } catch(e) {}
-      try {
-        for (var pi = 0; pi < cp.pathItems.length; pi++) {
-          var pathChild = cp.pathItems[pi];
-          var pcUuid = ensureUUID(pathChild);
-          var pcAbIdx = getArtboardIndexForItem(pathChild);
-          var pcAbRect = getArtboardRectByIndex(pcAbIdx);
-          var pcBounds = getBounds(pathChild, coordSystem, pcAbRect);
-          cpInfo.children.push({
-            uuid: pcUuid,
-            name: pathChild.name || "",
-            type: "path",
-            bounds: pcBounds
-          });
-        }
-      } catch(e) {}
+      if (isClippingPath(cp)) cpInfo.clipping = true;
+      attachChildren(cpInfo, cp, 0, coordSystem);
       results.push(cpInfo);
     }
 
@@ -156,7 +187,8 @@ export function register(server: McpServer): void {
     'get_groups',
     {
       title: 'Get Groups',
-      description: 'Get structure of groups, clipping masks, and compound paths',
+      description:
+        'Get structure of groups, clipping masks, and compound paths. Children of a clipping-mask group mark the mask path with clipping: true. When depth cuts the tree off, the item has childrenTruncated: true and childCount (children is empty only because of the depth limit).',
       inputSchema: {
         layer_name: z.string().optional().describe('Filter by layer name (all layers if omitted)'),
         depth: z.number().optional().default(10).describe('Maximum traversal depth'),

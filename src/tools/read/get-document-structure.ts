@@ -27,9 +27,16 @@ if (preflight) {
       return abIdx === filterArtboard;
     }
 
+    // 深度上限で子を打ち切ったことを示す（children が空なのが「子なし」か「打ち切り」かを区別する）
+    function markTruncated(info, count) {
+      if (count > 0) {
+        info.childrenTruncated = true;
+        info.childCount = count;
+      }
+    }
+
     function traverseItems(container, currentDepth) {
       var children = [];
-      if (currentDepth >= maxDepth) { return children; }
       for (var i = 0; i < container.pageItems.length; i++) {
         var item = container.pageItems[i];
         if (!shouldIncludeItem(item)) { continue; }
@@ -44,10 +51,15 @@ if (preflight) {
         };
         try { child.name = item.name || ""; } catch (e) {}
         if (itemType === "group") {
-          try {
-            child.children = traverseItems(item, currentDepth + 1);
-          } catch (e) {
-            child.children = [];
+          child.children = [];
+          if (currentDepth + 1 >= maxDepth) {
+            var groupCount = 0;
+            try { groupCount = item.pageItems.length; } catch (e) {}
+            markTruncated(child, groupCount);
+          } else {
+            try {
+              child.children = traverseItems(item, currentDepth + 1);
+            } catch (e) {}
           }
         }
         children.push(child);
@@ -72,6 +84,10 @@ if (preflight) {
         for (var s = 0; s < layer.layers.length; s++) {
           info.children.push(traverseLayer(layer.layers[s], currentDepth + 1));
         }
+      } else {
+        var layerCount = 0;
+        try { layerCount = layer.pageItems.length + layer.layers.length; } catch (e) {}
+        markTruncated(info, layerCount);
       }
 
       return info;
@@ -102,7 +118,7 @@ export function register(server: McpServer): void {
         depth: z
           .number()
           .optional()
-          .describe('Maximum traversal depth (unlimited if omitted)'),
+          .describe('Maximum traversal depth (unlimited if omitted). Layers/groups cut off by the limit have childrenTruncated: true and childCount.'),
         artboard_index: z
           .number()
           .optional()

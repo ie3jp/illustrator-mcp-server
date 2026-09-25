@@ -27,6 +27,31 @@ if (preflight) {
     var isCMYKDoc = (docColorSpace === DocumentColorSpace.CMYK);
     var images = [];
 
+    // リンクファイルのパスと実在チェック。file の取得自体が失敗する場合もリンク切れとみなす
+    function readLinkFile(target, info) {
+      var f = null;
+      try { f = target.file; } catch (e) {}
+      if (!f) { info.linkBroken = true; return; }
+      try { info.filePath = f.fsName; } catch (e) {}
+      try { if (!f.exists) info.linkBroken = true; } catch (e) {}
+    }
+
+    // 変形行列（画像 1px あたりの pt）と回転前の配置サイズからピクセル数を求める。
+    // geometricBounds は回転で膨らむ外接矩形（AABB）なので、そのまま割るとピクセル数を誤る。
+    // AABB 幅 = W*|a| + H*|c|、AABB 高さ = W*|b| + H*|d|（W,H はピクセル数）を解く。
+    // 45° 付近など解けない場合は null
+    function pixelSizeFromMatrix(m, aabbW, aabbH) {
+      var a = Math.abs(m.mValueA), b = Math.abs(m.mValueB);
+      var c = Math.abs(m.mValueC), d = Math.abs(m.mValueD);
+      var det = a * d - c * b;
+      var scale = Math.max(a * d, c * b);
+      if (scale <= 0 || Math.abs(det) < scale * 1e-3) return null;
+      var w = (aabbW * d - c * aabbH) / det;
+      var h = (a * aabbH - b * aabbW) / det;
+      if (!(w > 0) || !(h > 0)) return null;
+      return { width: Math.round(w), height: Math.round(h) };
+    }
+
     // Linked images (PlacedItems)
     for (var i = 0; i < doc.placedItems.length; i++) {
       var item = doc.placedItems[i];
@@ -52,11 +77,7 @@ if (preflight) {
         heightPt: null
       };
 
-      try {
-        info.filePath = item.file.fsName;
-      } catch (e) {
-        info.linkBroken = true;
-      }
+      readLinkFile(item, info);
 
       try { info.name = item.name || ""; } catch(e) {}
 
@@ -111,6 +132,11 @@ if (preflight) {
 
       try { rInfo.name = rItem.name || ""; } catch(e) {}
 
+      // 非埋め込み（リンク）のラスタはファイルの実在を確認する
+      if (!rItem.embedded) {
+        readLinkFile(rItem, rInfo);
+      }
+
       // colorSpace detection
       try {
         var cs = rItem.imageColorSpace;
@@ -126,37 +152,30 @@ if (preflight) {
       } catch (e) {}
 
       // pixel dimensions and resolution
+      var ppiH = null;
+      var ppiV = null;
       try {
-        // geometricBounds: [left, top, right, bottom] in points
+        // geometricBounds: [left, top, right, bottom] in points（回転時は外接矩形）
         var gb = rItem.geometricBounds;
-        var placedWidthPt = gb[2] - gb[0];
-        var placedHeightPt = -(gb[3] - gb[1]); // top > bottom in AI coords
-
-        // RasterItem exposes matrix; columns/rows not directly available
-        // but we can try to access them
-        try {
-          // Some versions expose these
-          var pw = rItem.artworkKnockout; // dummy access to keep try block
-        } catch(e2) {}
-
-        // Attempt to get pixel size from the item's internal properties
-        try {
-          var m = rItem.matrix;
-          if (m && placedWidthPt > 0 && placedHeightPt > 0) {
-            // Use vector magnitude to handle rotation correctly
-            // mValueA/mValueB form horizontal basis vector, mValueC/mValueD form vertical
-            var scaleX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
-            var scaleY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
-            if (scaleX > 0 && scaleY > 0) {
-              rInfo.pixelWidth = Math.round(placedWidthPt / scaleX);
-              rInfo.pixelHeight = Math.round(placedHeightPt / scaleY);
-              // PPI = pixels / (points / 72); use minimum of H and V
-              var ppiH = Math.round(rInfo.pixelWidth / (placedWidthPt / 72));
-              var ppiV = Math.round(rInfo.pixelHeight / (placedHeightPt / 72));
-              rInfo.resolution = Math.min(ppiH, ppiV);
+        var aabbWidthPt = Math.abs(gb[2] - gb[0]);
+        var aabbHeightPt = Math.abs(gb[1] - gb[3]);
+        var m = rItem.matrix;
+        if (m) {
+          // mValueA/mValueB が横方向、mValueC/mValueD が縦方向の基底ベクトル（1px あたりの pt）
+          var scaleX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
+          var scaleY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
+          if (scaleX > 0 && scaleY > 0) {
+            // 実効解像度 = 72 / (1px あたりの pt)。短辺側（低い方）を代表値にする
+            ppiH = Math.round(72 / scaleX);
+            ppiV = Math.round(72 / scaleY);
+            rInfo.resolution = Math.min(ppiH, ppiV);
+            var px = pixelSizeFromMatrix(m, aabbWidthPt, aabbHeightPt);
+            if (px) {
+              rInfo.pixelWidth = px.width;
+              rInfo.pixelHeight = px.height;
             }
           }
-        } catch(e3) {}
+        }
       } catch (e) {}
 
       // Print diagnostics
@@ -166,8 +185,10 @@ if (preflight) {
           if (isCMYKDoc && rInfo.colorSpace === "RGB") rInfo.colorSpaceMismatch = true;
           if (!isCMYKDoc && rInfo.colorSpace === "CMYK") rInfo.colorSpaceMismatch = true;
         }
-        if (rInfo.pixelWidth && rInfo.pixelHeight && placedWidthPt > 0) {
-          rInfo.scaleFactor = Math.round((placedWidthPt / rInfo.pixelWidth) * 100);
+        // 縦横別の実効解像度（非等方に拡大縮小されている場合に差が出る）
+        if (ppiH !== null && ppiV !== null) {
+          rInfo.resolutionH = ppiH;
+          rInfo.resolutionV = ppiV;
         }
       }
 
@@ -190,14 +211,15 @@ export function register(server: McpServer): void {
     'get_images',
     {
       title: 'Get Images',
-      description: 'Get embedded and linked image information',
+      description:
+        'Get embedded and linked image information: file path, broken-link status (linkBroken: file missing on disk), pixel size, and effective resolution (ppi at the placed size; rotation-safe).',
       inputSchema: {
         coordinate_system: coordinateSystemSchema,
         include_print_info: z
           .boolean()
           .optional()
           .default(false)
-          .describe('Include print diagnostics: color space mismatch flag, scale factor (%). Only available for embedded raster images.'),
+          .describe('Include print diagnostics: resolutionH/resolutionV (effective ppi per axis; they differ when scaled non-uniformly) and, for embedded raster images, a colorSpaceMismatch flag.'),
       },
       annotations: READ_ANNOTATIONS,
     },
@@ -238,7 +260,8 @@ export function register(server: McpServer): void {
                   const ppiV = Math.round(72 / matrixScaleY);
                   img.resolution = Math.min(ppiH, ppiV);
                   if (resolvedParams.include_print_info) {
-                    img.scaleFactor = Math.round(matrixScaleX * 100);
+                    img.resolutionH = ppiH;
+                    img.resolutionV = ppiV;
                   }
                 } else if (img.widthPt && img.heightPt) {
                   // Fallback to geometricBounds (inaccurate for rotated images)
@@ -248,7 +271,8 @@ export function register(server: McpServer): void {
                   const ppiV = Math.round(dims.height / heightInches);
                   img.resolution = Math.min(ppiH, ppiV);
                   if (resolvedParams.include_print_info) {
-                    img.scaleFactor = Math.round((img.widthPt / dims.width) * 100);
+                    img.resolutionH = ppiH;
+                    img.resolutionV = ppiV;
                   }
                 }
               }

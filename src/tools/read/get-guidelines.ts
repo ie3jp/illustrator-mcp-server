@@ -55,18 +55,12 @@ if (preflight) {
       }
     }
 
-    // 全レイヤーを再帰的に走査してガイドを収集
-    function scanLayer(layer) {
-      for (var i = 0; i < layer.pathItems.length; i++) {
-        checkGuide(layer.pathItems[i]);
-      }
-      for (var j = 0; j < layer.layers.length; j++) {
-        scanLayer(layer.layers[j]);
-      }
-    }
-
+    // 全レイヤーを再帰的に走査してガイドを収集。
+    // Layer.pathItems はグループ内のパスを含まないため、グループ・サブレイヤーも辿る
     for (var li = 0; li < doc.layers.length; li++) {
-      scanLayer(doc.layers[li]);
+      iterateAllItems(doc.layers[li], function(it) {
+        if (it.typename === "PathItem") checkGuide(it);
+      });
     }
 
     writeResultFile(RESULT_PATH, {

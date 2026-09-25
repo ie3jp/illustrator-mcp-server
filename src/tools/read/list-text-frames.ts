@@ -49,7 +49,11 @@ if (preflight) {
           });
           sourceFrames = null;
         } else {
-          sourceFrames = targetLayer.textFrames;
+          // Layer.textFrames はグループ内・サブレイヤー内のテキストを含まないため再帰的に集める
+          sourceFrames = [];
+          iterateAllItems(targetLayer, function(it) {
+            if (it.typename === "TextFrame") sourceFrames.push(it);
+          });
         }
       } else {
         sourceFrames = doc.textFrames;
@@ -57,6 +61,25 @@ if (preflight) {
 
       if (sourceFrames !== null) {
         var artboardRect = (filterArtboard !== null) ? getArtboardRectByIndex(filterArtboard) : null;
+
+        // 組み方向（縦組みは reading-order の並び順が変わる）
+        function getOrientation(frame) {
+          try { if (frame.orientation === TextOrientation.VERTICAL) return "vertical"; } catch (e) {}
+          return "horizontal";
+        }
+
+        // reading-order 用のソートキー（結果からは後で取り除く）
+        function attachSortKeys(entry, frame, abIdx) {
+          var sortAbRect = null;
+          if (coordSystem === "artboard-web" && abIdx >= 0) {
+            sortAbRect = getArtboardRectByIndex(abIdx);
+          }
+          var sb = getBounds(frame, coordSystem, sortAbRect);
+          entry._sortX = sb.x;
+          entry._sortRight = sb.x + sb.width;
+          entry._sortY = sb.y;
+          entry._sortVertical = (getOrientation(frame) === "vertical");
+        }
 
         var textFrames = [];
         var canPaginateEarly = contentsOnly && sortMode !== "reading-order";
@@ -87,13 +110,7 @@ if (preflight) {
               artboardIndex: itemArtboardIndex
             };
             if (sortMode === "reading-order") {
-              var sortAbRect = null;
-              if (coordSystem === "artboard-web" && itemArtboardIndex >= 0) {
-                sortAbRect = getArtboardRectByIndex(itemArtboardIndex);
-              }
-              var sortBounds = getBounds(tf, coordSystem, sortAbRect);
-              contentsItem.x = sortBounds.x;
-              contentsItem.y = sortBounds.y;
+              attachSortKeys(contentsItem, tf, itemArtboardIndex);
             }
             textFrames.push(contentsItem);
             if (canPaginateEarly) { earlyCollected++; }
@@ -125,31 +142,30 @@ if (preflight) {
             // フォント情報が取得できない場合は null のまま
           }
 
-          // 段落スタイル名
+          // 段落スタイル名・文字スタイル名（先頭 textRange が参照するスタイル）。
+          // ParagraphAttributes / CharacterAttributes にスタイルのプロパティはなく、
+          // TextRange.paragraphStyles / characterStyles から読む
           var paragraphStyleName = "";
-          try {
-            if (tf.textRanges.length > 0) {
-              var pStyle = tf.textRanges[0].paragraphAttributes.paragraphStyle;
-              if (pStyle) {
-                paragraphStyleName = pStyle.name || "";
-              }
-            }
-          } catch (e) {
-            // 段落スタイルが未設定の場合
-          }
-
-          // 文字スタイル名
           var characterStyleName = "";
           try {
             if (tf.textRanges.length > 0) {
-              var cStyle = tf.textRanges[0].characterAttributes.characterStyle;
-              if (cStyle) {
-                characterStyleName = cStyle.name || "";
-              }
+              var firstTr = tf.textRanges[0];
+              try {
+                if (firstTr.paragraphStyles.length > 0) paragraphStyleName = firstTr.paragraphStyles[0].name || "";
+              } catch (e) {}
+              try {
+                if (firstTr.characterStyles.length > 0) characterStyleName = firstTr.characterStyles[0].name || "";
+              } catch (e) {}
             }
           } catch (e) {
-            // 文字スタイルが未設定の場合
+            // スタイル情報が取得できない場合は空文字のまま
           }
+
+          // スレッド連結（前後のフレーム）。連結がなければ null
+          var nextFrameUUID = null;
+          var previousFrameUUID = null;
+          try { if (tf.nextFrame) nextFrameUUID = ensureUUID(tf.nextFrame); } catch (e) {}
+          try { if (tf.previousFrame) previousFrameUUID = ensureUUID(tf.previousFrame); } catch (e) {}
 
           var info = {
             uuid: ensureUUID(tf),
@@ -161,11 +177,17 @@ if (preflight) {
             width: bounds.width,
             height: bounds.height,
             textKind: textKind,
+            orientation: getOrientation(tf),
+            nextFrameUUID: nextFrameUUID,
+            previousFrameUUID: previousFrameUUID,
             fontFamily: fontFamily,
             fontSize: fontSize,
             paragraphStyle: paragraphStyleName,
             characterStyle: characterStyleName
           };
+          if (sortMode === "reading-order") {
+            attachSortKeys(info, tf, itemArtboardIndex);
+          }
 
           textFrames.push(info);
         }
@@ -173,17 +195,32 @@ if (preflight) {
         if (sortMode === "reading-order") {
           // document座標はY軸上向き正なので降順、artboard-web座標はY軸下向き正なので昇順
           var yDir = (coordSystem === "document") ? -1 : 1;
+          // アートボードごとに縦組みフレームが過半数なら縦組みの読み順（列を右→左、列内は上→下）。
+          // 比較関数の一貫性を保つため、判定はフレーム単位ではなくアートボード単位で行う
+          var verticalCount = {};
+          var horizontalCount = {};
+          for (var vi = 0; vi < textFrames.length; vi++) {
+            var abKey = "ab" + textFrames[vi].artboardIndex;
+            if (textFrames[vi]._sortVertical) verticalCount[abKey] = (verticalCount[abKey] || 0) + 1;
+            else horizontalCount[abKey] = (horizontalCount[abKey] || 0) + 1;
+          }
           textFrames.sort(function(a, b) {
             if (a.artboardIndex !== b.artboardIndex) return a.artboardIndex - b.artboardIndex;
-            // y差が5pt以内なら同一行とみなしx座標で比較
-            if (Math.abs(a.y - b.y) > 5) return (a.y - b.y) * yDir;
-            return a.x - b.x;
-          });
-          if (contentsOnly) {
-            for (var si = 0; si < textFrames.length; si++) {
-              delete textFrames[si].x;
-              delete textFrames[si].y;
+            var k = "ab" + a.artboardIndex;
+            if ((verticalCount[k] || 0) > (horizontalCount[k] || 0)) {
+              // 縦組み: 右端の差が5pt以内なら同一列とみなし上→下
+              if (Math.abs(a._sortRight - b._sortRight) > 5) return b._sortRight - a._sortRight;
+              return (a._sortY - b._sortY) * yDir;
             }
+            // 横組み: y差が5pt以内なら同一行とみなしx座標で比較
+            if (Math.abs(a._sortY - b._sortY) > 5) return (a._sortY - b._sortY) * yDir;
+            return a._sortX - b._sortX;
+          });
+          for (var si = 0; si < textFrames.length; si++) {
+            delete textFrames[si]._sortX;
+            delete textFrames[si]._sortRight;
+            delete textFrames[si]._sortY;
+            delete textFrames[si]._sortVertical;
           }
         }
 
@@ -224,11 +261,11 @@ export function register(server: McpServer): void {
     'list_text_frames',
     {
       title: 'List Text Frames',
-      description: 'List text frames with summary-level information. Supports reading-order sort, pagination, and a lightweight contents-only mode.',
+      description: 'List text frames with summary-level information (including orientation and threaded-frame links nextFrameUUID/previousFrameUUID). Supports reading-order sort, pagination, and a lightweight contents-only mode. layer_name includes text inside groups and sublayers of that layer.',
       inputSchema: {
         layer_name: z.string().optional().describe('Filter by layer name'),
         artboard_index: z.number().int().min(0).optional().describe('Filter by artboard index (0-based integer)'),
-        sort: z.enum(['reading-order']).optional().describe('Sort order. "reading-order" sorts by artboardIndex asc → y asc → x asc (rows within ~5pt tolerance are treated as the same line)'),
+        sort: z.enum(['reading-order']).optional().describe('Sort order. "reading-order" sorts by artboardIndex asc → y asc → x asc (rows within ~5pt tolerance are treated as the same line). On artboards where most frames are vertical text, columns are read right → left, then top → bottom.'),
         contents_only: coerceBoolean.optional().describe('When true, return only uuid, contents, and artboardIndex (no position/font/style info). Useful for text proofreading.'),
         offset: z.number().int().min(0).optional().describe('Number of items to skip (for pagination). Applied after sort.'),
         limit: z.number().int().min(1).optional().describe('Maximum number of items to return (for pagination). Applied after sort.'),
