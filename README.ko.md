@@ -586,18 +586,6 @@ E2E 테스트는 새 문서(RGB + CMYK)를 생성하고, 테스트 객체를 배
 
 ---
 
-## Special Thanks
-
-피드백과 기여로 이 프로젝트를 발전시켜 주신 분들께 감사드립니다:
-
-- [OKI Yoshiya (@448jp)](https://github.com/448jp)
-- [shadow (@shadowcz007)](https://github.com/shadowcz007)
-- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
-- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
-- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
-
----
-
 ## 면책 조항
 
 이 도구는 많은 Illustrator 작업을 자동화하지만, AI는 실수할 수 있습니다. 추출된 데이터, 프리플라이트 결과, 문서 수정은 항상 사람이 검토해야 합니다. **이 도구를 유일한 품질 점검 수단으로 의존하지 마세요.** 본인의 수동 검증과 병행하는 보조 도구로 사용하되, 특히 인쇄 납품 및 클라이언트 전달 데이터에서는 주의하세요. 저자는 본 소프트웨어 또는 그 출력 사용으로 인한 어떠한 손해나 손실에 대해서도 책임지지 않습니다.

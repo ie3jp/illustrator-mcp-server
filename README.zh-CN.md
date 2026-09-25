@@ -586,18 +586,6 @@ E2E 测试会创建全新文档（RGB + CMYK），置入测试对象，运行跨
 
 ---
 
-## 特别感谢
-
-感谢以下人士提供的反馈和贡献，帮助完善了本项目：
-
-- [OKI Yoshiya (@448jp)](https://github.com/448jp)
-- [shadow (@shadowcz007)](https://github.com/shadowcz007)
-- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
-- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
-- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
-
----
-
 ## 免责声明
 
 本工具自动化了大量 Illustrator 操作，但 AI 可能会出错。提取的数据、预检结果和文档修改应始终由人工复核。**请勿将本工具作为唯一的质量检查手段。** 请将其作为辅助工具，与你自己的手动验证配合使用，尤其是在印刷交付和客户交付物方面。作者不对因使用本软件或其输出所产生的任何损害或损失承担责任。

@@ -588,18 +588,6 @@ The E2E test creates fresh documents (RGB + CMYK), places test objects, runs 182
 
 ---
 
-## Special Thanks
-
-Thanks to the following people for feedback and contributions that shaped this project:
-
-- [OKI Yoshiya (@448jp)](https://github.com/448jp)
-- [shadow (@shadowcz007)](https://github.com/shadowcz007)
-- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
-- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
-- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
-
----
-
 ## Disclaimer
 
 This tool automates many Illustrator operations, but AI can make mistakes. Extracted data, preflight results, and document modifications should always be reviewed by a person. **Do not rely on this tool as your sole quality check.** Use it as an assistant alongside your own manual verification, especially for print submissions and client deliverables. The authors are not responsible for any damages or losses arising from the use of this software or its outputs.

@@ -586,18 +586,6 @@ La prueba E2E crea documentos nuevos (RGB + CMYK), coloca objetos de prueba, eje
 
 ---
 
-## Agradecimientos
-
-Gracias a las siguientes personas por sus comentarios y contribuciones, que han dado forma a este proyecto:
-
-- [OKI Yoshiya (@448jp)](https://github.com/448jp)
-- [shadow (@shadowcz007)](https://github.com/shadowcz007)
-- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
-- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
-- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
-
----
-
 ## Aviso Legal
 
 Esta herramienta automatiza muchas operaciones de Illustrator, pero la IA puede cometer errores. Los datos extraídos, los resultados del preflight y las modificaciones al documento deben ser revisados siempre por una persona. **No dependas de esta herramienta como tu único control de calidad.** Úsala como asistente junto con tu propia verificación manual, especialmente para entregas de imprenta y materiales para clientes. Los autores no se hacen responsables de daños o pérdidas derivados del uso de este software o de sus resultados.
