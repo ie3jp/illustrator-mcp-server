@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 import { resolveCoordinateSystem } from '../session.js';
+import { CROP_MARKS_JSX } from '../crop-marks-shared.js';
 
 /**
  * create_crop_marks — トリムマーク（トンボ）の作成
@@ -22,6 +23,9 @@ import { resolveCoordinateSystem } from '../session.js';
  * - 日本 (ja) → 日本式トンボ（二重線、3mm 塗り足し表示）
  * - その他 → 西洋式トンボ（一重線）
  *
+ * 生成物の特定・環境設定/選択/アクティブアートボードの復元は crop-marks-shared.ts を参照。
+ * 失敗時は生成済みトンボとアートボード拡張を取り消す（transaction）。
+ *
  * @see https://note.com/dtp_tranist/n/n40e3e39cf9f2
  * JSX API: app.executeMenuCommand('TrimMark v25'), app.preferences.setBooleanPreference('cropMarkStyle', ...)
  */
@@ -30,10 +34,19 @@ var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
 } else {
+  // transaction: 結果を書き出すまで committed=false。失敗時は生成物とアートボード拡張を戻す。
+  // 環境設定・選択・アクティブアートボードは成否にかかわらず finally で復元する。
+  var doc = null;
+  var cmState = null;
+  var createdMarks = [];
+  var committed = false;
+  var expandedAb = null;
+  var expandedAbOrigRect = null;
   try {
     var params = readParamsFile(PARAMS_PATH);
-    var doc = app.activeDocument;
+    doc = app.activeDocument;
     var useSelection = params.use_selection === true;
+    var coordSystem = params.coordinate_system || "artboard-web";
 
     // --- Determine crop mark style ---
     var style = params.style || "auto";
@@ -65,7 +78,8 @@ if (preflight) {
       }
     }
 
-    // Set crop mark style preference
+    // 書き換える前に環境設定・選択・アクティブアートボードを保存
+    cmState = cropMarksSaveState(doc);
     app.preferences.setBooleanPreference("cropMarkStyle", resolvedStyle === "japanese");
 
     if (useSelection) {
@@ -74,13 +88,8 @@ if (preflight) {
       if (!sel || sel.length === 0) {
         writeResultFile(RESULT_PATH, { error: true, message: "No objects selected. Select one or more objects to create crop marks for." });
       } else {
-        var groupCountBefore = doc.groupItems.length;
-
-        executeTrimMark();
-        doc.selection = null;
-
-        var newGroups = doc.groupItems.length - groupCountBefore;
-        if (newGroups === 0) {
+        createdMarks = cropMarksRun(doc, null);
+        if (createdMarks.length === 0) {
           writeResultFile(RESULT_PATH, { error: true, message: "TrimMark command ran but created no marks. The selected object may not be suitable for crop marks." });
         } else {
         var styleName = (resolvedStyle === "japanese") ? "Japanese (日本式トンボ)" : "Western (西洋式トンボ)";
@@ -89,10 +98,11 @@ if (preflight) {
           mode: "selection",
           crop_mark_style: resolvedStyle,
           style_display_name: styleName,
-          mark_groups_created: newGroups,
+          mark_groups_created: createdMarks.length,
           artboard_modified: false,
           description: "Crop marks created for the selected object(s). Artboard was not modified."
         });
+        committed = true;
         }
       }
     } else {
@@ -102,53 +112,38 @@ if (preflight) {
         writeResultFile(RESULT_PATH, { error: true, message: "Invalid artboard index: " + abIndex });
       } else {
         var ab = doc.artboards[abIndex];
-        var abRect = ab.artboardRect;
-        var origAbRect = abRect.slice(); // 元のアートボード矩形を保存
-        var abWidth = abRect[2] - abRect[0];
-        var abHeight = abRect[1] - abRect[3];
-
-        // アートボードサイズの一時矩形を作成
-        var tempRect = doc.pathItems.rectangle(abRect[1], abRect[0], abWidth, abHeight);
-        tempRect.filled = false;
-        tempRect.stroked = false;
+        var origAbRect = ab.artboardRect.slice(); // 仕上がり線（拡張前のアートボード矩形）
+        var abWidth = origAbRect[2] - origAbRect[0];
+        var abHeight = origAbRect[1] - origAbRect[3];
 
         doc.artboards.setActiveArtboardIndex(abIndex);
+        createdMarks = cropMarksRun(doc, origAbRect);
 
-        var groupCountBefore = doc.groupItems.length;
-
-        doc.selection = null;
-        tempRect.selected = true;
-
-        executeTrimMark();
-
-        try { tempRect.remove(); } catch (removeErr) {}
-        doc.selection = null;
-
-        // トンボグループの参照を取得
-        var newGroupCount = doc.groupItems.length - groupCountBefore;
-        if (newGroupCount === 0) {
+        if (createdMarks.length === 0) {
           writeResultFile(RESULT_PATH, { error: true, message: "TrimMark command ran but created no marks." });
         } else {
-        var trimMarkGroups = [];
-        for (var g = 0; g < newGroupCount; g++) {
-          trimMarkGroups.push(doc.groupItems[g]);
-        }
-
-        // トンボ全体の外接矩形を計算してアートボードを拡張
-        if (trimMarkGroups.length > 0) {
-          var mb = trimMarkGroups[0].geometricBounds.slice();
-          for (var g = 1; g < trimMarkGroups.length; g++) {
-            var gb = trimMarkGroups[g].geometricBounds;
-            if (gb[0] < mb[0]) mb[0] = gb[0];
-            if (gb[1] > mb[1]) mb[1] = gb[1];
-            if (gb[2] > mb[2]) mb[2] = gb[2];
-            if (gb[3] < mb[3]) mb[3] = gb[3];
-          }
-          // アートボードをトンボが収まるサイズに拡張（少し余裕を持たせる: 1pt）
-          ab.artboardRect = [mb[0] - 1, mb[1] + 1, mb[2] + 1, mb[3] - 1];
-        }
+        // トンボ全体の外接矩形まで拡張（少し余裕を持たせる: 1pt）
+        var mb = cropMarksUnionBounds(createdMarks);
+        expandedAb = ab;
+        expandedAbOrigRect = origAbRect;
+        ab.artboardRect = [mb[0] - 1, mb[1] + 1, mb[2] + 1, mb[3] - 1];
 
         var newAbRect = ab.artboardRect;
+
+        // 仕上がり線を find_objects の bounds と同じ形式・座標系で返す。
+        // artboard-web は「オブジェクトが載っているアートボード（＝拡張後）」の左上が原点
+        var trimRect;
+        if (coordSystem === "document") {
+          trimRect = { x: origAbRect[0], y: origAbRect[1], width: abWidth, height: abHeight };
+        } else {
+          trimRect = {
+            x: origAbRect[0] - newAbRect[0],
+            y: -(origAbRect[1] - newAbRect[1]),
+            width: abWidth,
+            height: abHeight
+          };
+        }
+
         var styleName = (resolvedStyle === "japanese") ? "Japanese (日本式トンボ)" : "Western (西洋式トンボ)";
         var detectionMethod = "";
         if (style === "japanese" || style === "western") {
@@ -160,9 +155,11 @@ if (preflight) {
         }
 
         var bleedNote = "ACTION REQUIRED — Bleed (塗り足し): You MUST do this now, without asking the user. " +
-          "Step 1: Call get_artboards to get the current artboard bounds — this tells you where the trim line is. " +
-          "Step 2: Call find_objects to list all design objects (exclude the crop mark groups). Compare each object's bounds against the trim line (the original artboard rectangle BEFORE it was expanded for crop marks — size was " + abWidth + " × " + abHeight + " pt). " +
-          "Step 3: For every object whose edge touches or nearly touches the trim line, use modify_object to extend that edge outward by at least 3 mm (8.5 pt). Do NOT move or scale the design — just stretch the touching edge outward. For background rectangles, extend all four sides. " +
+          "The trim line (仕上がり線) is original_artboard_rect = {x: " + trimRect.x + ", y: " + trimRect.y + ", width: " + abWidth + ", height: " + abHeight + "} pt " +
+          "(the artboard BEFORE it was expanded for the crop marks, in the same format and coordinate system as find_objects bounds). " +
+          "Do NOT treat the current artboard bounds (get_artboards) as the trim line: the artboard now includes the crop marks and is larger than the finished size. " +
+          "Step 1: Call find_objects to list all design objects (exclude the crop mark groups) and compare each object's bounds against original_artboard_rect. " +
+          "Step 2: For every object whose edge touches or nearly touches the trim line, use modify_object to extend that edge outward by at least 3 mm (8.5 pt). Do NOT move or scale the design — just stretch the touching edge outward. For background rectangles, extend all four sides. " +
           "Why: The trim marks show where the paper is physically cut. If an object stops at the trim line, cutting produces a white gap. Extending past ensures full bleed coverage.";
 
         writeResultFile(RESULT_PATH, {
@@ -171,11 +168,12 @@ if (preflight) {
           crop_mark_style: resolvedStyle,
           style_display_name: styleName,
           detection_method: detectionMethod,
-          mark_groups_created: newGroupCount,
+          mark_groups_created: createdMarks.length,
           artboard_index: abIndex,
           artboard_name: ab.name,
           artboard_modified: true,
           original_artboard_size: { width: abWidth, height: abHeight },
+          original_artboard_rect: trimRect,
           new_artboard_size: {
             width: newAbRect[2] - newAbRect[0],
             height: newAbRect[1] - newAbRect[3]
@@ -185,11 +183,20 @@ if (preflight) {
             ? "Japanese crop marks created. Artboard expanded to include all marks. See bleed_required for next steps."
             : "Western crop marks created. Artboard expanded to include all marks. See bleed_required for next steps."
         });
+        committed = true;
         }
       }
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create crop marks: " + e.message, line: e.line });
+  } finally {
+    if (!committed) {
+      cropMarksRemove(createdMarks);
+      if (expandedAb) {
+        try { expandedAb.artboardRect = expandedAbOrigRect; } catch (restoreErr) {}
+      }
+    }
+    if (doc) cropMarksRestoreState(doc, cmState);
   }
 }
 `;
@@ -201,9 +208,11 @@ export function register(server: McpServer): void {
       title: 'Create Crop Marks (トンボ)',
       description:
         'Create crop marks (トンボ / trim marks) on the active artboard or selected objects. ' +
-        'By default, creates marks for the artboard and expands the artboard to include all marks. ' +
+        'By default, creates marks for the artboard and expands the artboard to include all marks; ' +
+        'the original (trim) rectangle is returned as original_artboard_rect. ' +
         'With use_selection=true, creates marks for the currently selected object(s) without modifying the artboard. ' +
         'Automatically selects Japanese-style (日本式) or Western-style crop marks based on locale. ' +
+        'The Illustrator crop mark style preference, selection and active artboard are restored afterwards. ' +
         'Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         style: z
@@ -241,9 +250,13 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeToolJsx(jsxCode, params, { activate: true });
-      // Inject active coordinate system into the response for the bleed note
+      // original_artboard_rect を find_objects と同じ座標系で返すため、先に座標系を解決して JSX に渡す
       const coordSystem = await resolveCoordinateSystem(undefined);
+      const result = await executeToolJsx(
+        CROP_MARKS_JSX + jsxCode,
+        { ...params, coordinate_system: coordSystem },
+        { activate: true },
+      );
       const coordNote =
         coordSystem === 'document'
           ? 'document (Y-up, origin at bottom-left)'
