@@ -85,6 +85,11 @@ function writeResultFile(filePath, result) {
     for (var wi = 0; wi < _uuidAmbiguityWarnings.length; wi++) {
       extraWarnings.push(_uuidAmbiguityWarnings[wi]);
     }
+    if (_uuidWriteFailures.length > 0) {
+      var shown = _uuidWriteFailures.slice(0, 5).join(", ") + (_uuidWriteFailures.length > 5 ? ", ..." : "");
+      extraWarnings.push(_uuidWriteFailures.length + " object(s) could not store its UUID in the note (e.g. locked): " +
+        shown + ". The returned UUIDs for these will not resolve in later calls.");
+    }
     if (extraWarnings.length > 0) {
       if (!(result.warnings instanceof Array)) result.warnings = [];
       for (var wj = 0; wj < extraWarnings.length; wj++) {
@@ -182,6 +187,24 @@ function setNoteMeta(item, key, value) {
   try { item.note = note; } catch(e) {}
 }
 
+// note へ書き込み、読み返して UUID が保存されたか確かめる（ロック等で例外、または代入が無視されうる）
+function _writeNoteUUID(pageItem, newNote, uuid) {
+  try { pageItem.note = newNote; } catch(e) { return false; }
+  var stored = "";
+  try { stored = pageItem.note || ""; } catch(e2) { return false; }
+  return extractUUIDFromNote(stored) === uuid;
+}
+
+// 保存できなかった UUID は後で解決できないため、writeResultFile() が警告として結果に付ける
+var _uuidWriteFailures = [];
+
+function _describeItemForWarning(item) {
+  var label = "";
+  try { label = getItemType(item); } catch(e) {}
+  try { if (item.name) label += " '" + item.name + "'"; } catch(e2) {}
+  return label;
+}
+
 function ensureUUID(pageItem) {
   // UUID がなければ付与する。既存のメモは消さず UUID の後ろに残す
   var note = "";
@@ -191,15 +214,13 @@ function ensureUUID(pageItem) {
   if (uuid) return uuid;
 
   uuid = generateUUID();
-  try {
-    pageItem.note = note.length > 0 ? (uuid + NOTE_UUID_SEPARATOR + note) : uuid;
-  } catch(e) {
-    // ロックされたオブジェクト等で書き込み不可の場合はそのまま返す
+  if (!_writeNoteUUID(pageItem, note.length > 0 ? (uuid + NOTE_UUID_SEPARATOR + note) : uuid, uuid)) {
+    _uuidWriteFailures.push(_describeItemForWarning(pageItem));
   }
   return uuid;
 }
 
-// UUID だけ差し替え、メモとメタデータは温存する。新しい UUID を返す
+// UUID だけ差し替え、メモとメタデータは温存する。新しい UUID を返す（保存できなければ null）
 function reassignUUID(pageItem) {
   var note = "";
   try { note = pageItem.note || ""; } catch(e) {}
@@ -210,8 +231,7 @@ function reassignUUID(pageItem) {
   } else {
     newNote = note.length > 0 ? (uuid + NOTE_UUID_SEPARATOR + note) : uuid;
   }
-  try { pageItem.note = newNote; } catch(e) {}
-  return uuid;
+  return _writeNoteUUID(pageItem, newNote, uuid) ? uuid : null;
 }
 
 // アイテム自身と、グループ・複合パス内の子孫（サブグループも含む）を配列で返す
@@ -226,14 +246,34 @@ function collectItemWithDescendants(item) {
 }
 
 // duplicate() は note ごと UUID を継承するため、複製と子孫の UUID を振り直す。
-// UUID のないアイテムには付けない
+// UUID のないアイテムには付けない。振り直せず原本と同じ UUID のまま残ったものを
+// [{ uuid, type, name }] で返す（放置すると UUID 指定の操作が原本を選びうる）
 function reassignUUIDDeep(item) {
+  var failures = [];
   var list = collectItemWithDescendants(item);
   for (var i = 0; i < list.length; i++) {
     var n = "";
     try { n = list[i].note || ""; } catch(e) { continue; }
-    if (extractUUIDFromNote(n)) reassignUUID(list[i]);
+    var oldUuid = extractUUIDFromNote(n);
+    if (oldUuid && !reassignUUID(list[i])) {
+      var f = { uuid: oldUuid, type: "", name: "" };
+      try { f.type = getItemType(list[i]); } catch(e2) {}
+      try { f.name = list[i].name || ""; } catch(e3) {}
+      failures.push(f);
+    }
   }
+  return failures;
+}
+
+// reassignUUIDDeep() の失敗を警告文にする。失敗がなければ null
+function uuidReassignWarning(failures, label) {
+  if (!failures || failures.length === 0) return null;
+  var parts = [];
+  for (var i = 0; i < failures.length; i++) {
+    parts.push(failures[i].type + (failures[i].name ? " '" + failures[i].name + "'" : "") + " " + failures[i].uuid);
+  }
+  return label + ": " + failures.length + " object(s) kept the source's UUID because their note could not be rewritten (" +
+    parts.join(", ") + "). Operations by these UUIDs may pick the original instead of the copy.";
 }
 
 // --- カラー変換 ---

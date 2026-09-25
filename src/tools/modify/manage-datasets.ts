@@ -243,6 +243,7 @@ if (preflight) {
             if (totalRows <= maxCols) maxCols = totalRows;
 
             var createdIndices = [];
+            var uuidWarnings = [];
             for (var ri = 1; ri < lines.length; ri++) {
               var values = parseCsvLine(lines[ri]);
               var rowName = params.dataset_name_prefix
@@ -265,7 +266,8 @@ if (preflight) {
                 var dup = origItems[di].duplicate();
                 dup.translate(xOffset, -yOffset);
                 // duplicate() は note（UUID）を継承するため、複製側の UUID を子孫まで振り直す
-                reassignUUIDDeep(dup);
+                var uuidWarning = uuidReassignWarning(reassignUUIDDeep(dup), "Copy for row " + ri);
+                if (uuidWarning) uuidWarnings.push(uuidWarning);
                 // テキスト差し込みもグループ内の子まで含めて走査する
                 var dupItems = collectItemWithDescendants(dup);
                 for (var dj = 0; dj < dupItems.length; dj++) {
@@ -287,13 +289,15 @@ if (preflight) {
               verification.push(verifyArtboardContents(createdIndices[vai]));
             }
 
-            writeResultFile(RESULT_PATH, {
+            var csvResult = {
               success: true,
               action: "import_csv",
               templateArtboard: 0,
               columns: headers,
               artboards: verification
-            });
+            };
+            if (uuidWarnings.length > 0) csvResult.warnings = uuidWarnings;
+            writeResultFile(RESULT_PATH, csvResult);
           }
         }
       }

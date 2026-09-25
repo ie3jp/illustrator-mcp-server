@@ -60,6 +60,7 @@ if (preflight) {
         });
       } else {
         var createdArtboards = [];
+        var uuidWarnings = [];
 
         for (var ti = 0; ti < targetSizes.length; ti++) {
           var target = targetSizes[ti];
@@ -97,7 +98,8 @@ if (preflight) {
           var duplicatedItems = [];
           for (var ii = 0; ii < srcItems.length; ii++) {
             var dup = srcItems[ii].duplicate();
-            reassignUUIDDeep(dup);
+            var uuidWarning = uuidReassignWarning(reassignUUIDDeep(dup), "Copy for variation " + (ti + 1));
+            if (uuidWarning) uuidWarnings.push(uuidWarning);
             duplicatedItems.push(dup);
           }
 
@@ -134,14 +136,16 @@ if (preflight) {
           verifiedArtboards.push(verifyArtboardContents(createdArtboards[vai].artboardIndex));
         }
 
-        writeResultFile(RESULT_PATH, {
+        var variationResult = {
           success: true,
           coordinateSystem: params.coordinate_system || "artboard-web",
           sourceArtboard: srcIdx,
           createdCount: createdArtboards.length,
           artboards: createdArtboards,
           verified: verifiedArtboards
-        });
+        };
+        if (uuidWarnings.length > 0) variationResult.warnings = uuidWarnings;
+        writeResultFile(RESULT_PATH, variationResult);
       }
     }
   } catch (e) {

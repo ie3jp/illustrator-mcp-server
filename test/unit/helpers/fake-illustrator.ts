@@ -21,6 +21,44 @@ export function coll<T>(items: T[], byName?: (name: string) => T): T[] & { getBy
   return arr;
 }
 
+// ─── 失敗注入 ─────────────────────────────────────────────
+// 通常のオブジェクトは代入すれば必ず反映されるため、実機の「書き込み拒否」「黙って無視される代入」
+// 「読むと例外」を再現しないと偽成功を見逃す
+
+/** 代入すると例外を投げるプロパティにする（ロック中のオブジェクトなど）。読むと元の値 */
+export function rejectWrites<T extends object>(obj: T, prop: string, message = 'Target layer cannot be modified'): T {
+  const value = (obj as Fake)[prop];
+  Object.defineProperty(obj, prop, {
+    configurable: true,
+    enumerable: true,
+    get: () => value,
+    set: () => {
+      throw new Error(message);
+    },
+  });
+  return obj;
+}
+
+/** 代入しても値が変わらないプロパティにする（GroupItem.fillColor のように代入が子に伝わらない場合） */
+export function ignoreWrites<T extends object>(obj: T, prop: string): T {
+  const value = (obj as Fake)[prop];
+  Object.defineProperty(obj, prop, { configurable: true, enumerable: true, get: () => value, set: () => {} });
+  return obj;
+}
+
+/** 読むと例外を投げるプロパティにする */
+export function throwOnRead<T extends object>(obj: T, prop: string, message = 'No such element'): T {
+  Object.defineProperty(obj, prop, {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      throw new Error(message);
+    },
+    set: () => {},
+  });
+  return obj;
+}
+
 function detach(item: Fake) {
   if (item.parent && Array.isArray(item.parent.pageItems)) {
     const idx = item.parent.pageItems.indexOf(item);

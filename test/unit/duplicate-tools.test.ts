@@ -6,6 +6,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, expect, it, vi } from 'vitest';
+import { rejectWrites } from './helpers/fake-illustrator.js';
 
 vi.mock('../../src/executor/jsx-runner.js', () => ({
   executeJsx: vi.fn().mockResolvedValue({ success: true }),
@@ -260,6 +261,18 @@ describe('manage_datasets import_csv', () => {
     }
   });
 
+  it('複製の UUID を振り直せなかったら警告する', async () => {
+    const jsx = await captureJsx(registerManageDatasets, false);
+    const { doc, nameFrame } = setup();
+    const dup = nameFrame.duplicate;
+    nameFrame.duplicate = () => rejectWrites(dup(), 'note');
+    const result = runJsx(jsx, doc, { action: 'import_csv', file_path: '/data.csv' }, {
+      '/data.csv': 'name,title\nAlice,T1\n',
+    });
+    expect(result.success).toBe(true);
+    expect((result.warnings as string[]).join(' ')).toMatch(/kept the source's UUID.*text 'name'/);
+  });
+
   it('XML import は既存の変数・データセットを全置換するため destructive annotation を持つ', () => {
     const { config } = captureTool(registerManageDatasets);
     expect(config.annotations.destructiveHint).toBe(true);
@@ -307,6 +320,19 @@ describe('resize_for_variation', () => {
     expect(new Set(uuids).size).toBe(uuids.length);
     const dupChild = items.filter((i) => i.name === 'child').find((i) => !i.note.startsWith(UUID_A));
     expect(dupChild?.note.endsWith('::ai-mcp:rot=0')).toBe(true);
+  });
+
+  it('複製の UUID を振り直せなかったら警告する', async () => {
+    const jsx = await captureJsx(registerResizeForVariation, true);
+    const { doc, group } = setup();
+    const dup = group.duplicate;
+    group.duplicate = () => {
+      const copy = dup();
+      rejectWrites(copy.pageItems![0], 'note');
+      return copy;
+    };
+    const result = runJsx(jsx, doc, { source_artboard_index: 0, target_sizes: [{ width: 200, height: 200 }] });
+    expect((result.warnings as string[]).join(' ')).toMatch(new RegExp(`kept the source's UUID.*${UUID_A}`));
   });
 
   it('アクティブアートボードと選択を元に戻す', async () => {

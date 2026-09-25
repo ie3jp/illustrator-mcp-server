@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
+import { ignoreWrites, rejectWrites } from './helpers/fake-illustrator.js';
 
 // common.jsx（ES3）を Node で評価してテストする（動的評価はテスト専用）
 const jsxPath = path.resolve(__dirname, '../../src/jsx/helpers/common.jsx');
@@ -46,6 +47,7 @@ function loadHelpers(appVersion = '28.0') {
     ensureUUID: ensureUUID,
     reassignUUID: reassignUUID,
     reassignUUIDDeep: reassignUUIDDeep,
+    uuidReassignWarning: uuidReassignWarning,
     summarizeColors: summarizeColors,
     pixelSizeFromMatrix: pixelSizeFromMatrix,
     resolveTopLevelLayer: resolveTopLevelLayer,
@@ -81,8 +83,9 @@ type Note = { note?: string };
 type ExtraHelpers = {
   setActiveDocument: (doc: unknown) => void;
   ensureUUID: (item: Note) => string;
-  reassignUUID: (item: Note) => string;
-  reassignUUIDDeep: (item: unknown) => void;
+  reassignUUID: (item: Note) => string | null;
+  reassignUUIDDeep: (item: unknown) => Array<{ uuid: string; type: string; name: string }>;
+  uuidReassignWarning: (failures: Array<{ uuid: string; type: string; name: string }>, label: string) => string | null;
   summarizeColors: (colors: Array<Record<string, unknown>>) => Array<Record<string, unknown>>;
   pixelSizeFromMatrix: (m: Record<string, number>, w: number, h: number) => { width: number; height: number } | null;
   resolveTopLevelLayer: (doc: unknown, name: string, warnings?: string[]) => { layer: unknown; index: number } | null;
@@ -415,17 +418,21 @@ describe('ensureUUID (note を破壊しない)', () => {
     expect(item.note).toBe(legacy);
   });
 
-  it('note 書き込みが例外でも UUID を返す', () => {
+  it('note 書き込みが例外でも UUID を返し、保存できなかったことを結果の警告で報告する', () => {
     const h = loadHelpers();
-    const item = {
-      get note() {
-        return '';
-      },
-      set note(_v: string) {
-        throw new Error('locked');
-      },
-    };
+    const item = rejectWrites({ typename: 'PathItem', name: 'locked-rect', note: '' }, 'note', 'locked');
     expect(h.ensureUUID(item)).toMatch(UUID_RE);
+    h.writeResultFile('/r.json', { success: true });
+    const r = h.readWrittenResult('/r.json') as { warnings?: string[] };
+    expect(r.warnings?.join(' ')).toMatch(/could not store its UUID.*locked-rect/);
+  });
+
+  it('代入が黙って無視された場合も読み返して報告する', () => {
+    const h = loadHelpers();
+    const item = ignoreWrites({ typename: 'PathItem', name: '', note: '' }, 'note');
+    h.ensureUUID(item);
+    h.writeResultFile('/r.json', {});
+    expect((h.readWrittenResult('/r.json') as { warnings?: string[] }).warnings).toHaveLength(1);
   });
 
   it('付加後の note も UUID インデックスで解決できる', () => {
@@ -451,6 +458,12 @@ describe('reassignUUID', () => {
     const item: Note = { note: 'memo' };
     const uuid = h.reassignUUID(item);
     expect(item.note).toBe(uuid + ' memo');
+  });
+
+  it('書き込めなかったら null を返す（保存されていない UUID を返さない）', () => {
+    const h = loadHelpers();
+    expect(h.reassignUUID(rejectWrites({ note: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }, 'note'))).toBeNull();
+    expect(h.reassignUUID(ignoreWrites({ note: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee' }, 'note'))).toBeNull();
   });
 });
 
@@ -479,8 +492,23 @@ describe('reassignUUIDDeep', () => {
   it('UUID を持たない単体アイテムは変更しない', () => {
     const h = loadHelpers();
     const item = { typename: 'PathItem', note: '' };
-    h.reassignUUIDDeep(item);
+    expect(h.reassignUUIDDeep(item)).toEqual([]);
     expect(item.note).toBe('');
+  });
+
+  it('振り直せなかった子（書き込み拒否・代入が無視される）を旧 UUID 付きで返す', () => {
+    const h = loadHelpers();
+    const lockedChild = rejectWrites({ typename: 'PathItem', name: 'locked', note: `${U2} memo` }, 'note');
+    const stuckChild = ignoreWrites({ typename: 'TextFrame', name: 'stuck', note: U3 }, 'note');
+    const group = { typename: 'GroupItem', name: 'g', note: U1, pageItems: [lockedChild, stuckChild] };
+    const failures = h.reassignUUIDDeep(group);
+    expect(h.extractUUIDFromNote(group.note)).not.toBe(U1);
+    expect(failures).toEqual([
+      { uuid: U2, type: 'path', name: 'locked' },
+      { uuid: U3, type: 'text', name: 'stuck' },
+    ]);
+    expect(h.uuidReassignWarning(failures, 'Copy of x')).toMatch(/Copy of x: 2 object\(s\).*kept the source's UUID/);
+    expect(h.uuidReassignWarning([], 'Copy of x')).toBeNull();
   });
 });
 

@@ -39,6 +39,7 @@ import {
   makeItem,
   makeLayer,
   makeTextFrame,
+  rejectWrites,
   runToolJsx,
 } from './helpers/fake-illustrator.js';
 
@@ -266,6 +267,24 @@ describe('duplicate_objects (T11-3, T11-9, E)', () => {
     // 元は変わらない
     expect(group.note).toBe(UUID_A);
     expect(child1.note).toBe(`${UUID_B} designer memo`);
+  });
+
+  it('warns when a child of the copy could not get a new UUID (note not writable)', async () => {
+    const doc = makeDoc();
+    const layer = doc.layers[0];
+    const child = makeItem('PathItem', { name: 'locked-child', note: UUID_B });
+    const group = makeGroup([child], { note: UUID_A });
+    group.duplicate = () => {
+      const copy = layer.addItem(cloneTree(group));
+      rejectWrites(copy.pageItems[0], 'note');
+      copy.pageItems[0].name = 'locked-child';
+      return copy;
+    };
+    layer.addItem(group);
+
+    const r = await runTool(registerDuplicateObjects, { uuids: [UUID_A] }, makeApp(doc));
+    expect(r.warnings.join(' ')).toMatch(new RegExp(`Copy of ${UUID_A}: 1 object\\(s\\) kept the source's UUID.*locked-child.*${UUID_B}`));
+    expect(r.items[0].newUuid).not.toBe(UUID_A);
   });
 
   it('keeps successful copies and reports failures and missing UUIDs', async () => {
