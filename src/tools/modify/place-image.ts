@@ -21,6 +21,8 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
+    // x/y 省略時も verified の bounds をアートボード相対で返すため、ここで取得する
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
     var filePath = params.file_path;
     var imgFile = new File(filePath);
@@ -49,7 +51,6 @@ if (preflight) {
 
       // Position
       if (typeof params.x === "number" && typeof params.y === "number") {
-        var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
         var pos = webToAiPoint(params.x, params.y, coordSystem, abRect);
         placed.left = pos[0];
         placed.top = pos[1];
@@ -129,7 +130,8 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      // 大きな画像のリンク・埋め込みは 30 秒を超えうるため heavy
+      return executeToolJsx(jsxCode, params, { activate: true, heavy: true, resolveCoordinate: true });
     },
   );
 }

@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
-import { formatToolResult } from '../tool-executor.js';
+import { executeToolJsx } from '../tool-executor.js';
+import { coordinateSystemSchema } from '../session.js';
 import { WRITE_ANNOTATIONS, COLOR_HELPERS_JSX, cmykColorSchema, rgbColorSchema, grayColorSchema } from './shared.js';
 
 /**
@@ -30,6 +30,7 @@ if (preflight) {
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
+    var coordSystem = params.coordinate_system || "artboard-web";
 
     var grad = doc.gradients.add();
     grad.name = params.name;
@@ -49,7 +50,11 @@ if (preflight) {
       if (typeof stops[si].opacity === "number") gs.opacity = stops[si].opacity;
     }
 
+    // verified の bounds は他ツールと同じく解決済みの座標系で返す
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
     var appliedCount = 0;
+    var notFound = [];
+    var verifiedItems = [];
     if (params.apply_to_uuids) {
       for (var ai = 0; ai < params.apply_to_uuids.length; ai++) {
         var item = findItemByUUID(params.apply_to_uuids[ai]);
@@ -60,25 +65,26 @@ if (preflight) {
           item.filled = true;
           item.fillColor = gc;
           appliedCount++;
+          verifiedItems.push(verifyItem(item, coordSystem, abRect));
+        } else {
+          notFound.push(params.apply_to_uuids[ai]);
         }
       }
     }
-
-    var verifiedItems = [];
-    if (params.apply_to_uuids) {
-      for (var vi = 0; vi < params.apply_to_uuids.length; vi++) {
-        var vItem = findItemByUUID(params.apply_to_uuids[vi]);
-        if (vItem) verifiedItems.push(verifyItem(vItem));
-      }
-    }
-    writeResultFile(RESULT_PATH, {
+    var result = {
       success: true,
       name: params.name,
       type: params.type || "linear",
       stopCount: stops.length,
       appliedCount: appliedCount,
+      coordinateSystem: coordSystem,
       verified: verifiedItems
-    });
+    };
+    if (notFound.length > 0) {
+      result.success = false;
+      result.notFound = notFound;
+    }
+    writeResultFile(RESULT_PATH, appendColorSpaceWarnings(result));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "create_gradient failed: " + e.message, line: e.line });
   }
@@ -117,14 +123,14 @@ export function register(server: McpServer): void {
         apply_to_uuids: z
           .array(z.string())
           .optional()
-          .describe('UUIDs of objects to apply this gradient as fill'),
+          .describe('UUIDs of objects to apply this gradient as fill. UUIDs that cannot be found are listed in notFound and make success false (the gradient itself is still created).'),
         angle: z.number().optional().default(0).describe('Gradient angle (for linear). Note: may not take effect due to a long-standing Illustrator bug (since 2008).'),
+        coordinate_system: coordinateSystemSchema,
       },
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
-      return formatToolResult(result);
+      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
     },
   );
 }

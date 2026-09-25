@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
 import { coordinateSystemSchema } from '../session.js';
-import { WRITE_ANNOTATIONS } from './shared.js';
+import { DOCUMENT_COLORS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
 /**
  * place_color_chips — ドキュメント使用色のカラーチップ配置
@@ -15,6 +15,7 @@ if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
 } else {
   try {
+    ${DOCUMENT_COLORS_JSX}
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var abIdx = (typeof params.artboard_index === "number") ? params.artboard_index : doc.artboards.getActiveArtboardIndex();
@@ -29,36 +30,9 @@ if (preflight) {
     } else {
       var abRect = doc.artboards[abIdx].artboardRect;
 
-      // Collect unique colors
-      var colorMap = {};
-      var colorList = [];
-
-      function addColor(color) {
-        try {
-          var key = "";
-          if (color.typename === "CMYKColor") {
-            key = "cmyk_" + Math.round(color.cyan) + "_" + Math.round(color.magenta) + "_" + Math.round(color.yellow) + "_" + Math.round(color.black);
-          } else if (color.typename === "RGBColor") {
-            key = "rgb_" + Math.round(color.red) + "_" + Math.round(color.green) + "_" + Math.round(color.blue);
-          } else if (color.typename === "SpotColor") {
-            key = "spot_" + color.spot.name;
-          } else if (color.typename === "GrayColor") {
-            key = "gray_" + Math.round(color.gray);
-          } else {
-            return;
-          }
-          if (!colorMap[key]) {
-            colorMap[key] = true;
-            colorList.push({ color: color, key: key, info: colorToObject(color) });
-          }
-        } catch(e) {}
-      }
-
-      for (var i = 0; i < doc.pathItems.length; i++) {
-        var item = doc.pathItems[i];
-        try { if (item.filled) addColor(item.fillColor); } catch(e) {}
-        try { if (item.stroked) addColor(item.strokeColor); } catch(e) {}
-      }
+      // Collect unique colors（パス・テキスト・グラデーション分岐。チップ用レイヤー自身は除外）
+      var colorScan = collectDocumentColors(doc, [layerName]);
+      var colorList = colorScan.list;
 
       // Get or create layer
       var chipLayer = resolveTargetLayer(doc, layerName);
@@ -88,32 +62,7 @@ if (preflight) {
 
         // Create color chip rectangle
         var rect = chipLayer.pathItems.rectangle(chipY, chipX, chipSize, chipSize);
-        try {
-          // Clone the color for the chip
-          if (entry.color.typename === "CMYKColor") {
-            var nc = new CMYKColor();
-            nc.cyan = entry.color.cyan;
-            nc.magenta = entry.color.magenta;
-            nc.yellow = entry.color.yellow;
-            nc.black = entry.color.black;
-            rect.fillColor = nc;
-          } else if (entry.color.typename === "RGBColor") {
-            var nr = new RGBColor();
-            nr.red = entry.color.red;
-            nr.green = entry.color.green;
-            nr.blue = entry.color.blue;
-            rect.fillColor = nr;
-          } else if (entry.color.typename === "SpotColor") {
-            var ns = new SpotColor();
-            ns.spot = entry.color.spot;
-            ns.tint = entry.color.tint;
-            rect.fillColor = ns;
-          } else if (entry.color.typename === "GrayColor") {
-            var ng = new GrayColor();
-            ng.gray = entry.color.gray;
-            rect.fillColor = ng;
-          }
-        } catch(e) {}
+        try { rect.fillColor = entry.color; } catch(e) {}
         rect.stroked = true;
         var strokeC = new GrayColor();
         strokeC.gray = 80;
@@ -122,17 +71,7 @@ if (preflight) {
 
         // Add info text
         if (includeInfo) {
-          var label = "";
-          var info = entry.info;
-          if (info.type === "cmyk") {
-            label = "C" + Math.round(info.c) + " M" + Math.round(info.m) + " Y" + Math.round(info.y) + " K" + Math.round(info.k);
-          } else if (info.type === "rgb") {
-            label = "R" + Math.round(info.r) + " G" + Math.round(info.g) + " B" + Math.round(info.b);
-          } else if (info.type === "spot") {
-            label = info.name;
-          } else if (info.type === "gray") {
-            label = "Gray " + Math.round(info.value) + "%";
-          }
+          var label = docColorLabel(entry.info);
 
           if (label) {
             var textX, textY;
@@ -165,15 +104,18 @@ if (preflight) {
         placedCount++;
       }
 
+      var coordSystem = params.coordinate_system || "artboard-web";
+      var verifyAbRect = (coordSystem === "artboard-web") ? abRect : null;
       var verifiedChips = [];
       var chipItems = chipLayer.pageItems;
       for (var vci = 0; vci < chipItems.length && vci < 5; vci++) {
-        verifiedChips.push(verifyItem(chipItems[vci]));
+        verifiedChips.push(verifyItem(chipItems[vci], coordSystem, verifyAbRect));
       }
       writeResultFile(RESULT_PATH, {
         success: true,
-        coordinateSystem: params.coordinate_system || "artboard-web",
+        coordinateSystem: coordSystem,
         chipCount: placedCount,
+        skippedColors: colorScan.skipped,
         layerName: layerName,
         position: position,
         verified: verifiedChips
@@ -191,7 +133,7 @@ export function register(server: McpServer): void {
     {
       title: 'Place Color Chips',
       description:
-        'Extract all unique colors from the document and place color chip swatches with labels outside the artboard',
+        'Extract all unique colors used in the document (path fills/strokes including inside groups and compound paths, text colors, gradient stop colors; spot colors per tint) and place color chip swatches with labels outside the artboard. Pattern fills cannot be shown as chips and are counted in skippedColors. Items already on the chip layer are ignored.',
       inputSchema: {
         artboard_index: z
           .number()

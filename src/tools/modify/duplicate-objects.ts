@@ -1,7 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
-import { formatToolResult } from '../tool-executor.js';
+import { executeToolJsx } from '../tool-executor.js';
 import { coordinateSystemSchema } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
@@ -15,8 +14,27 @@ import { WRITE_ANNOTATIONS } from './shared.js';
  *   PageItem.translate(deltaX: Number, deltaY: Number) → void
  *
  * artboard-web 座標系の場合、offset.y を反転して translate に渡す。
+ * 座標系は resolveCoordinate で解決する（CMYK 文書は document になり、offset.y は上向き正）。
  */
 const jsxCode = `
+// 複製後の UUID 再採番。duplicate() は note を継承する（実機確認済み）ため、
+// 複製本体だけでなくグループの子・複合パス内部の UUID も元と重複する。
+// UUID を持つものだけ reassignUUID()（ユーザーメモ・メタデータは温存）で振り直す
+function reassignCopiedUUIDs(copy) {
+  var copyUuid = reassignUUID(copy);
+  function reassignIfTagged(item) {
+    var n = "";
+    try { n = item.note || ""; } catch(e) { return; }
+    if (extractUUIDFromNote(n)) reassignUUID(item);
+  }
+  if (copy.typename === "GroupItem") {
+    iterateAllItems(copy, reassignIfTagged);
+  } else if (copy.typename === "CompoundPathItem") {
+    for (var ci = 0; ci < copy.pathItems.length; ci++) reassignIfTagged(copy.pathItems[ci]);
+  }
+  return copyUuid;
+}
+
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
@@ -25,6 +43,7 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
     var targetLayer = null;
     var layerError = false;
@@ -39,49 +58,61 @@ if (preflight) {
 
     if (!layerError) {
       var results = [];
+      var notFound = [];
+      var failed = [];
       for (var i = 0; i < params.uuids.length; i++) {
         var item = findItemByUUID(params.uuids[i]);
-        if (!item) continue;
-
-        var dup;
-        if (targetLayer) {
-          dup = item.duplicate(targetLayer, ElementPlacement.PLACEATEND);
-        } else {
-          dup = item.duplicate();
+        if (!item) {
+          notFound.push(params.uuids[i]);
+          continue;
         }
 
-        if (params.offset) {
-          var dx = params.offset.x || 0;
-          var dy = params.offset.y || 0;
-          if (coordSystem === "artboard-web") {
-            dup.translate(dx, -dy);
-          } else {
-            dup.translate(dx, dy);
-          }
-        }
-
-        // 複製は元オブジェクトの note(UUID含む)を継承するため、新しいUUIDを強制割り当て
-        var newUuid = generateUUID();
+        // 1 件ごとに try する。途中で throw しても、それまでの複製の UUID を必ず返す
+        var dup = null;
+        var newUuid = null;
         try {
-          var dupNote = dup.note || "";
-          var oldUuid = extractUUIDFromNote(dupNote);
-          if (oldUuid) {
-            // UUID部分だけ置換し、メタデータ(::key=value)は保持
-            dup.note = newUuid + dupNote.substring(36);
+          if (targetLayer) {
+            dup = item.duplicate(targetLayer, ElementPlacement.PLACEATEND);
           } else {
-            dup.note = newUuid;
+            dup = item.duplicate();
           }
-        } catch(e) {
-          // note 書き込み不可の場合はそのまま
+
+          newUuid = reassignCopiedUUIDs(dup);
+
+          if (params.offset) {
+            var dx = params.offset.x || 0;
+            var dy = params.offset.y || 0;
+            if (coordSystem === "artboard-web") {
+              dup.translate(dx, -dy);
+            } else {
+              dup.translate(dx, dy);
+            }
+          }
+
+          results.push({ sourceUuid: params.uuids[i], newUuid: newUuid, verified: verifyItem(dup, coordSystem, abRect) });
+        } catch (dupErr) {
+          var failure = { sourceUuid: params.uuids[i], message: dupErr.message };
+          // 複製自体はできていた場合、回収できるよう UUID を返す
+          // （再採番前に落ちたなら元の UUID のままなので、ここで振り直す）
+          if (dup) {
+            if (!newUuid) {
+              try { newUuid = reassignUUID(dup); } catch (eUuid) {}
+            }
+            if (newUuid) failure.newUuid = newUuid;
+          }
+          failed.push(failure);
         }
-        results.push({ sourceUuid: params.uuids[i], newUuid: newUuid, verified: verifyItem(dup) });
       }
 
-      writeResultFile(RESULT_PATH, {
-        success: true,
+      var result = {
+        success: notFound.length === 0 && failed.length === 0,
+        coordinateSystem: coordSystem,
         duplicatedCount: results.length,
         items: results
-      });
+      };
+      if (notFound.length > 0) result.notFound = notFound;
+      if (failed.length > 0) result.failed = failed;
+      writeResultFile(RESULT_PATH, result);
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "duplicate_objects failed: " + e.message, line: e.line });
@@ -95,13 +126,13 @@ export function register(server: McpServer): void {
     {
       title: 'Duplicate Objects',
       description:
-        'Duplicate one or more objects, optionally offsetting the copies. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Duplicate one or more objects, optionally offsetting the copies. Copies (and their group/compound-path children) get new UUIDs; notes/memos are kept. Missing UUIDs are listed in notFound and per-item failures in failed (success is then false, but copies that were made are still returned). Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to duplicate'),
         offset: z
           .object({
             x: z.number().describe('X offset from original'),
-            y: z.number().describe('Y offset from original'),
+            y: z.number().describe('Y offset from original. Positive = down in artboard-web, up in document coordinates.'),
           })
           .optional()
           .describe('Offset for duplicated objects'),
@@ -111,8 +142,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
-      return formatToolResult(result);
+      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
     },
   );
 }

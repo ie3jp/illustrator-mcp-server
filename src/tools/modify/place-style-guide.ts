@@ -2,12 +2,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
 import { coordinateSystemSchema } from '../session.js';
-import { WRITE_ANNOTATIONS } from './shared.js';
+import { DOCUMENT_COLORS_JSX, WRITE_ANNOTATIONS } from './shared.js';
 
 /**
  * place_style_guide — カラーチップ＋フォントサンプル＋スペーシング表示をアートボード外に配置
  */
 const jsxCode = `
+${DOCUMENT_COLORS_JSX}
 // ─── Helper functions (top-level for ES3 compatibility) ───
 function makeTextColor(isCMYK) {
   if (isCMYK) {
@@ -42,27 +43,6 @@ function addLabel(layer, text, x, y, fontSize, isCMYK) {
   return tf;
 }
 
-function addColorToMap(color, colorMap, colorList) {
-  try {
-    var key = "";
-    if (color.typename === "CMYKColor") {
-      key = "cmyk_" + Math.round(color.cyan) + "_" + Math.round(color.magenta) + "_" + Math.round(color.yellow) + "_" + Math.round(color.black);
-    } else if (color.typename === "RGBColor") {
-      key = "rgb_" + Math.round(color.red) + "_" + Math.round(color.green) + "_" + Math.round(color.blue);
-    } else if (color.typename === "SpotColor") {
-      key = "spot_" + color.spot.name;
-    } else if (color.typename === "GrayColor") {
-      key = "gray_" + Math.round(color.gray);
-    } else {
-      return;
-    }
-    if (!colorMap[key]) {
-      colorMap[key] = true;
-      colorList.push({ color: color, key: key, info: colorToObject(color) });
-    }
-  } catch(e) {}
-}
-
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
@@ -79,7 +59,19 @@ if (preflight) {
       writeResultFile(RESULT_PATH, { error: true, message: "Artboard index out of range" });
     } else {
       var abRect = doc.artboards[abIdx].artboardRect;
+      var annotateArtboard = (params.annotate_artboard === true);
+      var warnings = [];
+
+      // スタイルガイドは確認用の注釈なので非印刷レイヤーに置く（PDF・印刷への混入を防ぐ）。
+      // 既存レイヤーの印刷設定はユーザーの意図がありうるため変えず、印刷される場合は警告する
+      var layerExisted = false;
+      try { doc.layers.getByName(layerName); layerExisted = true; } catch(eLayer) {}
       var guideLayer = resolveTargetLayer(doc, layerName);
+      if (!layerExisted) {
+        try { guideLayer.printable = false; } catch(ePrintable) {}
+      } else if (guideLayer.printable) {
+        warnings.push("Layer '" + layerName + "' already existed and is printable, so the style guide items on it will print and appear in PDF output. Turn off 'Print' for this layer in the Layers panel, or use a new layer_name.");
+      }
 
       // ─── Layout parameters ───
       var chipSize = 30;
@@ -118,17 +110,9 @@ if (preflight) {
       placedCount++;
       curY -= 20;
 
-      // Collect unique colors
-      var colorMap = {};
-      var colorList = [];
-
-      for (var i = 0; i < doc.pathItems.length; i++) {
-        var item = doc.pathItems[i];
-        try {
-          if (item.filled) addColorToMap(item.fillColor, colorMap, colorList);
-          if (item.stroked) addColorToMap(item.strokeColor, colorMap, colorList);
-        } catch(e) {}
-      }
+      // Collect unique colors（パス・テキスト・グラデーション分岐。注釈レイヤー自身は除外）
+      var colorScan = collectDocumentColors(doc, [layerName, "Color Chips"]);
+      var colorList = colorScan.list;
 
       // Place color chips
       var colorStartY = curY;
@@ -144,26 +128,7 @@ if (preflight) {
         }
 
         var rect = guideLayer.pathItems.rectangle(chipY, chipX, chipSize, chipSize);
-        try {
-          if (entry.color.typename === "CMYKColor") {
-            var nc = new CMYKColor();
-            nc.cyan = entry.color.cyan; nc.magenta = entry.color.magenta;
-            nc.yellow = entry.color.yellow; nc.black = entry.color.black;
-            rect.fillColor = nc;
-          } else if (entry.color.typename === "RGBColor") {
-            var nr = new RGBColor();
-            nr.red = entry.color.red; nr.green = entry.color.green; nr.blue = entry.color.blue;
-            rect.fillColor = nr;
-          } else if (entry.color.typename === "SpotColor") {
-            var ns = new SpotColor();
-            ns.spot = entry.color.spot; ns.tint = entry.color.tint;
-            rect.fillColor = ns;
-          } else if (entry.color.typename === "GrayColor") {
-            var ng = new GrayColor();
-            ng.gray = entry.color.gray;
-            rect.fillColor = ng;
-          }
-        } catch(e) {}
+        try { rect.fillColor = entry.color; } catch(e) {}
         rect.stroked = true;
         var strokeC = new GrayColor();
         strokeC.gray = 80;
@@ -171,19 +136,13 @@ if (preflight) {
         rect.strokeWidth = 0.5;
 
         // Color label
-        var label = "";
         var info = entry.info;
-        if (info.type === "cmyk") {
-          label = "C" + Math.round(info.c) + " M" + Math.round(info.m) + " Y" + Math.round(info.y) + " K" + Math.round(info.k);
-        } else if (info.type === "rgb") {
+        var label = docColorLabel(info);
+        if (info.type === "rgb") {
           var hexR = ("0" + Math.round(info.r).toString(16)).slice(-2).toUpperCase();
           var hexG = ("0" + Math.round(info.g).toString(16)).slice(-2).toUpperCase();
           var hexB = ("0" + Math.round(info.b).toString(16)).slice(-2).toUpperCase();
-          label = "#" + hexR + hexG + hexB + "  R" + Math.round(info.r) + " G" + Math.round(info.g) + " B" + Math.round(info.b);
-        } else if (info.type === "spot") {
-          label = info.name;
-        } else if (info.type === "gray") {
-          label = "Gray " + Math.round(info.value) + "%";
+          label = "#" + hexR + hexG + hexB + "  " + label;
         }
         if (label) {
           if (position === "right") {
@@ -485,9 +444,11 @@ if (preflight) {
       }
 
       if (spacingCount > 0) {
-        // Place on-artboard annotations
-        placeAnnotationBars(hList);
-        placeAnnotationBars(vList);
+        // Place on-artboard annotations（オプトイン。アートボード上に半透明バーと数値を置くため）
+        if (annotateArtboard) {
+          placeAnnotationBars(hList);
+          placeAnnotationBars(vList);
+        }
 
         // Place legend in style guide area
         addSectionTitle(guideLayer, "SPACING", curX, curY, isCMYKDoc);
@@ -600,7 +561,7 @@ if (preflight) {
         marginAnnotations.push({ dir: "h", x: nearRight.objEdge, y: nearRight.y + 2, w: nearRight.dist, h: 4, val: Math.round(nearRight.dist) });
       }
 
-      for (var mai = 0; mai < marginAnnotations.length; mai++) {
+      for (var mai = 0; annotateArtboard && mai < marginAnnotations.length; mai++) {
         var ma = marginAnnotations[mai];
         var mBar = guideLayer.pathItems.rectangle(ma.y, ma.x, ma.w, ma.h);
         mBar.fillColor = marginColor();
@@ -696,6 +657,8 @@ if (preflight) {
       for (var hgi = 0; hgi < hGuides.length - 1; hgi++) {
         var gGap = Math.round(hGuides[hgi] - hGuides[hgi + 1]);
         if (gGap > 1 && gGap < 1000) {
+          guideAnnotCount++;
+          if (!annotateArtboard) continue;
           var gMidX = (abRect[0] + abRect[2]) / 2;
           var gBar = guideLayer.pathItems.rectangle(hGuides[hgi], gMidX - 2, 4, hGuides[hgi] - hGuides[hgi + 1]);
           gBar.fillColor = guideColor();
@@ -713,7 +676,6 @@ if (preflight) {
           } catch(e) {}
           gLabel.move(guideGrp, ElementPlacement.PLACEATEND);
           placedCount++;
-          guideAnnotCount++;
         }
       }
 
@@ -721,6 +683,8 @@ if (preflight) {
       for (var vgi = 0; vgi < vGuides.length - 1; vgi++) {
         var vgGap = Math.round(vGuides[vgi + 1] - vGuides[vgi]);
         if (vgGap > 1 && vgGap < 2000) {
+          guideAnnotCount++;
+          if (!annotateArtboard) continue;
           var gMidY = (abRect[1] + abRect[3]) / 2;
           var vgBar = guideLayer.pathItems.rectangle(gMidY + 2, vGuides[vgi], vGuides[vgi + 1] - vGuides[vgi], 4);
           vgBar.fillColor = guideColor();
@@ -738,7 +702,6 @@ if (preflight) {
           } catch(e) {}
           vgLabel.move(guideGrp, ElementPlacement.PLACEATEND);
           placedCount++;
-          guideAnnotCount++;
         }
       }
 
@@ -770,10 +733,13 @@ if (preflight) {
         verifiedItems.push(verifyItem(guideItems[vi], params.coordinate_system, abRect));
       }
 
-      writeResultFile(RESULT_PATH, {
+      var result = {
         success: true,
         coordinateSystem: params.coordinate_system,
         placedCount: placedCount,
+        nonPrintingLayer: !guideLayer.printable,
+        artboardAnnotations: annotateArtboard,
+        skippedColors: colorScan.skipped,
         sections: {
           colors: colorList.length,
           fonts: fontList.length,
@@ -785,7 +751,9 @@ if (preflight) {
         layerName: layerName,
         position: position,
         verified: verifiedItems
-      });
+      };
+      if (warnings.length > 0) result.warnings = warnings;
+      writeResultFile(RESULT_PATH, result);
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Place style guide failed: " + e.message, line: e.line });
@@ -799,7 +767,7 @@ export function register(server: McpServer): void {
     {
       title: 'Place Style Guide',
       description:
-        'Place a visual style guide (color chips, font samples, spacing indicators) outside the artboard',
+        'Place a visual style guide next to the artboard: color chips (path, text and gradient stop colors), font samples, and legends of recurring spacings, artboard margins and guide gaps. Everything goes on a NON-PRINTING layer (created with Print off; if layer_name already exists its print setting is kept and a warning is returned). By default nothing is drawn on the artboard itself; set annotate_artboard=true to also draw semi-transparent measurement bars and numbers ON the artboard (same non-printing layer, but visible on screen and possibly in screen/image exports).',
       inputSchema: {
         artboard_index: z
           .number()
@@ -817,6 +785,11 @@ export function register(server: McpServer): void {
           .optional()
           .default('Style Guide')
           .describe('Layer name for the style guide'),
+        annotate_artboard: z
+          .boolean()
+          .optional()
+          .default(false)
+          .describe('Also draw measurement bars and numbers ON the artboard for spacings, margins and guide gaps (default: false = legends only, placed outside the artboard)'),
         coordinate_system: coordinateSystemSchema,
       },
       annotations: WRITE_ANNOTATIONS,

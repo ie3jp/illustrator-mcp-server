@@ -40,7 +40,11 @@ if (preflight) {
         writeResultFile(RESULT_PATH, { error: true, message: "SVG file not found: " + svgPath });
       } else {
         targetDocRef = app.activeDocument;
-        var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+        // fit_to_artboard は座標系に関係なくアクティブアートボードを使う。
+        // abRect（座標変換・verified 用）は artboard-web のときだけ
+        var activeAbRect = getActiveArtboardRect();
+        var abRect = (coordSystem === "artboard-web") ? activeAbRect : null;
+        var isCMYKTarget = (targetDocRef.documentColorSpace === DocumentColorSpace.CMYK);
 
         try {
           srcDoc = app.open(svgFile);
@@ -90,14 +94,14 @@ if (preflight) {
               var bounds = rootItem ? rootItem.geometricBounds : unionBounds(duplicated);
 
               // フィット → サイズが変わったらバウンディングを取り直す
-              if (params.fit_to_artboard === true && abRect) {
+              if (params.fit_to_artboard === true) {
                 var pad = (typeof params.padding === "number") ? params.padding : 0;
-                fitItemsToArtboard(movables, bounds, abRect, pad);
+                fitItemsToArtboard(movables, bounds, activeAbRect, pad);
                 bounds = rootItem ? rootItem.geometricBounds : unionBounds(duplicated);
               }
 
               // 明示的な x/y 指定（fit_to_artboard 時は中央配置が優先されるので無視）
-              if (!(params.fit_to_artboard === true && abRect) &&
+              if (params.fit_to_artboard !== true &&
                   typeof params.x === "number" && typeof params.y === "number") {
                 var pos = webToAiPoint(params.x, params.y, coordSystem, abRect);
                 translateItems(movables, pos[0] - bounds[0], pos[1] - bounds[1]);
@@ -119,7 +123,17 @@ if (preflight) {
                 });
               }
 
-              writeResultFile(RESULT_PATH, {
+              // CMYK 文書に取り込んでも SVG 由来の RGB 塗り・線はそのまま残る（実機確認済み）。
+              // 勝手に変換はせず、件数を数えて警告する
+              var importWarnings = [];
+              if (isCMYKTarget) {
+                var rgbCount = countRGBColors(duplicated);
+                if (rgbCount > 0) {
+                  importWarnings.push("The target document is CMYK but " + rgbCount + " RGB fill/stroke/text color(s) were imported from the SVG and kept as RGB. They were not converted. Use replace_color (from_color rgb -> to_color cmyk) or find_objects to fix them before print output.");
+                }
+              }
+
+              var svgResult = {
                 success: true,
                 sourcePath: svgPath,
                 grouped: !!rootItem && duplicated.length > 1,
@@ -130,7 +144,9 @@ if (preflight) {
                 items: itemSummaries,
                 duplicationErrors: dupErrors.length > 0 ? dupErrors : undefined,
                 verified: rootItem ? verifyItem(rootItem, coordSystem, abRect) : null
-              });
+              };
+              if (importWarnings.length > 0) svgResult.warnings = importWarnings;
+              writeResultFile(RESULT_PATH, svgResult);
             }
           }
         }
@@ -150,6 +166,42 @@ if (preflight) {
 }
 
 // --- ローカルヘルパー ---
+
+function _isRGBColor(color) {
+  try { return !!color && color.typename === "RGBColor"; } catch (e) { return false; }
+}
+
+// 取り込んだアイテム（グループ・複合パス内部・テキストを含む）の RGB 色の数
+function countRGBColors(items) {
+  var count = 0;
+  function visit(item) {
+    var tn = "";
+    try { tn = item.typename; } catch (e) { return; }
+    if (tn === "PathItem") {
+      try { if (item.filled && _isRGBColor(item.fillColor)) count++; } catch (e) {}
+      try { if (item.stroked && _isRGBColor(item.strokeColor)) count++; } catch (e) {}
+    } else if (tn === "TextFrame") {
+      try {
+        for (var ri = 0; ri < item.textRanges.length; ri++) {
+          var ca = item.textRanges[ri].characterAttributes;
+          if (_isRGBColor(ca.fillColor)) count++;
+          try { if (ca.strokeWeight > 0 && _isRGBColor(ca.strokeColor)) count++; } catch (e2) {}
+        }
+      } catch (e) {}
+    }
+  }
+  for (var i = 0; i < items.length; i++) {
+    visit(items[i]);
+    try {
+      if (items[i].typename === "GroupItem") {
+        iterateAllItems(items[i], visit);
+      } else if (items[i].typename === "CompoundPathItem") {
+        for (var pi = 0; pi < items[i].pathItems.length; pi++) visit(items[i].pathItems[pi]);
+      }
+    } catch (e) {}
+  }
+  return count;
+}
 
 function unionBounds(items) {
   // [left, top, right, bottom]
@@ -210,7 +262,7 @@ export function register(server: McpServer): void {
     {
       title: 'Import SVG as Editable',
       description:
-        'Import an SVG file into the active document as editable Illustrator paths/text/groups (NOT as a linked image). Internally opens the SVG as a temporary document, duplicates its contents into the target document, then closes the source. Use this instead of place_image for SVG. Note: Illustrator will be activated (brought to foreground) during execution. Font caveat: Illustrator does not fall back per glyph across a font-family list. If the FIRST family in the list is installed but lacks a glyph, that character is dropped silently and the import still reports success. Specify a single font-family per text element, and pick one that actually contains the glyphs you use (symbols such as U+2713 are the common failure case). An uninstalled family is substituted by Illustrator and is NOT affected by this.',
+        'Import an SVG file into the active document as editable Illustrator paths/text/groups (NOT as a linked image). Internally opens the SVG as a temporary document, duplicates its contents into the target document, then closes the source. Use this instead of place_image for SVG. Colors are NOT converted: importing into a CMYK document keeps the SVG\'s RGB colors, and the result then includes a warning with the count (fix with replace_color). Note: Illustrator will be activated (brought to foreground) during execution. Font caveat: Illustrator does not fall back per glyph across a font-family list. If the FIRST family in the list is installed but lacks a glyph, that character is dropped silently and the import still reports success. Specify a single font-family per text element, and pick one that actually contains the glyphs you use (symbols such as U+2713 are the common failure case). An uninstalled family is substituted by Illustrator and is NOT affected by this.',
       inputSchema: {
         file_path: z.string().describe('Absolute path to the .svg or .svgz file'),
         x: z
@@ -234,7 +286,7 @@ export function register(server: McpServer): void {
           .boolean()
           .optional()
           .default(false)
-          .describe('Scale and center the imported content to fit the active artboard (default: false).'),
+          .describe('Scale and center the imported content to fit the active artboard (default: false). Works in both coordinate systems.'),
         padding: z
           .number()
           .optional()
@@ -248,7 +300,8 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      // 大きな SVG の open・複製は 30 秒を超えうるため heavy
+      return executeToolJsx(jsxCode, params, { activate: true, heavy: true, resolveCoordinate: true });
     },
   );
 }

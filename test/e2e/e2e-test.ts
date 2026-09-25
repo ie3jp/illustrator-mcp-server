@@ -669,7 +669,7 @@ async function main(): Promise<void> {
     assert(fontName.length > 0, `should have a font family, got "${fontName}"`);
   });
 
-  await test('create_text_frame with non-existent font -> font_warning', async () => {
+  await test('create_text_frame with non-existent font -> error, nothing created', async () => {
     const r = await callTool(client, 'create_text_frame', {
       x: 600, y: 50, contents: 'Font fallback test',
       font_name: 'ZzNonExistentFont999',
@@ -677,10 +677,14 @@ async function main(): Promise<void> {
       name: '__e2e_font_fallback',
       layer_name: 'FontTest',
     }) as any;
-    assert(typeof r.uuid === 'string', 'should still create text frame with uuid');
-    assert(typeof r.font_warning === 'string', 'should have font_warning');
-    assert(r.font_warning.includes('not found'), `font_warning should mention "not found", got "${r.font_warning}"`);
+    // フォント不一致はデフォルトフォントで作らずエラーにする（LLM が警告を読み飛ばして別フォントの版が残るのを防ぐ）
+    assert(r.error === true, 'should return error for unknown font');
+    assert(typeof r.uuid === 'undefined', 'should not return a uuid (nothing created)');
+    assert(r.message.includes('not found'), `message should mention "not found", got "${r.message}"`);
     assert(Array.isArray(r.font_candidates), 'should have font_candidates array');
+
+    const found = await callTool(client, 'find_objects', { name: '__e2e_font_fallback' }) as any;
+    assert(found.count === 0, `no text frame should be created, found ${found.count}`);
   });
 
   await test('modify_object font_name with invalid font -> errors + candidates', async () => {

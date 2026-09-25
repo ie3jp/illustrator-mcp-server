@@ -1,7 +1,6 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { executeJsx } from '../../executor/jsx-runner.js';
-import { formatToolResult } from '../tool-executor.js';
+import { executeToolJsx } from '../tool-executor.js';
 import { coordinateSystemSchema } from '../session.js';
 import { WRITE_ANNOTATIONS } from './shared.js';
 
@@ -25,6 +24,7 @@ if (preflight) {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
     var coordSystem = params.coordinate_system || "artboard-web";
+    var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
     if (params.action === "place") {
       var sym = null;
@@ -36,12 +36,10 @@ if (preflight) {
       if (sym) {
         var si = doc.symbolItems.add(sym);
         if (typeof params.x === "number" && typeof params.y === "number") {
-          var abIndex = doc.artboards.getActiveArtboardIndex();
-          var abRect = getArtboardRectByIndex(abIndex);
           si.position = webToAiPoint(params.x, params.y, coordSystem, abRect);
         }
         var uuid = ensureUUID(si);
-        writeResultFile(RESULT_PATH, { success: true, uuid: uuid, symbolName: params.symbol_name, verified: verifyItem(si) });
+        writeResultFile(RESULT_PATH, { success: true, uuid: uuid, symbolName: params.symbol_name, coordinateSystem: coordSystem, verified: verifyItem(si, coordSystem, abRect) });
       }
     } else if (params.action === "replace") {
       if (!params.uuid) {
@@ -59,7 +57,7 @@ if (preflight) {
           }
           if (newSym) {
             item.symbol = newSym;
-            writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid, newSymbolName: params.symbol_name });
+            writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid, newSymbolName: params.symbol_name, coordinateSystem: coordSystem, verified: verifyItem(item, coordSystem, abRect) });
           }
         }
       }
@@ -86,8 +84,8 @@ export function register(server: McpServer): void {
         symbol_name: z
           .string()
           .describe('Symbol name to place or new symbol name for replace'),
-        x: z.number().optional().describe('X position (for place action)'),
-        y: z.number().optional().describe('Y position (for place action)'),
+        x: z.number().optional().describe('X of the instance top-left (for place action)'),
+        y: z.number().optional().describe('Y of the instance top-left (for place action)'),
         uuid: z
           .string()
           .optional()
@@ -97,8 +95,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
-      return formatToolResult(result);
+      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
     },
   );
 }
