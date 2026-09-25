@@ -234,6 +234,29 @@ function reassignUUID(pageItem) {
   return uuid;
 }
 
+// アイテム自身と、グループ・複合パス内の子孫（サブグループも含む）を配列で返す
+function collectItemWithDescendants(item) {
+  var list = [item];
+  if (item.typename === "GroupItem") {
+    iterateAllItems(item, function(child) { list.push(child); });
+  } else if (item.typename === "CompoundPathItem") {
+    for (var cp = 0; cp < item.pathItems.length; cp++) list.push(item.pathItems[cp]);
+  }
+  return list;
+}
+
+// duplicate() 直後の複製と、その子孫が継承した UUID を振り直す
+// （duplicate() は note を継承するため、放置すると元と UUID が重複する）。
+// 既に UUID を持つものだけが対象で、UUID のないアイテムには新たに付けない
+function reassignUUIDDeep(item) {
+  var list = collectItemWithDescendants(item);
+  for (var i = 0; i < list.length; i++) {
+    var n = "";
+    try { n = list[i].note || ""; } catch(e) { continue; }
+    if (extractUUIDFromNote(n)) reassignUUID(list[i]);
+  }
+}
+
 // --- カラー変換 ---
 
 function colorToObject(color) {
@@ -285,6 +308,44 @@ function colorToObject(color) {
     return { type: "none" };
   }
   return { type: "unknown", typename: tn || "undefined" };
+}
+
+// colorToObject() の結果の配列を、同一色ごとに count を付けた一覧にまとめる（多い順）。
+// 同じ色が使用箇所の数だけ並ぶと読めないため。渡した要素に count を書き込む
+function summarizeColors(colors) {
+  var byKey = {};
+  var list = [];
+  for (var i = 0; i < colors.length; i++) {
+    var key = jsonStringify(colors[i]);
+    if (byKey[key]) {
+      byKey[key].count++;
+    } else {
+      var entry = colors[i];
+      entry.count = 1;
+      byKey[key] = entry;
+      list.push(entry);
+    }
+  }
+  list.sort(function(a, b) { return b.count - a.count; });
+  return list;
+}
+
+// --- 画像のピクセル数 ---
+
+// 変形行列（画像 1px あたりの pt）と外接矩形からピクセル数を求める。
+// geometricBounds は回転で膨らむ外接矩形（AABB）なので、そのまま割るとピクセル数を誤る。
+// AABB 幅 = W*|a| + H*|c|、AABB 高さ = W*|b| + H*|d|（W,H はピクセル数）を解く。
+// 45° 付近など解けない場合は null
+function pixelSizeFromMatrix(m, aabbW, aabbH) {
+  var a = Math.abs(m.mValueA), b = Math.abs(m.mValueB);
+  var c = Math.abs(m.mValueC), d = Math.abs(m.mValueD);
+  var det = a * d - c * b;
+  var scale = Math.max(a * d, c * b);
+  if (scale <= 0 || Math.abs(det) < scale * 1e-3) return null;
+  var w = (aabbW * d - c * aabbH) / det;
+  var h = (a * aabbH - b * aabbW) / det;
+  if (!(w > 0) || !(h > 0)) return null;
+  return { width: Math.round(w), height: Math.round(h) };
 }
 
 // --- バウンディングボックス ---

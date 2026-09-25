@@ -50,6 +50,9 @@ function loadHelpers(appVersion = '28.0') {
     },
     ensureUUID: ensureUUID,
     reassignUUID: reassignUUID,
+    reassignUUIDDeep: reassignUUIDDeep,
+    summarizeColors: summarizeColors,
+    pixelSizeFromMatrix: pixelSizeFromMatrix,
     extractUUIDFromNote: extractUUIDFromNote,
     getNoteMeta: getNoteMeta,
     setNoteMeta: setNoteMeta,
@@ -83,6 +86,9 @@ type ExtraHelpers = {
   setActiveDocument: (doc: unknown) => void;
   ensureUUID: (item: Note) => string;
   reassignUUID: (item: Note) => string;
+  reassignUUIDDeep: (item: unknown) => void;
+  summarizeColors: (colors: Array<Record<string, unknown>>) => Array<Record<string, unknown>>;
+  pixelSizeFromMatrix: (m: Record<string, number>, w: number, h: number) => { width: number; height: number } | null;
   extractUUIDFromNote: (note: string) => string;
   getNoteMeta: (note: string, key: string) => string | null;
   setNoteMeta: (item: Note, key: string, value: string) => void;
@@ -453,6 +459,68 @@ describe('reassignUUID', () => {
     const item: Note = { note: 'memo' };
     const uuid = h.reassignUUID(item);
     expect(item.note).toBe(uuid + ' memo');
+  });
+});
+
+describe('reassignUUIDDeep', () => {
+  const U1 = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const U2 = 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const U3 = 'cccccccc-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+
+  it('グループ本体・入れ子の子・複合パス内部の UUID を振り直し、UUID のないものには付けない', () => {
+    const h = loadHelpers();
+    const inner = { typename: 'PathItem', note: `${U3} memo` };
+    const compound = { typename: 'CompoundPathItem', note: '', pageItems: [], pathItems: [inner] };
+    const untagged = { typename: 'PathItem', note: 'plain memo' };
+    const sub = { typename: 'GroupItem', note: U2, pageItems: [compound, untagged] };
+    const group = { typename: 'GroupItem', note: U1, pageItems: [sub] };
+    h.reassignUUIDDeep(group);
+    expect(group.note).not.toBe(U1);
+    expect(h.extractUUIDFromNote(group.note)).toBeTruthy();
+    expect(sub.note).not.toBe(U2);
+    expect(inner.note).not.toContain(U3);
+    expect(inner.note.endsWith(' memo')).toBe(true);
+    expect(compound.note).toBe('');
+    expect(untagged.note).toBe('plain memo');
+  });
+
+  it('UUID を持たない単体アイテムは変更しない', () => {
+    const h = loadHelpers();
+    const item = { typename: 'PathItem', note: '' };
+    h.reassignUUIDDeep(item);
+    expect(item.note).toBe('');
+  });
+});
+
+describe('summarizeColors', () => {
+  it('同一色をまとめて count を付け、多い順に並べる', () => {
+    const h = loadHelpers();
+    const k = () => ({ type: 'cmyk', c: 0, m: 0, y: 0, k: 100 });
+    const red = () => ({ type: 'rgb', r: 255, g: 0, b: 0 });
+    const list = h.summarizeColors([red(), k(), k(), red(), k()]);
+    expect(list).toEqual([
+      { type: 'cmyk', c: 0, m: 0, y: 0, k: 100, count: 3 },
+      { type: 'rgb', r: 255, g: 0, b: 0, count: 2 },
+    ]);
+  });
+});
+
+describe('pixelSizeFromMatrix', () => {
+  it('回転した画像の外接矩形から元のピクセル数を復元する', () => {
+    const h = loadHelpers();
+    const s = 0.5;
+    const t = (20 * Math.PI) / 180;
+    const [W, H] = [800, 600];
+    const m = { mValueA: s * Math.cos(t), mValueB: s * Math.sin(t), mValueC: -s * Math.sin(t), mValueD: s * Math.cos(t) };
+    const aabbW = W * s * Math.cos(t) + H * s * Math.sin(t);
+    const aabbH = W * s * Math.sin(t) + H * s * Math.cos(t);
+    expect(h.pixelSizeFromMatrix(m, aabbW, aabbH)).toEqual({ width: 800, height: 600 });
+  });
+
+  it('45° では解けないので null', () => {
+    const h = loadHelpers();
+    const v = Math.SQRT1_2;
+    expect(h.pixelSizeFromMatrix({ mValueA: v, mValueB: v, mValueC: -v, mValueD: v }, 100, 100)).toBeNull();
   });
 });
 

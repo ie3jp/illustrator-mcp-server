@@ -106,25 +106,6 @@ if (preflight) {
       return null;
     }
 
-    // 同一色をまとめて [{ ...color, count }] にする（多い順）
-    function summarizeColors(colors) {
-      var byKey = {};
-      var list = [];
-      for (var si = 0; si < colors.length; si++) {
-        var key = jsonStringify(colors[si]);
-        if (byKey[key]) {
-          byKey[key].count++;
-        } else {
-          var entry = colors[si];
-          entry.count = 1;
-          byKey[key] = entry;
-          list.push(entry);
-        }
-      }
-      list.sort(function(a, b) { return b.count - a.count; });
-      return list;
-    }
-
     // fill / stroke を末端へ適用して読み返す。report には件数、errors / warnings に失敗・スキップを積む
     function applyPaint(kind, targets, skipped, value, errors, warnings) {
       var report = { targets: targets.length, changed: 0 };

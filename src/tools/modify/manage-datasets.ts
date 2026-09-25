@@ -64,16 +64,6 @@ function collectTemplateItems(container, abRect, out) {
     collectTemplateItems(layer, abRect, out);
   }
 }
-// アイテム自身と、グループ・複合パス内の子孫を配列で返す
-function collectWithDescendants(item) {
-  var list = [item];
-  if (item.typename === "GroupItem") {
-    iterateAllItems(item, function(child) { list.push(child); });
-  } else if (item.typename === "CompoundPathItem") {
-    for (var cp = 0; cp < item.pathItems.length; cp++) list.push(item.pathItems[cp]);
-  }
-  return list;
-}
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
@@ -278,14 +268,12 @@ if (preflight) {
               for (var di = 0; di < origItems.length; di++) {
                 var dup = origItems[di].duplicate();
                 dup.translate(xOffset, -yOffset);
-                // 複製はグループ内の子まで含めて走査する（UUID 再採番とテキスト差し込み）
-                var dupItems = collectWithDescendants(dup);
+                // duplicate() は note（UUID）を継承するため、複製側の UUID を子孫まで振り直す
+                reassignUUIDDeep(dup);
+                // テキスト差し込みもグループ内の子まで含めて走査する
+                var dupItems = collectItemWithDescendants(dup);
                 for (var dj = 0; dj < dupItems.length; dj++) {
                   var d = dupItems[dj];
-                  // duplicate() は note（UUID）を継承するため、複製側の UUID を振り直す
-                  var dNote = "";
-                  try { dNote = d.note || ""; } catch(_eN) {}
-                  if (extractUUIDFromNote(dNote)) reassignUUID(d);
                   if (d.typename === "TextFrame") {
                     for (var ci3 = 0; ci3 < headers.length && ci3 < values.length; ci3++) {
                       if (headers[ci3] !== "" && d.name === headers[ci3]) {

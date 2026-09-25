@@ -11,21 +11,6 @@ import { WRITE_ANNOTATIONS } from './shared.js';
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — selectObjectsOnActiveArtboard()
  */
 const jsxCode = `
-// 複製直後のアイテムと、グループ・複合パス内の子孫が継承した UUID を振り直す
-// （duplicate() は note を継承するため、放置すると UUID が重複する）
-function reassignDuplicatedUUIDs(dup) {
-  var list = [dup];
-  if (dup.typename === "GroupItem") {
-    iterateAllItems(dup, function(child) { list.push(child); });
-  } else if (dup.typename === "CompoundPathItem") {
-    for (var cp = 0; cp < dup.pathItems.length; cp++) list.push(dup.pathItems[cp]);
-  }
-  for (var li = 0; li < list.length; li++) {
-    var n = "";
-    try { n = list[li].note || ""; } catch(e) {}
-    if (extractUUIDFromNote(n)) reassignUUID(list[li]);
-  }
-}
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
@@ -116,7 +101,7 @@ if (preflight) {
           var duplicatedItems = [];
           for (var ii = 0; ii < srcItems.length; ii++) {
             var dup = srcItems[ii].duplicate();
-            reassignDuplicatedUUIDs(dup);
+            reassignUUIDDeep(dup);
             duplicatedItems.push(dup);
           }
 

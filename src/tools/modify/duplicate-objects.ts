@@ -17,24 +17,6 @@ import { WRITE_ANNOTATIONS } from './shared.js';
  * 座標系は resolveCoordinate で解決する（CMYK 文書は document になり、offset.y は上向き正）。
  */
 const jsxCode = `
-// 複製後の UUID 再採番。duplicate() は note を継承する（実機確認済み）ため、
-// 複製本体だけでなくグループの子・複合パス内部の UUID も元と重複する。
-// UUID を持つものだけ reassignUUID()（ユーザーメモ・メタデータは温存）で振り直す
-function reassignCopiedUUIDs(copy) {
-  var copyUuid = reassignUUID(copy);
-  function reassignIfTagged(item) {
-    var n = "";
-    try { n = item.note || ""; } catch(e) { return; }
-    if (extractUUIDFromNote(n)) reassignUUID(item);
-  }
-  if (copy.typename === "GroupItem") {
-    iterateAllItems(copy, reassignIfTagged);
-  } else if (copy.typename === "CompoundPathItem") {
-    for (var ci = 0; ci < copy.pathItems.length; ci++) reassignIfTagged(copy.pathItems[ci]);
-  }
-  return copyUuid;
-}
-
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
@@ -77,7 +59,10 @@ if (preflight) {
             dup = item.duplicate();
           }
 
-          newUuid = reassignCopiedUUIDs(dup);
+          // duplicate() は note を継承する（実機確認済み）ため、複製と子孫の UUID を振り直す。
+          // 元が UUID を持っていなかった場合は ensureUUID() で新規に付ける
+          reassignUUIDDeep(dup);
+          newUuid = ensureUUID(dup);
 
           if (params.offset) {
             var dx = params.offset.x || 0;

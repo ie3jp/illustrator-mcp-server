@@ -36,22 +36,6 @@ if (preflight) {
       try { if (!f.exists) info.linkBroken = true; } catch (e) {}
     }
 
-    // 変形行列（画像 1px あたりの pt）と回転前の配置サイズからピクセル数を求める。
-    // geometricBounds は回転で膨らむ外接矩形（AABB）なので、そのまま割るとピクセル数を誤る。
-    // AABB 幅 = W*|a| + H*|c|、AABB 高さ = W*|b| + H*|d|（W,H はピクセル数）を解く。
-    // 45° 付近など解けない場合は null
-    function pixelSizeFromMatrix(m, aabbW, aabbH) {
-      var a = Math.abs(m.mValueA), b = Math.abs(m.mValueB);
-      var c = Math.abs(m.mValueC), d = Math.abs(m.mValueD);
-      var det = a * d - c * b;
-      var scale = Math.max(a * d, c * b);
-      if (scale <= 0 || Math.abs(det) < scale * 1e-3) return null;
-      var w = (aabbW * d - c * aabbH) / det;
-      var h = (a * aabbH - b * aabbW) / det;
-      if (!(w > 0) || !(h > 0)) return null;
-      return { width: Math.round(w), height: Math.round(h) };
-    }
-
     // Linked images (PlacedItems)
     for (var i = 0; i < doc.placedItems.length; i++) {
       var item = doc.placedItems[i];
