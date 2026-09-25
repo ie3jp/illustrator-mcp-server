@@ -136,6 +136,12 @@ if (preflight) {
             try { collectEffectItems(pi); } catch (e) {}
           }
         }
+        // サブレイヤー（Layer.layers）は pageItems に含まれないので明示的に辿る
+        var subLayers = null;
+        try { subLayers = container.layers; } catch (e) {}
+        if (subLayers) {
+          for (var sl = 0; sl < subLayers.length; sl++) collectEffectItems(subLayers[sl]);
+        }
       }
       for (var li = 0; li < doc.layers.length; li++) {
         collectEffectItems(doc.layers[li]);

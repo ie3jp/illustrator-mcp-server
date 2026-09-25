@@ -434,3 +434,28 @@ describe('get_document_info JSX', () => {
     expect(result.rulerUnits).toBe('Q');
   });
 });
+
+// ─── find_objects / get_effects: サブレイヤー ─────────────────────────
+
+describe('layer walks include sublayers', () => {
+  function docWithSublayerItem(): Record<string, unknown> {
+    const top = fakeItem('PathItem', [0, 0, 10, -10], { name: 'top' });
+    const inSub = fakeItem('PathItem', [20, -20, 30, -30], { name: 'in-sub' });
+    const sub = fakeLayer('Sub', [inSub]);
+    inSub.parent = sub;
+    const layer = fakeLayer('Parent', [top], { layers: [sub] });
+    top.parent = layer;
+    return fakeDoc({ layers: [layer] });
+  }
+
+  it('find_objects finds items that live in a sublayer', () => {
+    const result = runToolJsx(loadToolJsx('read/find-objects.ts'), docWithSublayerItem(), { coordinate_system: 'artboard-web' });
+    expect(result.objects.map((o: any) => o.name).sort()).toEqual(['in-sub', 'top']);
+    expect(result.objects.find((o: any) => o.name === 'in-sub').layerName).toBe('Sub');
+  });
+
+  it('get_effects lists items that live in a sublayer', () => {
+    const result = runToolJsx(loadToolJsx('read/get-effects.ts'), docWithSublayerItem(), { coordinate_system: 'artboard-web' });
+    expect(JSON.stringify(result)).toContain('in-sub');
+  });
+});

@@ -137,6 +137,12 @@ if (preflight) {
           try { collectItems(item); } catch (e) {}
         }
       }
+      // サブレイヤー（Layer.layers）は pageItems に含まれないので明示的に辿る
+      var subLayers = null;
+      try { subLayers = container.layers; } catch (e) {}
+      if (subLayers) {
+        for (var sl = 0; sl < subLayers.length; sl++) collectItems(subLayers[sl]);
+      }
     }
 
     for (var i = 0; i < doc.layers.length; i++) {
