@@ -54,6 +54,15 @@ Nécessite [Node.js 20+](https://nodejs.org/).
 claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 ```
 
+Vous pouvez aussi l'installer comme plugin, qui regroupe le serveur MCP et une skill de contrôle prépresse (fonctionne aussi dans Claude Cowork) :
+
+```
+/plugin marketplace add ie3jp/illustrator-mcp-server
+/plugin install illustrator@ie3jp-illustrator
+```
+
+Si vous avez déjà ajouté le serveur avec `claude mcp add`, retirez-le d'abord (`claude mcp remove illustrator-mcp`) pour qu'il ne tourne pas deux fois.
+
 ### 🖥️ Claude Desktop
 
 1. Téléchargez **`illustrator-mcp-server.mcpb`** depuis [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
@@ -586,6 +595,12 @@ npx tsx test/e2e/svg-import-test.ts
 ```
 
 Les suites E2E créent leurs propres documents, ne touchent pas aux autres documents ouverts et les ferment sans enregistrer. `e2e-test.ts` exécute tous les outils enregistrés (RVB + CMJN, détection automatique du système de coordonnées) ; `e2e-behaviors.ts` vérifie les comportements qui doivent tenir dans l'application réelle : les notes sont conservées, les échecs partiels sont signalés, les fichiers ne sont pas écrasés, les traits de coupe et l'export PDF laissent votre illustration intacte.
+
+---
+
+## Politique de confidentialité (Privacy Policy)
+
+illustrator-mcp-server s'exécute entièrement sur votre ordinateur. Il ne collecte aucune donnée personnelle, n'intègre aucune télémétrie et n'établit aucune connexion réseau de lui-même. Les paramètres des outils et les données du document ne transitent qu'entre votre Illustrator local et le client MCP qui a appelé l'outil ; les fichiers temporaires sont supprimés après chaque appel. Voir la [politique de confidentialité complète](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
 
 ---
 

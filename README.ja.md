@@ -52,6 +52,15 @@ Adobe 公式の Illustrator MCP（Beta）にできることは全部できて、
 claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 ```
 
+プラグインとして入れることもできます。MCP サーバーと入稿前チェック（プリフライト）用のスキルがセットになっています（Claude Cowork でも使えます）。
+
+```
+/plugin marketplace add ie3jp/illustrator-mcp-server
+/plugin install illustrator@ie3jp-illustrator
+```
+
+`claude mcp add` で登録済みの場合は、二重に起動しないよう先に `claude mcp remove illustrator-mcp` で外してください。
+
 ### 🖥️ Claude Desktop
 
 1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest) から **`illustrator-mcp-server.mcpb`** をダウンロード
@@ -585,6 +594,12 @@ npx tsx test/e2e/svg-import-test.ts
 ```
 
 E2E テストはそれぞれ専用のドキュメントを作成し、ほかに開いているドキュメントには触れず、最後に保存せずに閉じます。`e2e-test.ts` は登録済みの全ツールを（RGB・CMYK、座標系の自動検出を含めて）実行し、`e2e-behaviors.ts` はメモが消えない・部分失敗を報告する・ファイルを上書きしない・トンボや PDF 書き出しがアートワークを壊さない、といった実機で守るべき挙動を確かめます。
+
+---
+
+## プライバシーポリシー（Privacy Policy）
+
+illustrator-mcp-server はお使いのコンピューター上だけで動作します。個人データの収集やテレメトリーはなく、本サーバー自身がネットワーク通信を行うこともありません。ツールの引数やドキュメントのデータは、ローカルの Illustrator と、ツールを呼び出した MCP クライアントの間だけでやり取りされ、一時ファイルは呼び出しのたびに削除されます。詳しくは[プライバシーポリシー](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md)をご覧ください。
 
 ---
 

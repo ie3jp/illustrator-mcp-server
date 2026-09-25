@@ -56,6 +56,15 @@ Requires [Node.js 20+](https://nodejs.org/).
 claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 ```
 
+Or install it as a plugin, which bundles the MCP server with a pre-press preflight skill (also works in Claude Cowork):
+
+```
+/plugin marketplace add ie3jp/illustrator-mcp-server
+/plugin install illustrator@ie3jp-illustrator
+```
+
+If you already added the server with `claude mcp add`, remove it first (`claude mcp remove illustrator-mcp`) so it doesn't run twice.
+
 ### 🖥️ Claude Desktop
 
 1. Download **`illustrator-mcp-server.mcpb`** from [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)
@@ -588,6 +597,12 @@ npx tsx test/e2e/svg-import-test.ts
 ```
 
 The E2E suites create their own documents, never touch other open documents, and close them without saving. `e2e-test.ts` exercises every registered tool (RGB + CMYK, coordinate-system auto-detection); `e2e-behaviors.ts` checks behaviors that must hold on the real app — notes are preserved, partial failures are reported, files are not overwritten, crop marks and PDF export leave your artwork intact.
+
+---
+
+## Privacy Policy
+
+illustrator-mcp-server runs entirely on your computer. It collects no personal data, has no telemetry, and makes no network connections of its own. Tool parameters and document data go only to your local Illustrator and back to the MCP client that called the tool; temporary files are deleted after each call. See the full [Privacy Policy](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
 
 ---
 

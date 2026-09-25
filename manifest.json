@@ -107,6 +107,7 @@
     "pdf"
   ],
   "license": "MIT",
+  "privacy_policies": ["https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md"],
   "repository": {
     "type": "git",
     "url": "https://github.com/ie3jp/illustrator-mcp-server.git"

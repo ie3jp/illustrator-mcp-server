@@ -54,6 +54,15 @@ Adobe 공식 Illustrator MCP(Beta)가 할 수 있는 것은 전부, 그리고 �
 claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 ```
 
+플러그인으로 설치할 수도 있습니다. MCP 서버와 인쇄 전 점검(프리플라이트) 스킬이 함께 들어 있습니다(Claude Cowork에서도 사용 가능).
+
+```
+/plugin marketplace add ie3jp/illustrator-mcp-server
+/plugin install illustrator@ie3jp-illustrator
+```
+
+이미 `claude mcp add`로 서버를 등록했다면, 두 번 실행되지 않도록 먼저 `claude mcp remove illustrator-mcp`로 제거하세요.
+
 ### 🖥️ Claude Desktop
 
 1. [GitHub Releases](https://github.com/ie3jp/illustrator-mcp-server/releases/latest)에서 **`illustrator-mcp-server.mcpb`** 를 다운로드
@@ -586,6 +595,12 @@ npx tsx test/e2e/svg-import-test.ts
 ```
 
 E2E 스위트는 각자 전용 문서를 만들고, 열려 있는 다른 문서는 건드리지 않으며, 끝나면 저장하지 않고 닫습니다. `e2e-test.ts`는 등록된 모든 도구를 (RGB + CMYK, 좌표계 자동 감지 포함) 실행하고, `e2e-behaviors.ts`는 메모가 지워지지 않는지, 부분 실패를 보고하는지, 파일을 덮어쓰지 않는지, 재단선과 PDF 내보내기가 아트워크를 망가뜨리지 않는지 등 실제 앱에서 지켜져야 할 동작을 확인합니다.
+
+---
+
+## 개인정보처리방침 (Privacy Policy)
+
+illustrator-mcp-server는 사용자의 컴퓨터에서만 동작합니다. 개인 데이터를 수집하지 않고, 텔레메트리가 없으며, 서버 자체적으로 네트워크 연결을 하지 않습니다. 도구 인수와 문서 데이터는 로컬 Illustrator와 도구를 호출한 MCP 클라이언트 사이에서만 오가며, 임시 파일은 호출이 끝날 때마다 삭제됩니다. 자세한 내용은 [개인정보처리방침](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md)을 참고하세요.
 
 ---
 
