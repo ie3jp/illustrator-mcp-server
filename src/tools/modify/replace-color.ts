@@ -8,8 +8,10 @@ import { colorSchema, COLOR_HELPERS_JSX, DESTRUCTIVE_ANNOTATIONS } from './share
  * replace_color — 塗り/線の色を一括置換
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PathItem/ — fillColor, strokeColor
  *
- * 制限事項: SpotColor, GrayColor のマッチングは未対応。
- * クロスカラースペース（RGB→CMYK等）のマッチングも不可。
+ * マッチングは from_color と同じ色空間で保持されている色のみ（cmyk は CMYKColor、rgb は RGBColor）。
+ * gray / none の from_color、特色・グレー・グラデーション・パターンの色にはマッチしない。
+ * to_color の色空間は from_color と揃える必要はない（RGB の色を CMYK に置換できる。実機確認済み）。
+ * 対象は PathItem の塗り/線のみで、テキストの文字色は置換しない。
  */
 const jsxCode = `
 ${COLOR_HELPERS_JSX}
@@ -113,10 +115,11 @@ export function register(server: McpServer): void {
     'replace_color',
     {
       title: 'Replace Color',
-      description: 'Find and replace colors across the document or within a specific layer. Limitations: SpotColor and GrayColor matching not supported. Cross-colorspace matching (e.g. RGB→CMYK) not possible — from_color and to_color must use the same color type as the target objects.',
+      description:
+        'Find and replace fill/stroke colors of paths across the document or within a specific layer (text colors are not changed). from_color must be cmyk or rgb and matches only objects whose current color is stored in that same color type (check with get_colors) — an RGB from_color does not match CMYK-colored objects. to_color can be any type, e.g. replace an RGB color with a CMYK one. Spot, gray, gradient and pattern colors are never matched.',
       inputSchema: {
-        from_color: colorSchema.unwrap().describe('Color to find (required)'),
-        to_color: colorSchema.unwrap().describe('Replacement color (required)'),
+        from_color: colorSchema.unwrap().describe('Color to find (required). cmyk or rgb, in the same color type the objects currently use'),
+        to_color: colorSchema.unwrap().describe('Replacement color (required). Any type; need not match from_color\'s type'),
         tolerance: z
           .number()
           .min(0)

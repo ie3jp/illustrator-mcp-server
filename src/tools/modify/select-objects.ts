@@ -46,8 +46,8 @@ if (preflight) {
       var verified = [];
       for (var k = 0; k < actualSel.length; k++) {
         var sel = actualSel[k];
-        var selUuid = "";
-        try { selUuid = sel.note || ""; } catch(e2) {}
+        // note は "<UUID> <メモ>::ai-mcp:..." 形式のため、そのまま UUID として返さない
+        var selUuid = ensureUUID(sel);
         verified.push({ uuid: selUuid, name: sel.name || "", type: getItemType(sel) });
       }
 

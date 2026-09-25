@@ -8,8 +8,12 @@ import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUC
  * modify_object — オブジェクトのプロパティ変更
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — position, width, height, opacity, locked, hidden, name
  *
- * 注意: rotation の累積角度は item.note のメタデータ (::rot=N) に記録される。
+ * 注意: rotation の累積角度は item.note のメタデータ (::ai-mcp:rot=N) に記録される。
  * Illustrator UI で直接回転した場合はこの値と実際の角度がずれる。
+ *
+ * fill / stroke: GroupItem・CompoundPathItem は自身の塗り/線を持たない。
+ * fillColor に代入しても子には伝わらず、読み返すと代入値が見えるだけの偽成功になるため、
+ * Illustrator UI と同様に配下の PathItem / TextFrame へ再帰適用し、子を読み返して検証する。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -23,12 +27,175 @@ if (preflight) {
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
 
+    function isPaintContainer(it) {
+      return it.typename === "GroupItem" || it.typename === "CompoundPathItem";
+    }
+
+    // 塗り/線を実際に持つ末端（PathItem / TextFrame）を集める。
+    // クリッピングパスとガイドは見た目が変わってしまうため対象外（skipped に記録）
+    function collectPaintTargets(container, targets, skipped) {
+      var children = (container.typename === "CompoundPathItem") ? container.pathItems : container.pageItems;
+      for (var ci = 0; ci < children.length; ci++) {
+        var child = children[ci];
+        var tn = child.typename;
+        if (isPaintContainer(child)) {
+          collectPaintTargets(child, targets, skipped);
+        } else if (tn === "PathItem") {
+          var reason = null;
+          try { if (child.guides) reason = "guide"; } catch(eG) {}
+          try { if (!reason && child.clipping) reason = "clipping path"; } catch(eC) {}
+          if (reason) {
+            skipped[reason] = (skipped[reason] || 0) + 1;
+          } else {
+            targets.push(child);
+          }
+        } else if (tn === "TextFrame") {
+          targets.push(child);
+        } else {
+          skipped[tn] = (skipped[tn] || 0) + 1;
+        }
+      }
+    }
+
+    function applyFillToTarget(t, colorObj) {
+      if (t.typename === "TextFrame") {
+        t.textRange.characterAttributes.fillColor = createColor(colorObj);
+      } else {
+        applyOptionalFill(t, colorObj);
+      }
+    }
+
+    function applyStrokeToTarget(t, strokeObj) {
+      if (t.typename === "TextFrame") {
+        var sca = t.textRange.characterAttributes;
+        if (typeof strokeObj.width === "number") sca.strokeWeight = strokeObj.width;
+        if (strokeObj.color) sca.strokeColor = createColor(strokeObj.color);
+      } else {
+        applyStroke(t, strokeObj, t.stroked);
+      }
+    }
+
+    function readTargetFill(t) {
+      if (t.typename === "TextFrame") return colorToObject(t.textRange.characterAttributes.fillColor);
+      return t.filled ? colorToObject(t.fillColor) : { type: "none" };
+    }
+
+    function readTargetStroke(t) {
+      if (t.typename === "TextFrame") {
+        var rca = t.textRange.characterAttributes;
+        return { color: colorToObject(rca.strokeColor), width: rca.strokeWeight };
+      }
+      return { color: t.stroked ? colorToObject(t.strokeColor) : { type: "none" }, width: t.strokeWidth };
+    }
+
+    // 読み返した色が指定色と一致するか。true / false、色空間が違う場合は null
+    // （ドキュメントのカラーモードへ Illustrator が変換した可能性があり、値では比較できない）
+    function paintMatches(actual, req) {
+      var tol = 0.5;
+      if (!req || req.type === "none") return actual.type === "none";
+      if (actual.type !== req.type) return actual.type === "none" ? false : null;
+      if (req.type === "cmyk") {
+        return Math.abs(actual.c - req.c) <= tol && Math.abs(actual.m - req.m) <= tol &&
+               Math.abs(actual.y - req.y) <= tol && Math.abs(actual.k - req.k) <= tol;
+      }
+      if (req.type === "rgb") {
+        return Math.abs(actual.r - req.r) <= tol && Math.abs(actual.g - req.g) <= tol &&
+               Math.abs(actual.b - req.b) <= tol;
+      }
+      if (req.type === "gray") return Math.abs(actual.value - req.value) <= tol;
+      return null;
+    }
+
+    // 同一色をまとめて [{ ...color, count }] にする（多い順）
+    function summarizeColors(colors) {
+      var byKey = {};
+      var list = [];
+      for (var si = 0; si < colors.length; si++) {
+        var key = jsonStringify(colors[si]);
+        if (byKey[key]) {
+          byKey[key].count++;
+        } else {
+          var entry = colors[si];
+          entry.count = 1;
+          byKey[key] = entry;
+          list.push(entry);
+        }
+      }
+      list.sort(function(a, b) { return b.count - a.count; });
+      return list;
+    }
+
+    // fill / stroke を末端へ適用して読み返す。report には件数、errors / warnings に失敗・スキップを積む
+    function applyPaint(kind, targets, skipped, value, errors, warnings) {
+      var report = { targets: targets.length, changed: 0 };
+      var failed = [];
+      var mismatched = 0;
+      var converted = 0;
+      for (var ti = 0; ti < targets.length; ti++) {
+        var t = targets[ti];
+        try {
+          var ok, before, after;
+          if (kind === "fill") {
+            before = readTargetFill(t);
+            applyFillToTarget(t, value);
+            after = readTargetFill(t);
+            ok = paintMatches(after, value);
+          } else {
+            before = readTargetStroke(t).color;
+            applyStrokeToTarget(t, value);
+            var st = readTargetStroke(t);
+            after = st.color;
+            ok = true;
+            if (value.color) {
+              ok = paintMatches(st.color, value.color);
+            }
+            if (ok !== false && typeof value.width === "number" && !(value.color && value.color.type === "none") &&
+                Math.abs(st.width - value.width) > 0.01) {
+              ok = false;
+            }
+          }
+          // 色空間が違って値比較できない場合、書き込み前と同じ色のままなら反映されていないとみなす
+          // （変換済みの同色が既に入っていた場合もここに入るが、偽成功よりは失敗として報告する）
+          if (ok === null && jsonStringify(before) === jsonStringify(after)) ok = false;
+          if (ok === false) {
+            mismatched++;
+          } else {
+            if (ok === null) converted++;
+            report.changed++;
+          }
+        } catch(eT) {
+          failed.push(eT.message);
+        }
+      }
+      if (targets.length === 0) {
+        errors.push(kind + ": no path or text object to paint in this " + getItemType(item));
+      }
+      if (failed.length > 0) {
+        errors.push(kind + ": failed on " + failed.length + " of " + targets.length + " objects (e.g. " + failed[0] + ")");
+      }
+      if (mismatched > 0) {
+        errors.push(kind + ": " + mismatched + " of " + targets.length + " objects did not take the requested value when read back (unchanged or different)");
+      }
+      if (converted > 0) {
+        warnings.push(kind + ": " + converted + " objects read back in a different color space (converted to the document color mode)");
+      }
+      var skippedParts = [];
+      for (var sk in skipped) {
+        if (skipped.hasOwnProperty(sk)) skippedParts.push(skipped[sk] + " " + sk);
+      }
+      if (skippedParts.length > 0) {
+        warnings.push(kind + ": skipped " + skippedParts.join(", ") + " (cannot take or should not receive a " + kind + ")");
+      }
+      return report;
+    }
+
     var item = findItemByUUID(params.uuid);
     if (!item) {
       writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + params.uuid });
     } else {
       var props = params.properties;
       var errors = [];
+      var warnings = [];
       var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
       // locked=false は他のプロパティ変更が弾かれないよう最初に適用する
@@ -60,15 +227,30 @@ if (preflight) {
         } catch(e) { errors.push("size: " + e.message); }
       }
 
+      var isContainer = isPaintContainer(item);
+      var paintTargets = null;
+      var paintSkipped = {};
+      var paintReport = {};
+      if (typeof props.fill !== "undefined" || props.stroke) {
+        paintTargets = [];
+        if (isContainer) {
+          collectPaintTargets(item, paintTargets, paintSkipped);
+        } else if (item.typename === "PathItem" || item.typename === "TextFrame") {
+          paintTargets.push(item);
+        } else {
+          paintSkipped[item.typename] = 1;
+        }
+      }
+
       if (typeof props.fill !== "undefined") {
         try {
-          applyOptionalFill(item, props.fill);
+          paintReport.fill = applyPaint("fill", paintTargets, paintSkipped, props.fill, errors, warnings);
         } catch(e) { errors.push("fill: " + e.message); }
       }
 
       if (props.stroke) {
         try {
-          applyStroke(item, props.stroke, item.stroked);
+          paintReport.stroke = applyPaint("stroke", paintTargets, paintSkipped, props.stroke, errors, warnings);
         } catch(e) { errors.push("stroke: " + e.message); }
       }
 
@@ -139,6 +321,27 @@ if (preflight) {
         } catch(e) { errors.push("tracking: " + e.message); }
       }
 
+      if (typeof props.leading !== "undefined") {
+        try {
+          for (var ri4 = 0; ri4 < item.textRanges.length; ri4++) {
+            var lca = item.textRanges[ri4].characterAttributes;
+            if (props.leading === "auto") {
+              lca.autoLeading = true;
+            } else {
+              lca.autoLeading = false;
+              lca.leading = props.leading;
+            }
+          }
+        } catch(e) { errors.push("leading: " + e.message); }
+      }
+
+      if (props.justification) {
+        try {
+          var justMap = { left: Justification.LEFT, center: Justification.CENTER, right: Justification.RIGHT };
+          item.textRange.paragraphAttributes.justification = justMap[props.justification];
+        } catch(e) { errors.push("justification: " + e.message); }
+      }
+
       // locked=true は他の変更を全て終えてから最後に適用する
       if (props.locked === true) {
         try { item.locked = true; }
@@ -146,13 +349,46 @@ if (preflight) {
       }
 
       var verifiedState = verifyItem(item, coordSystem, abRect);
-      if (errors.length > 0) {
-        var result = { success: false, uuid: params.uuid, coordinateSystem: coordSystem, errors: errors, verified: verifiedState };
-        if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
-        writeResultFile(RESULT_PATH, result);
-      } else {
-        writeResultFile(RESULT_PATH, { success: true, uuid: params.uuid, coordinateSystem: coordSystem, verified: verifiedState });
+      if (isContainer) {
+        // グループ・複合パス自体の fill/stroke は存在しない値なので報告しない。
+        // 代わりに配下の末端が実際に持っている色を集計する
+        delete verifiedState.fill;
+        delete verifiedState.stroke;
+        var vTargets = [];
+        collectPaintTargets(item, vTargets, {});
+        var vFills = [];
+        var vStrokes = [];
+        for (var vi = 0; vi < vTargets.length; vi++) {
+          try { vFills.push(readTargetFill(vTargets[vi])); } catch(eVF) {}
+          try {
+            var vs = readTargetStroke(vTargets[vi]);
+            if (vs.color.type !== "none") vStrokes.push(vs.color);
+          } catch(eVS) {}
+        }
+        verifiedState.descendantCount = vTargets.length;
+        verifiedState.descendantFills = summarizeColors(vFills);
+        verifiedState.descendantStrokes = summarizeColors(vStrokes);
       }
+      if (item.typename === "TextFrame" && (typeof props.leading !== "undefined" || props.justification)) {
+        try {
+          var vca = item.textRange.characterAttributes;
+          verifiedState.autoLeading = vca.autoLeading;
+          verifiedState.leading = vca.leading;
+        } catch(eVL) {}
+        try {
+          var vj = item.textRange.paragraphAttributes.justification;
+          verifiedState.justification = (vj === Justification.LEFT) ? "left" : (vj === Justification.CENTER) ? "center" :
+            (vj === Justification.RIGHT) ? "right" : String(vj);
+        } catch(eVJ) {}
+      }
+
+      var result = { success: errors.length === 0, uuid: params.uuid, coordinateSystem: coordSystem };
+      if (errors.length > 0) result.errors = errors;
+      if (warnings.length > 0) result.warnings = warnings;
+      if (paintReport.fill || paintReport.stroke) result.painted = paintReport;
+      if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
+      result.verified = verifiedState;
+      writeResultFile(RESULT_PATH, result);
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to modify object: " + e.message, line: e.line });
@@ -165,7 +401,8 @@ export function register(server: McpServer): void {
     'modify_object',
     {
       title: 'Modify Object',
-      description: 'Modify properties of an existing object. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description:
+        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target object'),
         properties: z
@@ -184,8 +421,8 @@ export function register(server: McpServer): void {
               })
               .optional()
               .describe('Size'),
-            fill: colorSchema.describe('Fill color'),
-            stroke: strokeSchema.describe('Stroke settings'),
+            fill: colorSchema.describe('Fill color. For text frames this is the character color; for groups/compound paths it is applied to all paths and text inside'),
+            stroke: strokeSchema.describe('Stroke settings. For groups/compound paths it is applied to all paths and text inside'),
             opacity: z.number().optional().describe('Opacity (0-100)'),
             rotation: z.number().optional().describe('Rotation in degrees. Default mode is "delta" (additive). Use rotation_mode: "absolute" for target angle.'),
             rotation_mode: z.enum(['delta', 'absolute']).optional().default('delta').describe('delta = add to current rotation, absolute = set to exact angle'),
@@ -203,6 +440,14 @@ export function register(server: McpServer): void {
               .describe(
                 'Letter spacing (tracking) in 1/1000 em, for text frames. 0 = none, positive = looser, negative = tighter. Same units and range as Illustrator\'s Character panel.',
               ),
+            justification: z
+              .enum(['left', 'center', 'right'])
+              .optional()
+              .describe('Paragraph alignment for text frames, applied to all paragraphs'),
+            leading: z
+              .union([z.number().positive(), z.literal('auto')])
+              .optional()
+              .describe('Line spacing (leading) in pt for text frames, or "auto" for auto leading. Omit to leave unchanged'),
           })
           .describe('Properties to modify'),
         coordinate_system: coordinateSystemSchema,

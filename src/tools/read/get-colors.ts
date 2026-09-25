@@ -217,8 +217,27 @@ if (preflight) {
         };
       }
 
-      result.usedFillColors = usedFills;
-      result.usedStrokeColors = usedStrokes;
+      // 同一色が使用箇所の数だけ並ぶと読めないため、ユニーク色ごとに count を付けてまとめる（多い順）
+      function summarizeColors(colors) {
+        var byKey = {};
+        var list = [];
+        for (var ui = 0; ui < colors.length; ui++) {
+          var key = jsonStringify(colors[ui]);
+          if (byKey[key]) {
+            byKey[key].count++;
+          } else {
+            var entry = colors[ui];
+            entry.count = 1;
+            byKey[key] = entry;
+            list.push(entry);
+          }
+        }
+        list.sort(function(a, b) { return b.count - a.count; });
+        return list;
+      }
+
+      result.usedFillColors = summarizeColors(usedFills);
+      result.usedStrokeColors = summarizeColors(usedStrokes);
       result.meshGradient = {
         hasMesh: meshItems.length > 0,
         meshItemUUIDs: meshItems
@@ -237,7 +256,8 @@ export function register(server: McpServer): void {
     'get_colors',
     {
       title: 'Get Colors',
-      description: 'Get all color information used in the document',
+      description:
+        'Get all color information used in the document. usedFillColors / usedStrokeColors list each distinct color once with a count of how many paths and text ranges use it (most used first).',
       inputSchema: {
         include_swatches: z
           .boolean()
