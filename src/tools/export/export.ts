@@ -344,7 +344,18 @@ if (preflight) {
           return true;
         }
       };
+      // 書き込みの完了が exportFile の戻りより遅れることがある（UTF-8 の大きな SVG で誤判定の報告あり、PR #51）。
+      // 見つからなければ最大 2 秒まで待って確かめ直す
       var verifyOne = function (path, abIdx, sinceMs) {
+        for (var attempt = 0; attempt < 20; attempt++) {
+          var found = findOutput(path, abIdx, sinceMs);
+          if (found) return found;
+          if (typeof $ === "undefined" || typeof $.sleep !== "function") break;
+          $.sleep(100);
+        }
+        return null;
+      };
+      var findOutput = function (path, abIdx, sinceMs) {
         var direct = new File(path);
         if (direct.exists && isFresh(direct, sinceMs)) return path;
         if (format === "svg" && abIdx >= 0) {
