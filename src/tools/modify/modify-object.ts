@@ -227,38 +227,31 @@ if (preflight) {
 
       if (resolvedFont) {
         try {
-          for (var ri = 0; ri < item.textRanges.length; ri++) {
-            item.textRanges[ri].characterAttributes.textFont = resolvedFont;
-          }
+          // textRanges を回しながら書くと範囲が結合してインデックスがずれ MRAP になる（実機確認）ため全体に一度で設定する
+          item.textRange.characterAttributes.textFont = resolvedFont;
         } catch(e) { errors.push("font_name: " + e.message); }
       }
 
       if (typeof props.font_size === "number") {
         try {
-          for (var ri2 = 0; ri2 < item.textRanges.length; ri2++) {
-            item.textRanges[ri2].characterAttributes.size = props.font_size;
-          }
+          item.textRange.characterAttributes.size = props.font_size;
         } catch(e) { errors.push("font_size: " + e.message); }
       }
 
       if (typeof props.tracking === "number") {
         try {
-          for (var ri3 = 0; ri3 < item.textRanges.length; ri3++) {
-            item.textRanges[ri3].characterAttributes.tracking = props.tracking;
-          }
+          item.textRange.characterAttributes.tracking = props.tracking;
         } catch(e) { errors.push("tracking: " + e.message); }
       }
 
       if (typeof props.leading !== "undefined") {
         try {
-          for (var ri4 = 0; ri4 < item.textRanges.length; ri4++) {
-            var lca = item.textRanges[ri4].characterAttributes;
-            if (props.leading === "auto") {
-              lca.autoLeading = true;
-            } else {
-              lca.autoLeading = false;
-              lca.leading = props.leading;
-            }
+          var lca = item.textRange.characterAttributes;
+          if (props.leading === "auto") {
+            lca.autoLeading = true;
+          } else {
+            lca.autoLeading = false;
+            lca.leading = props.leading;
           }
         } catch(e) { errors.push("leading: " + e.message); }
       }

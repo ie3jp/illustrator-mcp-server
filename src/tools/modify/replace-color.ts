@@ -103,18 +103,33 @@ if (preflight) {
     // 線は太さ 0 だと見えないので対象にしない。1 範囲でも置換したフレームを数える
     var textFramesChanged = 0;
     function replaceInText(tf) {
-      var changed = false;
-      var ranges = tf.textRanges;
-      for (var ri = 0; ri < ranges.length; ri++) {
-        var ca = ranges[ri].characterAttributes;
-        if (target === "fill" || target === "both") {
-          if (replaceOne(ca, "fillColor", tf, "text_fill")) changed = true;
+      // 色を変えた範囲は同色の隣と結合し、元の範囲オブジェクトは無効になる（触ると MRAP、実機確認）。
+      // 範囲ごとには設定だけ行い（後ろから回せば未処理側のインデックスはずれない）、最後に取り直して検証する
+      var attempted = { fill: false, stroke: false };
+      var doFill = (target === "fill" || target === "both");
+      var doStroke = (target === "stroke" || target === "both");
+      for (var ri = tf.textRanges.length - 1; ri >= 0; ri--) {
+        if (ri >= tf.textRanges.length) continue;
+        var ca = tf.textRanges[ri].characterAttributes;
+        if (doFill && colorsMatch(ca.fillColor, fromColor, tolerance)) {
+          try { ca.fillColor = newColorObj; attempted.fill = true; }
+          catch(eF) { noteFailure(tf, "text_fill", eF.message); }
         }
-        if ((target === "stroke" || target === "both") && ca.strokeWeight > 0) {
-          if (replaceOne(ca, "strokeColor", tf, "text_stroke")) changed = true;
+        if (doStroke && ca.strokeWeight > 0 && colorsMatch(ca.strokeColor, fromColor, tolerance)) {
+          try { ca.strokeColor = newColorObj; attempted.stroke = true; }
+          catch(eS) { noteFailure(tf, "text_stroke", eS.message); }
         }
       }
-      if (changed) textFramesChanged++;
+      if (!attempted.fill && !attempted.stroke) return;
+      var left = { fill: 0, stroke: 0 };
+      for (var vi = 0; vi < tf.textRanges.length; vi++) {
+        var vca = tf.textRanges[vi].characterAttributes;
+        if (attempted.fill && colorsMatch(vca.fillColor, fromColor, tolerance)) left.fill++;
+        if (attempted.stroke && vca.strokeWeight > 0 && colorsMatch(vca.strokeColor, fromColor, tolerance)) left.stroke++;
+      }
+      if (left.fill > 0) noteFailure(tf, "text_fill", left.fill + " range(s) still have the original color");
+      if (left.stroke > 0) noteFailure(tf, "text_stroke", left.stroke + " range(s) still have the original color");
+      if (left.fill === 0 && left.stroke === 0) textFramesChanged++;
     }
 
     function replaceInPath(item) {

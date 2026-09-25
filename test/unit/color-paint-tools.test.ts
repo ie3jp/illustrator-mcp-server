@@ -395,6 +395,44 @@ describe('replace_color', () => {
     expect(r.warnings).toBeUndefined();
   });
 
+  it('survives ranges merging as colors change (textRanges is a live collection)', async () => {
+    // 実機では色を変えた範囲が同色の隣と結合し、前から回すと存在しない範囲に触れて MRAP になる
+    const ranges: Array<{ characterAttributes: Record<string, unknown> }> = [];
+    const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+    // 結合で消えた範囲のオブジェクトに触ると例外（実機の MRAP 相当）
+    const dead = new Set<unknown>();
+    const kill = (i: number) => dead.add(ranges.splice(i, 1)[0].characterAttributes);
+    const makeRange = (fill: unknown) => {
+      const attrs: Record<string, unknown> = { strokeColor: { typename: 'NoColor' }, strokeWeight: 0 };
+      let value = fill;
+      Object.defineProperty(attrs, 'fillColor', {
+        get: () => {
+          if (dead.has(attrs)) throw new Error("an Illustrator error occurred: 1346458189 ('MRAP')");
+          return value;
+        },
+        set: (v) => {
+          value = v;
+          const i = ranges.findIndex((r) => r.characterAttributes === attrs);
+          if (ranges[i + 1] && same(ranges[i + 1].characterAttributes.fillColor, v)) kill(i + 1);
+          if (i > 0 && same(ranges[i - 1].characterAttributes.fillColor, v)) kill(i);
+        },
+      });
+      return { characterAttributes: attrs };
+    };
+    // 赤・黒・赤 → 黒 50% にすると 3 範囲が段階的に結合する
+    ranges.push(makeRange(cmyk(0, 100, 100, 0)), makeRange(cmyk(0, 0, 0, 50)), makeRange(cmyk(0, 100, 100, 0)));
+    const tf = { typename: 'TextFrame', textRanges: ranges };
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [], textFrames: [tf] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 } },
+      { doc },
+    );
+    expect(r.success).toBe(true);
+    expect(r.textFramesChanged).toBe(1);
+    expect(ranges).toHaveLength(1);
+  });
+
   it('ignores text strokes with zero weight and respects target', async () => {
     const tf = textWithRanges(
       [cmyk(0, 100, 100, 0), cmyk(0, 0, 0, 100)],
