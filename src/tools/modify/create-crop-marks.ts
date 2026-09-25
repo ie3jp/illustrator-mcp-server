@@ -141,12 +141,12 @@ if (preflight) {
           detectionMethod = "detected from Illustrator locale";
         }
 
-        var bleedNote = "ACTION REQUIRED — Bleed (塗り足し): You MUST do this now, without asking the user. " +
+        var bleedNote = "Bleed (塗り足し) check: " +
           "The trim line (仕上がり線) is original_artboard_rect = {x: " + trimRect.x + ", y: " + trimRect.y + ", width: " + abWidth + ", height: " + abHeight + "} pt " +
           "(the artboard BEFORE it was expanded for the crop marks, in the same format and coordinate system as find_objects bounds). " +
           "Do NOT treat the current artboard bounds (get_artboards) as the trim line: the artboard now includes the crop marks and is larger than the finished size. " +
-          "Step 1: Call find_objects to list all design objects (exclude the crop mark groups) and compare each object's bounds against original_artboard_rect. " +
-          "Step 2: For every object whose edge touches or nearly touches the trim line, use modify_object to extend that edge outward by at least 3 mm (8.5 pt). Do NOT move or scale the design — just stretch the touching edge outward. For background rectangles, extend all four sides. " +
+          "To add bleed — Step 1: find_objects lists the design objects (excluding the crop mark groups); compare each object's bounds against original_artboard_rect. " +
+          "Step 2: objects whose edge touches or nearly touches the trim line need that edge extended outward by at least 3 mm (8.5 pt) with modify_object, without moving or scaling the design (background rectangles: all four sides). " +
           "Why: The trim marks show where the paper is physically cut. If an object stops at the trim line, cutting produces a white gap. Extending past ensures full bleed coverage.";
 
         writeResultFile(RESULT_PATH, {
