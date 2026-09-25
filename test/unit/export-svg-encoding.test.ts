@@ -1,9 +1,5 @@
 /**
- * export の SVG documentEncoding マッピング検証
- *
- * jsxCode はテンプレート文字列のため tsc の型検査が届かない。
- * jsx-syntax.test.ts と同じ手順でテンプレートを取り出し、encoding 分岐だけを
- * 切り出して実際に実行することで、文字列 grep では区別できない
+ * export の SVG documentEncoding マッピング。jsxCode から encoding 分岐だけを切り出して実行し、
  * 「既定が UTF8 になる」ことを挙動として確認する。
  */
 import { describe, it, expect } from 'vitest';
@@ -19,8 +15,7 @@ function extractEncodingBlock(): string {
   const src = readFileSync(EXPORT_TS, 'utf8');
   const tpl = src.match(/const jsxCode = `([\s\S]*?)\n`;/);
   if (!tpl) throw new Error('jsxCode template not found in export.ts');
-  // テンプレートリテラルとして評価し、\\. 等のエスケープを実際のJSXコードに展開する。
-  // 入力はこのリポジトリ内のソースファイルのみ（外部入力なし）。
+  // テンプレートリテラルのエスケープを展開する（入力はリポジトリ内のソースのみ）
   // eslint-disable-next-line no-eval
   const code = eval('`' + tpl[1].replace(/`/g, '\\`') + '`') as string;
   const block = code.match(/if \(svgOpts\.encoding === "ascii"\)[\s\S]*?SVGDocumentEncoding\.UTF8;\s*\}/);

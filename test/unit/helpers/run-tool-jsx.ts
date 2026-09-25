@@ -2,12 +2,8 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /**
- * ツールファイルの埋め込み JSX（const jsxCode = `...`）を common.jsx と一緒に
- * Node 上で実行し、writeResultFile に渡された結果を返すテスト用ヘルパー。
- *
- * - preflightChecks は常に通過、readParamsFile は params を返す
- * - Illustrator の列挙定数やアプリオブジェクトは globals で注入する
- * 入力はこのリポジトリ内のソースのみのため、動的評価はテスト用途に限って使う。
+ * ツールの埋め込み JSX を common.jsx と一緒に Node 上で実行し、writeResultFile の結果を返す。
+ * 列挙定数・app は globals で注入する。動的評価の入力はリポジトリ内のソースのみ（テスト専用）。
  */
 const COMMON_JSX = readFileSync(resolve(__dirname, '../../../src/jsx/helpers/common.jsx'), 'utf-8');
 
@@ -15,7 +11,7 @@ export function extractJsxCode(toolFile: string): string {
   const src = readFileSync(resolve(__dirname, '../../../src/tools', toolFile), 'utf-8');
   const m = src.match(/const jsxCode = `([\s\S]*?)\n`;/);
   if (!m) throw new Error(`jsxCode not found in ${toolFile}`);
-  // テンプレートリテラルのエスケープを展開する（jsx-syntax.test.ts と同じ手法）
+  // テンプレートリテラルのエスケープを展開する
   // eslint-disable-next-line no-eval -- test-only: expanding a template literal from repo source
   return eval('`' + m[1].replace(/`/g, '\\`') + '`') as string;
 }

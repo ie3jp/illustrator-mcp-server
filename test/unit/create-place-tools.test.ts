@@ -1,6 +1,5 @@
 /**
- * 作成・配置系ツール（修正計画 T11）の JSX ロジックを Node 上で検証する。
- * executeJsx をモックして各ツールが渡す JSX を捕まえ、fake-illustrator で実行する。
+ * 作成・配置系ツールの JSX を fake-illustrator 上で検証する。
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

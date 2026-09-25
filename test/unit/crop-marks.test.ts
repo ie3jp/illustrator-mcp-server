@@ -1,10 +1,7 @@
 /**
- * create_crop_marks / export_pdf のトンボ transaction（修正計画 T5）
- *
- * ツールハンドラが executeJsx / executeJsxHeavy に渡す実際の JSX を捕捉し、
- * Illustrator の DOM を模したフェイクの上で Node 実行して挙動を検証する。
- * フェイクは実機で確認済みの「doc.groupItems は上のレイヤーが先に列挙される」を再現し、
- * ユーザーの既存グループを index 0 に置いたうえで、トンボをその後ろに生成する。
+ * create_crop_marks / export_pdf のトンボ transaction をフェイク DOM 上で検証する。
+ * doc.groupItems は上のレイヤーが先に列挙される（実機確認）ため、ユーザーの既存グループを
+ * index 0 に置き、トンボはその後ろに生成する。
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -235,7 +232,7 @@ function runJsx(script: string, params: unknown, env: Env): Record<string, unkno
     function executeTrimMark() { __trim(); }
     ${script}
   `;
-  // eslint-disable-next-line no-new-func -- test-only: ES3 JSX をフェイク DOM 上で実行する（common-helpers.test.ts と同じ方式）
+  // eslint-disable-next-line no-new-func -- test-only: ES3 JSX をフェイク DOM 上で実行する
   new Function(...names, body)(...names.map((n) => (globals as Record<string, unknown>)[n])); // NOSONAR
   if (!out.result) throw new Error('JSX wrote no result');
   return out.result;

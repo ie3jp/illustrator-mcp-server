@@ -182,7 +182,7 @@ function runExportJsx(
     ElementPlacement: { PLACEATEND: 'PLACEATEND' },
   };
   const names = Object.keys(globals);
-  // テスト専用: ES3 JSX を Node で評価する（common-helpers.test.ts と同じパターン）
+  // テスト専用: ES3 JSX を Node で評価する
   // eslint-disable-next-line no-new-func
   const fn = new Function(...names, code); // NOSONAR
   fn(...names.map((n) => globals[n]));

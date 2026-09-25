@@ -1,8 +1,6 @@
 /**
- * ツールの埋め込み JSX（ExtendScript）を common.jsx と一緒に Node.js 上で実行するテスト用ハーネス。
- *
- * app.activeDocument などの Illustrator オブジェクトはテスト側で偽物を渡す。
- * 入力はこのリポジトリ内のソースファイルのみ（外部入力なし）のため動的評価を使う（テスト専用）。
+ * ツールの埋め込み JSX を common.jsx と一緒に Node 上で実行するテスト用ハーネス。
+ * 動的評価の入力はリポジトリ内のソースのみ（テスト専用）。
  */
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
@@ -34,12 +32,7 @@ var ImageColorSpace = { RGB: "RGB", CMYK: "CMYK", Grayscale: "GRAY" };
 var DocumentColorSpace = { RGB: "RGB", CMYK: "CMYK" };
 `;
 
-/**
- * ツール JSX を実行して結果オブジェクトを返す。
- * @param jsx loadToolJsx() の戻り値
- * @param doc app.activeDocument に入れる偽ドキュメント
- * @param params readParamsFile() が返すパラメータ
- */
+/** loadToolJsx() の JSX を偽ドキュメント（app.activeDocument）上で実行し、結果オブジェクトを返す */
 export function runToolJsx(jsx: string, doc: unknown, params: Record<string, unknown> = {}): any {
   const wrapped = `
   ${ENUM_MOCKS}

@@ -1,9 +1,6 @@
 /**
- * 修正計画 T3（データ損失の停止）の回帰テスト
- *
- * 各ツールが executeJsx に渡す JSX コードを捕捉し、Illustrator DOM を模した
- * フェイクオブジェクトの上で Node.js で実行して結果を検証する。
- * （JSX はこのリポジトリのソースのみ。new Function はテスト専用）
+ * データ損失ガードのテスト。ツールが executeJsx に渡す JSX を捕捉し、
+ * フェイク DOM 上で Node 実行して検証する。
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';

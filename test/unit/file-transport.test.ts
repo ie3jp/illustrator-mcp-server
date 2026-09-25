@@ -1,9 +1,3 @@
-/**
- * file-transport.test.ts
- *
- * file-transport モジュールのユニットテスト。
- * ensureTmpDir / createTempFiles / writeParams / writeJsx / readResult / cleanupTmpDirSync
- */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { mkdtemp, writeFile } from 'fs/promises';
 import { tmpdir } from 'os';

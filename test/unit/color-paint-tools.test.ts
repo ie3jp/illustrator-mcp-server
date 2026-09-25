@@ -1,8 +1,6 @@
 /**
- * modify_object（グループへの塗り/線・段落設定）・get_colors（使用色の集約）・
- * select_objects（UUID 抽出）の JSX を、Illustrator の DOM を模したフェイクで Node 上で実行して検証する。
- * 実機の挙動そのものは検証できない（フェイクは「プレーンオブジェクトへの代入は素通りする」
- * という GroupItem で実際に起きた偽成功の構図を再現するためのもの）。
+ * modify_object（グループへの塗り/線・段落設定）・get_colors・select_objects の JSX をフェイク DOM 上で検証する。
+ * フェイクは GroupItem への fill 代入が素通りして偽成功する実機の構図を再現する。
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import * as fs from 'fs';

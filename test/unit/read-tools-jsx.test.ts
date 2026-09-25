@@ -1,7 +1,6 @@
 /**
- * 読み取り系ツール（修正計画 T9）の JSX ロジックを偽の Illustrator オブジェクトで検証する。
- * 実機の API 挙動そのもの（TextRange の parent 等）は検証できないため、ここでは
- * 「一次資料どおりのオブジェクトが来たときに正しく扱えるか」を確認する。
+ * 読み取り系ツールの JSX をフェイク DOM 上で検証する。実機の API 挙動（TextRange の parent 等）は
+ * 検証できないため、公式リファレンスどおりのオブジェクトを正しく扱えるかを確認する。
  */
 import { describe, it, expect } from 'vitest';
 import { loadToolJsx, runToolJsx, fakeDoc, fakeItem, fakeLayer } from './helpers/read-tool-jsx.js';
@@ -25,7 +24,7 @@ function textFrame(bounds: number[], extra: Record<string, unknown> = {}): any {
   });
 }
 
-// ─── 1. get_selection ───────────────────────────────────────────────
+// ─── get_selection ───────────────────────────────────────────────
 
 describe('get_selection: text editing selection (TextRange)', () => {
   const jsx = loadToolJsx('read/get-selection.ts');
@@ -87,7 +86,7 @@ describe('get_selection: text editing selection (TextRange)', () => {
   });
 });
 
-// ─── 2〜4. get_text_frame_detail ───────────────────────────────────
+// ─── get_text_frame_detail ───────────────────────────────────
 
 function detailFrame(extra: Record<string, unknown> = {}): any {
   const spot = (name: string) => ({
@@ -152,7 +151,7 @@ describe('get_text_frame_detail JSX', () => {
   });
 });
 
-// ─── 2, 4, 7. list_text_frames ─────────────────────────────────────
+// ─── list_text_frames ─────────────────────────────────────
 
 describe('list_text_frames JSX', () => {
   const jsx = loadToolJsx('read/list-text-frames.ts');
@@ -205,7 +204,7 @@ describe('list_text_frames JSX', () => {
   });
 });
 
-// ─── 5, 6. get_images ──────────────────────────────────────────────
+// ─── get_images ──────────────────────────────────────────────
 
 function raster(matrix: Record<string, number>, bounds: number[], extra: Record<string, unknown> = {}): any {
   return fakeItem('RasterItem', bounds, { embedded: true, imageColorSpace: 'RGB', matrix, ...extra });
@@ -240,7 +239,7 @@ describe('get_images JSX', () => {
   });
 
   it('does not report the misleading scaleFactor; reports per-axis resolution instead', () => {
-    // 300ppi 画像を 100% 配置（旧実装は scaleFactor: 24 と誤表示していた）
+    // 300ppi 画像を 100% 配置
     const s = 72 / 300;
     const r = raster({ mValueA: s, mValueB: 0, mValueC: 0, mValueD: -s }, [0, 0, 240, -120]);
     const img = runToolJsx(jsx, doc({ rasterItems: [r] }), {
@@ -281,7 +280,7 @@ describe('get_images JSX', () => {
   });
 });
 
-// ─── 7. get_path_items / get_guidelines / get_groups ───────────────
+// ─── get_path_items / get_guidelines / get_groups ───────────────
 
 function path(bounds: number[], extra: Record<string, unknown> = {}): any {
   return fakeItem('PathItem', bounds, { filled: false, stroked: false, closed: true, guides: false, clipping: false, ...extra });
@@ -379,7 +378,7 @@ describe('get_groups JSX', () => {
   });
 });
 
-// ─── 8. get_document_structure ─────────────────────────────────────
+// ─── get_document_structure ─────────────────────────────────────
 
 describe('get_document_structure JSX', () => {
   const jsx = loadToolJsx('read/get-document-structure.ts');

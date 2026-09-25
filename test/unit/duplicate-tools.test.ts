@@ -1,8 +1,5 @@
 /**
- * 複製系ツール（manage_datasets の import_csv / resize_for_variation）の JSX ロジックテスト
- *
- * ツールが executeJsx に渡す JSX 文字列を取り出し、common.jsx と一緒に Node 上で
- * 偽の Illustrator オブジェクトに対して実行する（common-helpers.test.ts と同じ手法）。
+ * 複製系ツール（manage_datasets の import_csv / resize_for_variation）の JSX をフェイク DOM 上で検証する。
  * 実機の挙動（duplicate() の配置・Layer.pageItems の範囲等）は再現していない。
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';

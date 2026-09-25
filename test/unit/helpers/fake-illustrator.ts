@@ -1,9 +1,6 @@
 /**
  * ツールの JSX を Node 上で実行するための最小限の Illustrator モック。
- *
- * ツールの register() から executeJsx に渡される JSX 文字列を捕まえ、
- * common.jsx と連結して（jsx-runner と同じく関数で包んで）評価する。
- * 実機の挙動を再現するものではなく、ツール側の分岐・結果組み立てを検証するためのもの。
+ * 実機の挙動は再現しない。ツール側の分岐・結果組み立ての検証用。
  */
 import * as fs from 'fs';
 import * as path from 'path';
@@ -223,10 +220,7 @@ export function makeApp(doc: Fake, fonts: Array<{ name: string; family: string }
   return { version: '30.0', documents: [doc], activeDocument: doc, textFonts };
 }
 
-/**
- * JSX を実行して結果オブジェクトを返す。
- * params は readParamsFile で読まれる内容、app は Illustrator の app グローバル。
- */
+/** JSX を実行して結果オブジェクトを返す（params は readParamsFile が返す内容） */
 export function runToolJsx(toolJsx: string, params: Record<string, unknown>, app: FakeApp): Fake {
   const files: Record<string, string> = { __params__: JSON.stringify(params) };
   function FakeFile(this: Fake, p: string) {
@@ -267,7 +261,6 @@ var PARAMS_PATH = "__params__";
 var RESULT_PATH = "__result__";
 ${toolJsx}
 })();`;
-  // テスト専用: リポジトリ内のソースから組み立てた JSX のみを評価する（外部入力なし）
   // eslint-disable-next-line no-new-func
   new Function('G', code)({ app, File: FakeFile });
   const raw = files.__result__;

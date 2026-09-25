@@ -1,9 +1,4 @@
-/**
- * transport.test.ts
- *
- * Windows トランスポートのモックテスト。
- * 実際の Illustrator・PowerShell は不要。
- */
+/** トランスポートのモックテスト（実際の Illustrator・PowerShell は不要） */
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
@@ -353,7 +348,7 @@ describe('getExecFailureMessage with a real execFile timeout', () => {
         else reject(new Error('expected the child to be killed by timeout'));
       });
     });
-    // 前提: Node はタイムアウトに ETIMEDOUT を付けない（旧実装の分岐が到達しなかった理由）
+    // 前提: Node はタイムアウトに ETIMEDOUT を付けない
     expect(error.code).not.toBe('ETIMEDOUT');
     expect(error.killed).toBe(true);
 

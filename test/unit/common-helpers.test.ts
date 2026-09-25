@@ -2,16 +2,13 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 
-// common.jsx を読み込んでテスト用にロードする
-// ExtendScript (ES3) の関数を Node.js 環境でテストするため、
-// テストコード内でのみ動的評価を使用（プロダクションコードではない）
+// common.jsx（ES3）を Node で評価してテストする（動的評価はテスト専用）
 const jsxPath = path.resolve(__dirname, '../../src/jsx/helpers/common.jsx');
 const jsxCode = fs.readFileSync(jsxPath, 'utf-8');
 
 function loadHelpers(appVersion = '28.0') {
   // ExtendScript のグローバルオブジェクトをモック
   const wrappedCode = `
-  // Mock ExtendScript globals
   var TextType = { POINTTEXT: 1, AREATEXT: 2, PATHTEXT: 3 };
   var app = { version: ${JSON.stringify(appVersion)} };
   var writtenFiles = {};
@@ -36,9 +33,7 @@ function loadHelpers(appVersion = '28.0') {
     readWrittenResult: function(filePath) {
       return jsonParse(writtenFiles[filePath]);
     },
-    // test-only: expose the internal UUID index builder directly (bypassing
-    // app.activeDocument) so we can hand it a fake container tree and assert
-    // on the resulting uuid -> item map.
+    // app.activeDocument を介さず偽のコンテナから UUID インデックスを組む
     buildUUIDIndexFor: function (container) {
       _resetUUIDIndex();
       _indexContainer(container);
@@ -328,12 +323,7 @@ describe('iterateAllItems', () => {
 });
 
 describe('UUID index (findItemByUUID support)', () => {
-  // Regression test for a bug where modify_object / move_to_layer / select_objects
-  // (all of which resolve a uuid via findItemByUUID) failed with "No object found
-  // matching UUID" for any item placed inside a named sublayer — even though
-  // read-only tools (list_text_frames, get_images, get_document_structure) could
-  // see the same item fine, because they use doc.textFrames / doc.placedItems
-  // (which recurse into sublayers natively) instead of a hand-rolled walk.
+  // container.pageItems はサブレイヤー内を含まないため、layers も辿る必要がある
   it('finds an item nested one level inside a sublayer', () => {
     const topLayer = {
       pageItems: { length: 0 },
@@ -789,7 +779,6 @@ describe('verifyItem', () => {
     const snap = h.verifyItem(path(), 'artboard-web', null);
     expect(snap.bounds).toMatchObject({ x: 10, y: -90, artboardRelative: false });
     expect((snap.bounds as { coordinateNote: string }).coordinateNote).toContain('Not artboard-relative');
-    // アートボードありの場合は従来どおり
     expect(h.verifyItem(path(), 'artboard-web', AB).bounds).toEqual({ x: 10, y: 10, width: 10, height: 10 });
   });
 });

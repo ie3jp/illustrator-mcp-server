@@ -9,8 +9,7 @@ import {
   type PreflightEntry,
 } from '../../src/tools/utility/preflight-check.js';
 
-// preflight_check の JSX を common.jsx と一緒に Node 上で評価し、偽の Illustrator DOM で検証する。
-// ExtendScript (ES3) を Node.js で動かすため、テストコード内でのみ動的評価を使用（プロダクションコードではない）
+// preflight_check の JSX を common.jsx と一緒にフェイク DOM 上で評価する（動的評価はテスト専用）
 const commonJsx = fs.readFileSync(
   path.resolve(__dirname, '../../src/jsx/helpers/common.jsx'),
   'utf-8',

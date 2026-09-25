@@ -1,5 +1,5 @@
 /**
- * 読み取り系ツール（修正計画 T9）の Node 側後処理を、JSX 実行をモックして検証する。
+ * 読み取り系ツールの Node 側後処理を、JSX 実行をモックして検証する。
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';

@@ -1,6 +1,6 @@
 /**
- * 全ツールの annotations（修正計画 T12）。判定基準は src/tools/modify/shared.ts の
- * 「共通 annotations 定数」のコメントを参照。ツールを足したらここにも追加する。
+ * 全ツールの annotations。判定基準は src/tools/modify/shared.ts の annotations 定数を参照。
+ * ツールを足したらここにも追加する。
  */
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { describe, expect, it, vi } from 'vitest';
