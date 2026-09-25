@@ -578,8 +578,8 @@ npm test
 
 # E2E スモークテスト（Illustrator 起動状態で実行）
 npm run build   # E2E runs dist/index.js
-npx tsx test/e2e/e2e-test.ts        # every tool (193 cases)
-npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (92 cases)
+npx tsx test/e2e/e2e-test.ts        # every tool (192 cases)
+npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (91 cases)
 npx tsx test/e2e/e2e-cmyk-only.ts
 npx tsx test/e2e/svg-import-test.ts
 ```
