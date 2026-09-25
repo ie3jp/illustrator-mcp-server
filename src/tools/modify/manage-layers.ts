@@ -33,8 +33,7 @@ if (preflight) {
       };
     }
 
-    // 同名レイヤーは findTopLevelLayerIndices / resolveTopLevelLayer（common.jsx）で解決する。
-    // 同名が複数あると最上位を対象にして warnings に記録する（delete だけは曖昧としてエラー）
+    // 同名レイヤーが複数あると最上位を対象にして warnings に記録する（delete だけはエラー）
     function writeResult(result) {
       if (warnings.length > 0) result.warnings = warnings;
       writeResultFile(RESULT_PATH, result);

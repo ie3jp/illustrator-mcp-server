@@ -8,12 +8,10 @@ import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUC
  * modify_object — オブジェクトのプロパティ変更
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — position, width, height, opacity, locked, hidden, name
  *
- * 注意: rotation の累積角度は item.note のメタデータ (::ai-mcp:rot=N) に記録される。
- * Illustrator UI で直接回転した場合はこの値と実際の角度がずれる。
+ * rotation の累積角度は note メタデータ (::ai-mcp:rot=N) に記録するため、UI で直接回転するとずれる。
  *
- * fill / stroke: GroupItem・CompoundPathItem は自身の塗り/線を持たない。
- * fillColor に代入しても子には伝わらず、読み返すと代入値が見えるだけの偽成功になるため、
- * Illustrator UI と同様に配下の PathItem / TextFrame へ再帰適用し、子を読み返して検証する。
+ * GroupItem・CompoundPathItem の fillColor への代入は子に伝わらず、読み返すと代入値が見えるだけの
+ * 偽成功になる。UI と同様に配下の PathItem / TextFrame へ再帰適用し、子を読み返して検証する。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -171,8 +169,7 @@ if (preflight) {
     }
 
     var item = findItemByUUID(params.uuid);
-    // フォントは作成系と同じく完全一致のみ。見つからなければ他のプロパティも含めて何も変更しない
-    // （別フォントのまま他の変更だけ入った半端な状態を残さない）
+    // フォントが見つからなければ半端な状態を残さないよう、他のプロパティも含めて何も変更しない
     var resolvedFont = null;
     if (params.properties.font_name) {
       try { resolvedFont = app.textFonts.getByName(params.properties.font_name); } catch(eFont) { resolvedFont = null; }

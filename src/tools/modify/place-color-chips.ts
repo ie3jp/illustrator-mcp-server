@@ -30,11 +30,10 @@ if (preflight) {
     } else {
       var abRect = doc.artboards[abIdx].artboardRect;
 
-      // Collect unique colors（パス・テキスト・グラデーション分岐。チップ用レイヤー自身は除外）
+      // チップ用レイヤー自身の色は数えない
       var colorScan = collectDocumentColors(doc, [layerName]);
       var colorList = colorScan.list;
 
-      // Get or create layer
       var chipLayer = resolveTargetLayer(doc, layerName);
 
       // Calculate start position
@@ -60,7 +59,6 @@ if (preflight) {
           chipY = startY;
         }
 
-        // Create color chip rectangle
         var rect = chipLayer.pathItems.rectangle(chipY, chipX, chipSize, chipSize);
         try { rect.fillColor = entry.color; } catch(e) {}
         rect.stroked = true;
@@ -87,7 +85,6 @@ if (preflight) {
             textFrame.position = [textX, textY];
             try {
               textFrame.textRange.characterAttributes.size = 7;
-              // Set text to black/dark
               if (isCMYKDoc) {
                 var tc = new CMYKColor();
                 tc.cyan = 0; tc.magenta = 0; tc.yellow = 0; tc.black = 100;

@@ -62,8 +62,7 @@ if (preflight) {
             dup = item.duplicate();
           }
 
-          // duplicate() は note を継承する（実機確認済み）ため、複製と子孫の UUID を振り直す。
-          // 元が UUID を持っていなかった場合は ensureUUID() で新規に付ける
+          // duplicate() は note を継承する（実機確認済み）ため、複製と子孫の UUID を振り直す
           reassignUUIDDeep(dup);
           newUuid = ensureUUID(dup);
 
@@ -80,8 +79,7 @@ if (preflight) {
           results.push({ sourceUuid: params.uuids[i], newUuid: newUuid, verified: verifyItem(dup, coordSystem, abRect) });
         } catch (dupErr) {
           var failure = { sourceUuid: params.uuids[i], message: dupErr.message };
-          // 複製自体はできていた場合、回収できるよう UUID を返す
-          // （再採番前に落ちたなら元の UUID のままなので、ここで振り直す）
+          // 複製自体はできていたら回収できるよう UUID を返す（再採番前に落ちた場合はここで振り直す）
           if (dup) {
             if (!newUuid) {
               try { newUuid = reassignUUID(dup); } catch (eUuid) {}

@@ -113,7 +113,6 @@ if (preflight) {
 
       try { info.name = item.name || ""; } catch (e) {}
       try { info.closed = item.closed; } catch (e) {}
-      // クリッピングマスクのマスクパスかどうか
       try { if (item.clipping === true) info.clipping = true; } catch (e) {}
       try { info.opacity = item.opacity; } catch (e) {}
 
@@ -133,8 +132,7 @@ if (preflight) {
       }
 
       // fill
-      // Note: ExtendScript does not expose per-fill opacity on pathItems.
-      // item.opacity is the object-level opacity, exposed separately in info.opacity.
+      // ExtendScript は塗り単位の不透明度を公開しない（item.opacity はオブジェクト全体の値で info.opacity に出す）
       try {
         if (item.filled) {
           info.fill = {
@@ -210,8 +208,7 @@ if (preflight) {
           message: "Layer '" + layerName + "' not found"
         });
       } else {
-        // Layer.pathItems はグループ・複合パス内部・サブレイヤーのパスを含まないため再帰的に辿る
-        // （Document.pathItems と同じ範囲になる）
+        // Layer.pathItems はグループ・複合パス内部・サブレイヤーを含まないため再帰的に辿る（Document.pathItems と同範囲）
         iterateAllItems(targetLayer, function(it) {
           if (it.typename === "PathItem" && !it.guides) {
             pathItems.push(extractPathInfo(it));

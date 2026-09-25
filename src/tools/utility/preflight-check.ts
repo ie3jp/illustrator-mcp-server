@@ -17,10 +17,6 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/GradientStop/ — color, opacity
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/CharacterAttributes/ — fillColor, strokeColor
  *
- * GrayColor.gray の解釈: 0=白(インクなし), 100=黒(フルインク)。
- * Adobe公式リファレンス (docsforadobe.dev) は「0=black, 100=white」と記載しているが誤り。
- * Illustrator 2026 (v30) で実機検証済み (2026-04)。
- *
  * 偽陰性対策: 各検査は coverage に checked / partial / skipped / not_applicable を記録する。
  * 「問題なし」は全検査が checked（または not_applicable）のときだけ言い切る。
  */
@@ -60,7 +56,6 @@ if (preflight) {
       inspectErrors[key] = (inspectErrors[key] || 0) + 1;
     }
 
-    // Helper: check if a color is RGB type
     function isRGBColor(color) {
       try {
         if (color.typename === "RGBColor") return true;
@@ -68,7 +63,7 @@ if (preflight) {
       return false;
     }
 
-    // Helper: RGB 色、または RGB の stop を含むグラデーションか
+    // RGB 色、または RGB の stop を含むグラデーションか
     function colorHasRGB(color) {
       if (isRGBColor(color)) return true;
       try {
@@ -82,7 +77,6 @@ if (preflight) {
       return false;
     }
 
-    // Helper: グラデーション stop の最小不透明度（グラデーションでなければ 100）
     function minGradientStopOpacity(color) {
       var minOp = 100;
       try {
@@ -96,7 +90,6 @@ if (preflight) {
       return minOp;
     }
 
-    // Helper: check if color is white
     function isWhiteColor(color) {
       try {
         if (color.typename === "CMYKColor") {
@@ -104,17 +97,15 @@ if (preflight) {
         } else if (color.typename === "RGBColor") {
           if (color.red === 255 && color.green === 255 && color.blue === 255) return true;
         } else if (color.typename === "GrayColor") {
-          // GrayColor.gray: 0=白(インクなし), 100=黒(フルインク)
-          // Adobe公式リファレンスの「0=black, 100=white」記載は誤り (Illustrator 2026 実機検証済み)
+          // GrayColor.gray は 0=白, 100=黒（公式リファレンスの記載は逆。Illustrator 2026 で実機確認）
           if (color.gray === 0) return true;
         }
       } catch(e) {}
       return false;
     }
 
-    // 複合パス内部の PathItem は親の CompoundPathItem を報告対象にする。
-    // iterateAllItems は複合パス本体と内部パスの両方を訪問するため、そのままだと
-    // 1 つの複合パスがサブパスの数だけ重複報告される
+    // iterateAllItems は複合パス本体と内部パスの両方を訪問するため、
+    // 内部パスは親の CompoundPathItem に寄せてサブパス数ぶんの重複報告を防ぐ
     function reportOwner(item) {
       try {
         if (item.typename === "PathItem" && item.parent && item.parent.typename === "CompoundPathItem") {
@@ -239,7 +230,6 @@ if (preflight) {
 
           var m = raster.matrix;
           if (m && widthPt > 0 && heightPt > 0) {
-            // Use vector magnitude to handle rotation correctly
             var sX = Math.sqrt(m.mValueA * m.mValueA + m.mValueB * m.mValueB);
             var sY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
             if (sX > 0 && sY > 0) {
@@ -250,7 +240,7 @@ if (preflight) {
               var effectivePPI = Math.min(ppiH, ppiV);
               if (effectivePPI < minDPI) {
                 var uuid4 = ensureUUID(raster);
-                // ピクセル数は外接矩形を割るだけだと回転時に誤るため、get_images と同じ解法を使う（解けなければ null）
+                // 外接矩形を割るだけだと回転時にピクセル数を誤るため行列から解く（解けなければ null）
                 var px = pixelSizeFromMatrix(m, widthPt, heightPt);
                 results.push({
                   level: "error",
@@ -290,7 +280,6 @@ if (preflight) {
               matrixScaleX: 0,
               matrixScaleY: 0
             };
-            // Get matrix scale factors for rotation-safe PPI calculation
             try {
               var plm = pItem.matrix;
               if (plm) {
@@ -699,8 +688,7 @@ export function postProcessPreflightResult(
         continue;
       }
       let effectivePPI: number;
-      // Use matrix scale factors for rotation-safe PPI calculation
-      // Matrix scale = pt per pixel, so PPI = 72 / scale
+      // 行列スケール = 1px あたりの pt（回転しても基底ベクトル長で正しく求まる）
       if (placed.matrixScaleX > 0 && placed.matrixScaleY > 0) {
         const ppiH = Math.round(72 / placed.matrixScaleX);
         const ppiV = Math.round(72 / placed.matrixScaleY);
@@ -813,7 +801,6 @@ export function postProcessPreflightResult(
     coverage.transparency.note = liveEffectNote;
   }
 
-  // Clean up internal fields
   delete result.targetPdfProfile;
   delete result.pdfxSummary;
 

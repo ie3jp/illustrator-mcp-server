@@ -55,8 +55,7 @@ if (preflight) {
       }
     }
 
-    // 全レイヤーを再帰的に走査してガイドを収集。
-    // Layer.pathItems はグループ内のパスを含まないため、グループ・サブレイヤーも辿る
+    // Layer.pathItems はグループ内を含まないため、グループ・サブレイヤーも辿ってガイドを集める
     for (var li = 0; li < doc.layers.length; li++) {
       iterateAllItems(doc.layers[li], function(it) {
         if (it.typename === "PathItem") checkGuide(it);

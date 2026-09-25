@@ -63,12 +63,10 @@ if (preflight) {
 
         for (var ti = 0; ti < targetSizes.length; ti++) {
           var target = targetSizes[ti];
-          // Convert mm to points if coordinate_system is artboard-web (assume points input)
           var tgtWidthPt = target.width;
           var tgtHeightPt = target.height;
 
-          // 新規アートボードは全アートボードの右端より右に置く
-          // （コレクション末尾が空間的な右端とは限らないため、末尾基準だと既存と重なる）
+          // コレクション末尾が空間的な右端とは限らないため、全アートボードの右端より右に置く
           var maxRight = srcRect[2];
           for (var ai = 0; ai < doc.artboards.length; ai++) {
             var abR = doc.artboards[ai].artboardRect;
@@ -77,7 +75,6 @@ if (preflight) {
           var offsetX = maxRight + 50; // 50pt gap
           var newRect = [offsetX, srcRect[1], offsetX + tgtWidthPt, srcRect[1] - tgtHeightPt];
 
-          // Create new artboard
           var newAb = doc.artboards.add(newRect);
           invalidateArtboardCache();
           var newAbIdx = doc.artboards.length - 1;
@@ -85,7 +82,6 @@ if (preflight) {
             newAb.name = target.name;
           }
 
-          // Calculate scale factor
           var scaleX = tgtWidthPt / srcWidth;
           var scaleY = tgtHeightPt / srcHeight;
           var scale = 1;
@@ -114,7 +110,6 @@ if (preflight) {
             var relX = (origPos[0] - srcRect[0]) / srcWidth;
             var relY = (origPos[1] - srcRect[1]) / srcHeight; // srcRect[1] is top
 
-            // Scale the item
             var scalePercent = scale * 100;
             dupItem.resize(scalePercent, scalePercent);
 
@@ -134,7 +129,6 @@ if (preflight) {
           });
         }
 
-        // Verify created artboards
         var verifiedArtboards = [];
         for (var vai = 0; vai < createdArtboards.length; vai++) {
           verifiedArtboards.push(verifyArtboardContents(createdArtboards[vai].artboardIndex));

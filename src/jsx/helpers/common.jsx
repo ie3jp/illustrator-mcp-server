@@ -58,12 +58,8 @@ function _jsonEscapeString(s) {
 }
 
 function jsonParse(str) {
-  // ExtendScript (ES3) には JSON オブジェクトが存在しないため、
-  // eval ベースのパースが唯一の手段。
-  // パラメータは MCP Server が生成した JSON ファイル経由で渡されるため、
-  // ユーザー入力の直接埋め込みは発生せず、インジェクションリスクはない。
+  // ES3 には JSON がないため eval で読む。入力は MCP Server が書いた JSON ファイルのみ
   if (typeof str !== "string" || str.length === 0) return null;
-  // BOM 除去
   if (str.charCodeAt(0) === 0xFEFF) str = str.substring(1);
   return eval("(" + str + ")"); // eslint-disable-line no-eval
 }
@@ -82,12 +78,10 @@ function readParamsFile(filePath) {
 }
 
 function writeResultFile(filePath, result) {
-  // 未検証バージョンの警告を結果に添える（checkIllustratorVersion() が設定）。
-  // 配列を返すツールには付与できないため、オブジェクトの場合のみ。
+  // 未検証バージョン・UUID 重複の警告を添える（配列の結果には付けられない）
   if (result && typeof result === "object" && !(result instanceof Array)) {
     var extraWarnings = [];
     if (_versionWarning) extraWarnings.push(_versionWarning);
-    // findItemByUUID() が重複 UUID を解決した場合の警告
     for (var wi = 0; wi < _uuidAmbiguityWarnings.length; wi++) {
       extraWarnings.push(_uuidAmbiguityWarnings[wi]);
     }
@@ -132,22 +126,10 @@ function generateUUID() {
 }
 
 // --- note フォーマット ---
-//
-// PageItem.note に UUID とメタデータを格納する（note は保存・再オープン後も残る。
-// native PageItem.uuid は保存をまたぐと変わるため永続 ID には使えない）。
-//
-//   "<UUID>"                                  … UUID のみ
-//   "<UUID>::ai-mcp:key=value::ai-mcp:k2=v2"  … UUID + メタデータ
-//   "<UUID> <ユーザーのメモ>"                   … 既存メモがあった場合（メモは温存）
-//   "<UUID> <ユーザーのメモ>::ai-mcp:key=value"
-//
-// - UUID は常に先頭36文字。extractUUIDFromNote() は先頭36文字だけを見る
-//   （duplicate_objects は substring(36) で UUID 部分だけ差し替えている）
-// - 既存メモがある場合は UUID の後ろに NOTE_UUID_SEPARATOR を挟んで元の文字列を残す
-// - メタデータのキーは "ai-mcp:" 名前空間付き。ユーザーが "::rot=" と書いていても壊さない
-// - 旧フォーマット（"<UUID>::key=value"、名前空間なし）も読み取る。書き込み時に名前空間付きへ移行する
-//   旧フォーマットのメタデータは UUID 直後の "::" 連鎖にしか存在しないため、
-//   名前空間なしキーは note が "<UUID>::" で始まる場合のみ探す
+// 永続 ID は PageItem.note に持つ（native PageItem.uuid は保存をまたぐと変わる）。
+//   "<UUID>" / "<UUID>::ai-mcp:key=value" / "<UUID> <ユーザーのメモ>::ai-mcp:key=value"
+// UUID は常に先頭36文字、既存メモは温存する。キーの "ai-mcp:" 名前空間はユーザーのメモとの衝突避け。
+// 旧フォーマット "<UUID>::key=value" も読み、書き込み時に名前空間付きへ移行する
 
 var NOTE_UUID_SEPARATOR = " ";
 var NOTE_META_NAMESPACE = "ai-mcp:";
@@ -201,8 +183,7 @@ function setNoteMeta(item, key, value) {
 }
 
 function ensureUUID(pageItem) {
-  // note プロパティに UUID がなければ遅延割り当て。
-  // 既存の note（ユーザーのメモ等）は消さず、先頭に UUID を付加する。
+  // UUID がなければ付与する。既存のメモは消さず UUID の後ろに残す
   var note = "";
   try { note = pageItem.note || ""; } catch(e) { /* note がないオブジェクトもある */ }
 
@@ -218,8 +199,7 @@ function ensureUUID(pageItem) {
   return uuid;
 }
 
-// UUID を新しい値に差し替える（duplicate() は note を継承するため複製側に使う）。
-// ユーザーのメモとメタデータは温存する。新しい UUID を返す
+// UUID だけ差し替え、メモとメタデータは温存する。新しい UUID を返す
 function reassignUUID(pageItem) {
   var note = "";
   try { note = pageItem.note || ""; } catch(e) {}
@@ -245,9 +225,8 @@ function collectItemWithDescendants(item) {
   return list;
 }
 
-// duplicate() 直後の複製と、その子孫が継承した UUID を振り直す
-// （duplicate() は note を継承するため、放置すると元と UUID が重複する）。
-// 既に UUID を持つものだけが対象で、UUID のないアイテムには新たに付けない
+// duplicate() は note ごと UUID を継承するため、複製と子孫の UUID を振り直す。
+// UUID のないアイテムには付けない
 function reassignUUIDDeep(item) {
   var list = collectItemWithDescendants(item);
   for (var i = 0; i < list.length; i++) {
@@ -310,8 +289,7 @@ function colorToObject(color) {
   return { type: "unknown", typename: tn || "undefined" };
 }
 
-// colorToObject() の結果の配列を、同一色ごとに count を付けた一覧にまとめる（多い順）。
-// 同じ色が使用箇所の数だけ並ぶと読めないため。渡した要素に count を書き込む
+// colorToObject() の結果を同一色ごとにまとめ、count の多い順に返す（渡した要素に count を書き込む）
 function summarizeColors(colors) {
   var byKey = {};
   var list = [];
@@ -332,10 +310,8 @@ function summarizeColors(colors) {
 
 // --- 画像のピクセル数 ---
 
-// 変形行列（画像 1px あたりの pt）と外接矩形からピクセル数を求める。
-// geometricBounds は回転で膨らむ外接矩形（AABB）なので、そのまま割るとピクセル数を誤る。
-// AABB 幅 = W*|a| + H*|c|、AABB 高さ = W*|b| + H*|d|（W,H はピクセル数）を解く。
-// 45° 付近など解けない場合は null
+// geometricBounds は回転で膨らんだ AABB なので、変形行列（1px あたりの pt）で
+// AABB 幅 = W*|a| + H*|c|、高さ = W*|b| + H*|d| を解いてピクセル数 W,H を求める。45° 付近など解けなければ null
 function pixelSizeFromMatrix(m, aabbW, aabbH) {
   var a = Math.abs(m.mValueA), b = Math.abs(m.mValueB);
   var c = Math.abs(m.mValueC), d = Math.abs(m.mValueD);
@@ -364,10 +340,8 @@ function getBoundsWebCoord(item, artboardRect) {
       height: b[1] - b[3]  // top - bottom (Illustrator座標では top > bottom)
     };
   }
-  // アートボードなしの場合はドキュメント座標をWeb向きに変換（Y だけ反転）。
-  // アイテムがどのアートボードにも属さない（getArtboardIndexForItem() が -1）と
-  // artboard-web 指定でもここに来る。アートボード相対ではない第三の座標系になるため、
-  // 無警告で返さず artboardRelative: false と coordinateNote で明示する。
+  // アートボードなし: ドキュメント座標の Y だけ反転。どのアートボードにも属さないアイテムは
+  // artboard-web 指定でもここに来るため、アートボード相対でないことを結果に明示する
   return {
     x: b[0],
     y: -b[1],
@@ -448,16 +422,13 @@ function getArtboardIndexForItem(item) {
 
 // --- バージョンチェック ---
 
-// 動作下限（Illustrator 2020 = v24）。
-// 本サーバーが使う ExtendScript API はすべて v24 以前から存在するもののみ
-// （Adobe 公式の scripting changelog でも API 追加は 24.0 が最後）。
+// 動作下限 Illustrator 2020。使う API はすべて v24 以前からある（公式 scripting changelog の API 追加も 24.0 が最後）
 var MIN_ILLUSTRATOR_VERSION = 24;
 
-// 実機で検証済みの下限（Illustrator 2024 = v28）。
-// これ未満は「動くはずだが未検証」の扱いで、警告を添えて実行する。
+// 実機検証済みの下限 Illustrator 2024。これ未満は警告付きで実行する
 var VERIFIED_ILLUSTRATOR_VERSION = 28;
 
-// 未検証バージョンで実行中に立つ警告。writeResultFile() が全ツールの結果に付与する。
+// writeResultFile() が全ツールの結果に付与する
 var _versionWarning = null;
 
 function checkIllustratorVersion() {
@@ -499,12 +470,7 @@ function preflightChecks() {
 
 // --- フォアグラウンド必須メニューコマンド実行 ---
 
-/**
- * app.executeMenuCommand のラッパー。
- * 失敗時にフォアグラウンド要求のガイダンス付きエラーを投げる。
- * executeMenuCommand はIllustratorが前面でないと失敗するため、
- * ユーザーにウィンドウを切り替えないよう案内する。
- */
+// executeMenuCommand は Illustrator が前面でないと失敗するため、失敗時は前面維持を案内する
 function executeMenuCommandSafe(command) {
   try {
     app.executeMenuCommand(command);
@@ -519,10 +485,7 @@ function executeMenuCommandSafe(command) {
   }
 }
 
-/**
- * TrimMark メニューコマンドを実行する。
- * v25 → レガシー の順にフォールバック。
- */
+// "TrimMark v25" → レガシー "TrimMark" の順に試す
 function executeTrimMark() {
   try {
     executeMenuCommandSafe("TrimMark v25");
@@ -545,12 +508,10 @@ function getItemType(item) {
 }
 
 // --- zIndex 計算 ---
-// zIndex は 0-based 背面→前面の昇順（親コンテナ内）。
-// PageItem.itemIndex は実機に存在しない（undefined）ため、PageItem.zOrderPosition
-// （親コンテナ内の重なり順、1 始まり・背面が 1。実機確認済み）を 0 始まりに直して使う。
-// ただし同一 JSX 内で作成した直後のアイテムは再描画前だと zOrderPosition が
-// "No such element" を投げる（実機確認済み）。その場合は親の pageItems（前面→背面の順）
-// から同一参照を探して算出する。
+// 親コンテナ内の 0 始まり・背面→前面の昇順。以下いずれも実機確認済み:
+// - PageItem.itemIndex は存在しない。zOrderPosition は 1 始まり・背面が 1
+// - 同一 JSX 内で作成直後のアイテムは zOrderPosition が "No such element" を投げるため、
+//   親の pageItems（前面→背面）から同一参照を探す
 
 function getZIndex(item) {
   try {
@@ -572,13 +533,11 @@ function getZIndex(item) {
 // 同一 JSX 実行内で UUID→item マップを遅延構築し、2回目以降は O(1) で引く
 var _uuidIndex = null;
 
-// UUID 重複の記録（uuid → 出現数。2 以上のものだけ入る）。
-// duplicate() やコピー&ペーストは note を継承するため、同じ UUID を持つオブジェクトが
-// 実際に複数存在しうる。インデックスは先勝ち（上のレイヤー・前面側が先）のまま、
-// 重複は getUUIDDuplicates() で取得できるようにする。
+// uuid → 出現数（2 以上のみ）。duplicate() やコピー&ペーストは note を継承するため重複しうる。
+// インデックス自体は先勝ち（上のレイヤー・前面側）
 var _uuidDuplicates = null;
 
-// findItemByUUID() が重複 UUID を解決したときの警告。writeResultFile() が結果に付与する
+// writeResultFile() が結果に付与する
 var _uuidAmbiguityWarnings = [];
 
 function _resetUUIDIndex() {
@@ -617,20 +576,14 @@ function _indexContainer(container) {
       if (item.typename === "GroupItem") {
         _indexContainer(item);
       } else if (item.typename === "CompoundPathItem") {
-        // Layer.pageItems / GroupItem.pageItems は複合パス内部の PathItem を含まない
-        // （実機確認済み）。get_groups 等が内部パスに発行した UUID を解決できるよう明示的に辿る
+        // pageItems は複合パス内部の PathItem を含まない（実機確認済み）
         for (var pi = 0; pi < item.pathItems.length; pi++) {
           _indexItem(item.pathItems[pi]);
         }
       }
     } catch(e) {}
   }
-  // container.pageItems only returns items placed directly in this container.
-  // Sublayers (nested Layer objects, e.g. Layer > sublayer > pageItem) are a
-  // separate collection (container.layers) and were previously never walked,
-  // so any item living inside a named sublayer was invisible to findItemByUUID
-  // even though read-only scans (list_text_frames/get_images/get_document_structure)
-  // recurse into sublayers and find it fine. Recurse into sublayers here too.
+  // サブレイヤーは pageItems ではなく layers にある
   try {
     if (container.layers && container.layers.length > 0) {
       for (var sl = 0; sl < container.layers.length; sl++) {
@@ -736,9 +689,7 @@ function getTextKind(tf) {
 
 // --- 再帰的アイテム走査 ---
 
-// container（Layer / GroupItem）配下の全 PageItem に callback を呼ぶ。
-// GroupItem・複合パス内部の PathItem・サブレイヤー（Layer.layers）も辿る。
-// 複合パスは本体（CompoundPathItem）→ 内部 PathItem の順に呼ばれる。
+// container 配下の全 PageItem に callback を呼ぶ（グループ・複合パス内部・サブレイヤーも辿る）
 function iterateAllItems(container, callback) {
   for (var i = 0; i < container.pageItems.length; i++) {
     var item = container.pageItems[i];
@@ -763,19 +714,9 @@ function iterateAllItems(container, callback) {
 
 // --- 操作結果の検証（Post-Operation Verification） ---
 
-/**
- * 単一アイテムの現在の状態をスナップショットとして返す。
- * 操作後に呼び出し、結果に含めることで「実際にどうなったか」を確認できる。
- *
- * @param {PageItem} item - 検証対象
- * @param {string} [coordSystem] - "artboard-web" | "document"
- * @param {Array} [artboardRect] - アートボード矩形（artboard-web時に必要）
- * @returns {Object} アイテムのスナップショット
- */
 function checkArtboardBounds(item, artboardRect) {
   if (!artboardRect) return null;
-  // ストローク幅を含む visibleBounds で判定する（geometricBounds だと太いストロークで
-  // 実際には見えているのに「completely outside」と誤報する）。取れなければ geometricBounds
+  // geometricBounds だと太いストロークが見えていても「completely outside」と誤報するため visibleBounds
   var gb = null; // [left, top, right, bottom]
   try { gb = item.visibleBounds; } catch(e) {}
   if (!gb || gb.length !== 4) gb = item.geometricBounds;
@@ -791,8 +732,7 @@ function checkArtboardBounds(item, artboardRect) {
   return "WARNING: This object extends beyond the artboard edges. Parts of it may be clipped in the final output.";
 }
 
-// 対象自身の hidden に加え、親 GroupItem 等の hidden と Layer.visible を
-// Document まで遡って判定する（非表示レイヤー上のオブジェクトは見えていない）
+// 親 GroupItem の hidden と Layer.visible も Document まで遡って判定する
 function isItemEffectivelyVisible(item) {
   try { if (item.hidden === true) return false; } catch(e) {}
   var obj = null;
@@ -828,8 +768,7 @@ function verifyItem(item, coordSystem, artboardRect) {
       var ca = item.textRange.characterAttributes;
       try { snap.fontSize = ca.size; } catch (eSize) {}
       try { snap.tracking = ca.tracking; } catch (eTrack) {}
-      // TextFrame 自体は塗りを持たないため、文字の塗り色を fill として報告する。
-      // 範囲全体で取れない（混在等）場合は先頭文字の色を使う
+      // TextFrame 自体は塗りを持たないため文字の塗りを報告する（混在時は先頭文字）
       try {
         var tfFill = ca.fillColor;
         if (tfFill === void 0 || tfFill === null) {
@@ -863,13 +802,7 @@ function verifyItem(item, coordSystem, artboardRect) {
   return snap;
 }
 
-/**
- * 指定アートボード上の名前付きアイテムのスナップショットを返す。
- * アートボード操作やバッチ操作の検証に使う。
- *
- * @param {number} artboardIndex - アートボードインデックス
- * @returns {Object} { artboard: string, items: Array }
- */
+// アートボード上（中心座標で判定）の名前付きアイテム一覧。アートボード操作・バッチ操作の検証用
 function verifyArtboardContents(artboardIndex) {
   var doc = app.activeDocument;
   var ab = doc.artboards[artboardIndex];

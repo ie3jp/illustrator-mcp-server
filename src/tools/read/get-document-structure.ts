@@ -27,7 +27,7 @@ if (preflight) {
       return abIdx === filterArtboard;
     }
 
-    // 深度上限で子を打ち切ったことを示す（children が空なのが「子なし」か「打ち切り」かを区別する）
+    // children が空なのが「子なし」か「深度上限で打ち切り」かを区別する
     function markTruncated(info, count) {
       if (count > 0) {
         info.childrenTruncated = true;

@@ -9,7 +9,7 @@ import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-p
 function requiresMenuCommandActivation(params: {
   options?: { marks_style?: string; trim_marks?: boolean };
 }): boolean {
-  // JSX の日本式トンボ生成条件と同じ。どちらかを変更するときは必ず双方を更新する。
+  // JSX の wantsJapaneseDocMarks と同じ条件。変更時は双方を更新する
   return params.options?.marks_style === 'japanese' && params.options.trim_marks === true;
 }
 
@@ -36,7 +36,6 @@ if (preflight) {
     var outputPath = params.output_path;
     var preset = params.preset || "";
 
-    // Default path generation when output_path is omitted
     if (!outputPath) {
       var dir;
       try {
@@ -59,7 +58,7 @@ if (preflight) {
       }
     }
     var options = params.options || {};
-    // TS の requiresMenuCommandActivation() と同期すること。
+    // TS の requiresMenuCommandActivation() と同期すること
     var wantsJapaneseDocMarks = (options.marks_style === "japanese" && options.trim_marks === true);
 
     // --- 事前検証（ドキュメントに手を入れる前に行う） ---
@@ -86,9 +85,8 @@ if (preflight) {
       }
     }
     if (!validationError && wantsJapaneseDocMarks && doc.artboards.length > 1) {
-      // 日本式トンボはアートボード 1 枚分をドキュメント上に生成してそのページだけ拡張する方式のため、
-      // 複数アートボードでは「全ページ出力されるがトンボは 1 ページだけ・そのページだけ紙サイズが違う」PDF になる。
-      // 不整合な PDF を黙って出さず、明示的にエラーにする。
+      // 日本式トンボは 1 アートボード分だけ生成・拡張する方式のため、複数アートボードでは
+      // 「トンボも紙サイズ変更も 1 ページだけ」の不整合な PDF になる。黙って出さずエラーにする
       validationError = "Japanese trim marks (marks_style: \\"japanese\\" + trim_marks: true) are not supported for documents with multiple artboards (" +
         doc.artboards.length + " artboards): marks would be added to only one page. " +
         "Use marks_style: \\"roman\\" (PDF-generated marks on every page), a print preset that includes trim marks, " +
@@ -99,10 +97,8 @@ if (preflight) {
       writeResultFile(RESULT_PATH, { error: true, message: validationError });
     } else {
       // --- 日本式トンボ: TrimMark コマンドでドキュメント上に生成 ---
-      // PDFSaveOptions.pageMarksType = PageMarksTypes.Japanese は
-      // Illustrator バージョンによって正しく反映されない場合がある。
-      // そのため日本式トンボはドキュメント上にパスとして生成し、
-      // アートボードを一時拡張して PDF に含める。書き出し後に復元する。
+      // pageMarksType = Japanese はバージョンによって正しく反映されないため、
+      // パスとして生成しアートボードを一時拡張して PDF に含める（書き出し後に復元）
       var usedDocumentMarks = false;
       var documentMarksError = null;
       if (wantsJapaneseDocMarks) {
@@ -140,7 +136,6 @@ if (preflight) {
 
       var pdfOpts = new PDFSaveOptions();
 
-      // Apply preset if specified
       if (preset !== "") {
         pdfOpts.pDFPreset = preset;
       } else {
@@ -149,8 +144,7 @@ if (preflight) {
         pdfOpts.preserveEditability = false;
       }
 
-      // トンボ種類。preset 指定時は、明示されなかった項目を preset の設定のまま残す
-      // （印刷所支給プリセットのトンボ設定を黙って消さない）
+      // preset 指定時、明示されなかったトンボ設定は preset のまま残す（印刷所支給プリセットを黙って消さない）
       if (usedDocumentMarks) {
         // ドキュメント上にトンボを生成済み → PDF のマークは OFF（二重トンボ防止）
         pdfOpts.trimMarks = false;

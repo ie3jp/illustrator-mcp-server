@@ -22,8 +22,7 @@ if (preflight) {
     var scanned = { pathItems: 0, textFrames: 0, rasterItems: 0 };
     var skippedItems = {};
 
-    // オーバープリントしている 1 面（塗り or 線）の色を印刷上の性質で分類する
-    // "k100" | "rich_black" | "spot" | "other"
+    // オーバープリント面の色を分類: "k100" | "rich_black" | "spot" | "other"
     function classifyInk(color) {
       var tn = "";
       try { tn = color.typename; } catch(e) { return "other"; }
@@ -50,8 +49,7 @@ if (preflight) {
       return "other";
     }
 
-    // 効いているオーバープリント面の分類から推定ラベルを決める。
-    // 1 面でも K100/リッチブラック/特色以外があれば事故の可能性が高い
+    // 1 面でも K100/リッチブラック/特色以外がオーバープリントなら事故の可能性が高い
     function heuristicFor(kinds) {
       if (kinds.length === 0) return "no_effect";
       var hasRich = false;

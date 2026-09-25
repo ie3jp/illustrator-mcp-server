@@ -15,18 +15,10 @@ export const coerceBoolean = z.preprocess(
 );
 
 // --- 共通 annotations 定数 ---
-//
-// 判定基準（MCP の ToolAnnotations。destructiveHint は "If false, the tool performs only additive updates"）:
-// - DESTRUCTIVE: オブジェクト・定義・ファイルを消す、または既存の値（色・スタイル・文字・
-//   アートボード寸法・ディスク上の既存ファイルなど）を上書きしうるもの。オプション次第で
-//   上書きするもの（overwrite: true、apply_to_uuids、replace など）も含める（hint は "may" の意味）。
-// - WRITE: 新しいものを足すだけのもの、または既存オブジェクトの中身を変えずに配置
-//   （位置・重ね順・所属レイヤー）だけを変えるもの。選択やセッション設定の変更もここ。
-// - READ: 読み取りのみ。ただし読み取り系は ensureUUID() で、UUID を持たないオブジェクトの
-//   note 先頭に UUID を書き込む（ドキュメントは「変更あり」になる）。T1 以降この書き込みは
-//   既存の note を消さず、画面にも出力にも現れない識別用タグなので、ユーザーの内容を変える
-//   操作とはみなさず readOnlyHint: true のままにする。2 回目以降は付与済みの UUID を読むだけなので冪等。
-//   ファイルを書き出すもの（extract_design_tokens の output_path）は READ にしない。
+// - DESTRUCTIVE: 消す、または既存の値・ファイルを上書きしうるもの（オプション次第で上書きするものも含む。hint は "may"）
+// - WRITE: 足すだけ、または中身を変えず配置（位置・重ね順・レイヤー）・選択・セッション設定だけを変えるもの
+// - READ: 読み取りのみ。ensureUUID() は note に識別用 UUID を足すが、既存 note を消さず出力にも現れないので
+//   readOnlyHint: true のまま（2 回目以降は読むだけなので冪等）。ファイルを書き出すものは READ にしない
 
 export const READ_ANNOTATIONS = {
   readOnlyHint: true,
@@ -107,10 +99,7 @@ function findFontCandidates(fontName) {
   return candidates;
 }
 
-// フォントが見つからないときのエラー結果（作成系と modify_object 共用）。
-// デフォルトフォントで作成して警告を添えるだけだと、LLM が警告を読み飛ばして
-// 別フォントで組まれた版が残るため、何も作らず・変えずにエラーを返す。
-// forModify: modify_object から呼ぶとき true（文言を「何も変更していない」にする）
+// フォント未検出はデフォルトフォントで代用せずエラーにする（警告だと LLM が読み飛ばし別フォントの版が残る）
 function fontNotFoundResult(fontName, forModify) {
   var outcome = forModify ? "Nothing was modified." : "Nothing was created.";
   var omit = forModify ? "omit font_name to keep the current font" : "omit font_name to use the default font";
@@ -123,9 +112,8 @@ function fontNotFoundResult(fontName, forModify) {
 `;
 
 export const COLOR_HELPERS_JSX = `
-// ドキュメントのカラーモードと異なる色（CMYK 文書への RGB 指定など）の記録。
-// Illustrator は文書のカラーモードに変換して保存する（一次資料 CMYKColor.md: 変換で情報が失われる）。
-// 変換自体は止めず、appendColorSpaceWarnings() で結果に警告として載せる
+// 文書のカラーモードと異なる色の記録。Illustrator は文書のモードに変換して保存し情報が失われるため、
+// 変換は止めずに appendColorSpaceWarnings() で警告として載せる
 var _colorSpaceMismatches = [];
 var _colorSpaceMismatchKeys = {};
 var _colorSpaceDocSpace = null;
@@ -148,7 +136,6 @@ function _noteColorSpaceMismatch(colorObj) {
   _colorSpaceMismatches.push(label);
 }
 
-// createColor() で記録した不一致を result.warnings に追加する
 function appendColorSpaceWarnings(result) {
   if (_colorSpaceMismatches.length === 0 || !result || typeof result !== "object") return result;
   if (!(result.warnings instanceof Array)) result.warnings = [];
@@ -160,7 +147,6 @@ function appendColorSpaceWarnings(result) {
   } else {
     msg += ". Specify {type:'rgb'} colors in this document.";
   }
-  // 実際に保存された値の在りかを案内する（結果に載っているツールだけ）
   var v = result.verified;
   if (v && (v.fill || v.stroke)) {
     msg += " The stored values are shown in verified.fill / verified.stroke.";
@@ -228,9 +214,7 @@ function applyStroke(item, strokeObj, defaultStroked) {
 
 /**
  * ドキュメントの使用色の収集（place_color_chips / place_style_guide 共用）。
- * パスの塗り・線（doc.pathItems はグループ・複合パス内部も含む）に加え、
- * テキストの文字色と、グラデーションの各分岐点の色も拾う。
- * 特色は tint 違いを別色として扱う。パターン等チップにできない色は skipped に数える。
+ * doc.pathItems はグループ・複合パス内部も含む。特色は tint 違いを別色とし、チップにできない色は skipped に数える。
  */
 export const DOCUMENT_COLORS_JSX = `
 function _docColorKey(color) {
@@ -296,7 +280,6 @@ function collectDocumentColors(doc, excludeLayerNames) {
   return state;
 }
 
-// チップ用のラベル文字列
 function docColorLabel(info) {
   if (info.type === "cmyk") return "C" + Math.round(info.c) + " M" + Math.round(info.m) + " Y" + Math.round(info.y) + " K" + Math.round(info.k);
   if (info.type === "rgb") return "R" + Math.round(info.r) + " G" + Math.round(info.g) + " B" + Math.round(info.b);

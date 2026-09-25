@@ -110,7 +110,6 @@ if (preflight) {
         }
       }
     } else if (action === "create_dataset") {
-      // Check that at least one variable is bound to an object
       var hasBound = false;
       for (var cb = 0; cb < doc.pageItems.length && !hasBound; cb++) {
         try { if (doc.pageItems[cb].contentVariable) hasBound = true; } catch(_e1) {}
@@ -186,14 +185,12 @@ if (preflight) {
           csvFile.close();
 
           var lines = csvText.split(/\\r?\\n/);
-          // Remove empty trailing lines
           while (lines.length > 0 && lines[lines.length - 1].replace(/^\\s+|\\s+$/g, "") === "") {
             lines.pop();
           }
           if (lines.length < 2) {
             writeResultFile(RESULT_PATH, { error: true, message: "CSV must have a header row and at least one data row" });
           } else {
-            // Parse CSV header
             var headers = parseCsvLine(lines[0]);
             for (var hi = 0; hi < headers.length; hi++) {
               headers[hi] = headers[hi].replace(/^\\s+|\\s+$/g, "");
@@ -212,7 +209,6 @@ if (preflight) {
               throw new Error("No objects found on artboard 0 (the import_csv template)");
             }
 
-            // Calculate how far items extend beyond artboard edges
             // geometricBounds: [left, top, right, bottom]
             var rightOverhang = 0;
             var leftOverhang = 0;
@@ -286,7 +282,6 @@ if (preflight) {
               }
             }
 
-            // Verify each created artboard using common helper
             var verification = [];
             for (var vai = 0; vai < createdIndices.length; vai++) {
               verification.push(verifyArtboardContents(createdIndices[vai]));
@@ -360,8 +355,7 @@ export function register(server: McpServer): void {
           .optional()
           .describe('File path (XML for import/export, CSV for import_csv)'),
       },
-      // import は既存の変数・データセットを全置換する（Document.importVariables の仕様）ため、
-      // 最も破壊的なアクションに合わせて destructive とする
+      // import は既存の変数・データセットを全置換する（importVariables の仕様）ため destructive
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {

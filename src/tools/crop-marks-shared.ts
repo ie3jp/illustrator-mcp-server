@@ -1,21 +1,10 @@
 /**
- * トンボ生成の共通 JSX（create_crop_marks / export_pdf で共有）
+ * トンボ生成の共通 JSX（create_crop_marks / export_pdf で共有）。`CROP_MARKS_JSX + jsxCode` で連結して使う。
  *
- * 両ツールとも「TrimMark メニューコマンドでドキュメント上にトンボを生成する」ため、
- * 同じ壊れ方（生成物を index で特定してユーザーのグループを掴む・環境設定を戻さない・
- * 一時矩形が残る）をしていた。ここで一度だけ正しく実装する。
- *
- * - 生成物の特定: 実行前の GroupItem 集合と実行後の差分で特定する。
- *   `doc.groupItems` は上のレイヤーが先に列挙される（実機確認済み）ため、index 決め打ちは
- *   他レイヤーの既存グループを掴む。差分のキーには native `PageItem.uuid` を使う。
- *   uuid は保存をまたぐと変わるが、1 回の JSX 実行内の同一性判定には十分（v24+ で存在）。
- * - 状態の復元: cropMarkStyle 環境設定・選択・アクティブアートボードを保存し、
- *   呼び出し側の finally で cropMarksRestoreState() により戻す。
- * - 一時矩形: cropMarksRun() 内の finally で必ず削除する。TrimMark が例外を投げた場合は
- *   その時点までに生成されたグループも取り除いてから再スローする。
- *
- * 使い方: 各ツールの jsxCode の前に連結して実行する（`CROP_MARKS_JSX + jsxCode`）。
- * ES3 ExtendScript。executeTrimMark() は common.jsx に定義されている。
+ * - 生成物は実行前後の GroupItem の差分で特定する。doc.groupItems は上のレイヤーが先に並ぶ
+ *   （実機確認済み）ため index 決め打ちでは既存グループを掴む。キーの native PageItem.uuid は
+ *   保存をまたぐと変わるが、1 回の JSX 実行内なら十分
+ * - cropMarkStyle 環境設定・選択・アクティブアートボードは呼び出し側の finally で戻す
  */
 export const CROP_MARKS_JSX = `
 // --- トンボ生成の共通ヘルパー（crop-marks-shared.ts） ---
@@ -27,7 +16,6 @@ function _cropMarksGroupKey(item) {
   return "u" + u;
 }
 
-// 現在の全 GroupItem のキー集合（実行前スナップショット）
 function _cropMarksGroupKeys(doc) {
   var keys = {};
   var groups = doc.groupItems;
@@ -41,7 +29,7 @@ function _cropMarksGroupKeys(doc) {
   return keys;
 }
 
-// スナップショットに無い GroupItem（＝新規生成物）を返す。入れ子の新規グループは最上位だけ残す。
+// 入れ子の新規グループは最上位だけ残す
 function _cropMarksNewGroups(doc, beforeKeys) {
   var created = [];
   var createdKeys = {};
@@ -68,12 +56,8 @@ function _cropMarksNewGroups(doc, beforeKeys) {
   return top;
 }
 
-/**
- * TrimMark を実行し、新規に生成されたトンボグループ（最上位のみ）を返す。
- * rect（[left, top, right, bottom]）を渡すとその大きさの不可視矩形を一時作成して対象にする。
- * rect が null なら現在の選択を対象にする。
- * 一時矩形は成否にかかわらず削除する。例外時は生成済みグループも削除して再スローする。
- */
+// TrimMark を実行し、新規トンボグループ（最上位のみ）を返す。rect 指定時は一時矩形を、null なら選択を対象にする。
+// 例外時は生成済みグループも削除して再スローする
 function cropMarksRun(doc, rect) {
   var before = _cropMarksGroupKeys(doc);
   var tempRect = null;
@@ -106,7 +90,6 @@ function cropMarksRemove(groups) {
   }
 }
 
-// グループ群の geometricBounds の外接矩形 [left, top, right, bottom]
 function cropMarksUnionBounds(groups) {
   var mb = groups[0].geometricBounds.slice();
   for (var i = 1; i < groups.length; i++) {
@@ -119,7 +102,6 @@ function cropMarksUnionBounds(groups) {
   return mb;
 }
 
-// cropMarkStyle 環境設定・選択・アクティブアートボードを保存する
 function cropMarksSaveState(doc) {
   var state = { hasPref: false, prefValue: false, selection: null, activeArtboard: -1 };
   try {
@@ -137,7 +119,7 @@ function cropMarksSaveState(doc) {
   return state;
 }
 
-// cropMarksSaveState() の内容を復元する。各項目は独立に試み、1 つの失敗で他を止めない
+// 各項目は独立に試み、1 つの失敗で他を止めない
 function cropMarksRestoreState(doc, state) {
   if (!state) return;
   if (state.hasPref) {

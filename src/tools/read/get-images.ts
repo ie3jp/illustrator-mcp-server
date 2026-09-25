@@ -65,9 +65,7 @@ if (preflight) {
 
       try { info.name = item.name || ""; } catch(e) {}
 
-      // Store matrix scale factors for Node.js-side DPI calculation
-      // Using matrix vector magnitude instead of geometricBounds to handle rotation correctly
-      // (geometricBounds returns AABB which is larger when rotated, giving incorrect PPI)
+      // PPI 算出用（Node 側）。geometricBounds は回転で膨らむ外接矩形なので行列のベクトル長を使う
       try {
         var pm = item.matrix;
         if (pm) {
@@ -121,7 +119,6 @@ if (preflight) {
         readLinkFile(rItem, rInfo);
       }
 
-      // colorSpace detection
       try {
         var cs = rItem.imageColorSpace;
         if (cs === ImageColorSpace.RGB) {
@@ -135,11 +132,9 @@ if (preflight) {
         }
       } catch (e) {}
 
-      // pixel dimensions and resolution
       var ppiH = null;
       var ppiV = null;
       try {
-        // geometricBounds: [left, top, right, bottom] in points（回転時は外接矩形）
         var gb = rItem.geometricBounds;
         var aabbWidthPt = Math.abs(gb[2] - gb[0]);
         var aabbHeightPt = Math.abs(gb[1] - gb[3]);
@@ -235,8 +230,7 @@ export function register(server: McpServer): void {
               if (dims) {
                 img.pixelWidth = dims.width;
                 img.pixelHeight = dims.height;
-                // Use matrix scale factors for PPI calculation (rotation-safe)
-                // Matrix scale = pt per pixel, so PPI = 72 / scale
+                // PPI = 72 / (1px あたりの pt)。回転していても正しい
                 const matrixScaleX = img.matrixScaleX as number | undefined;
                 const matrixScaleY = img.matrixScaleY as number | undefined;
                 if (matrixScaleX && matrixScaleY && matrixScaleX > 0 && matrixScaleY > 0) {

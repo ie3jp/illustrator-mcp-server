@@ -6,8 +6,7 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * check_contrast — WCAG コントラスト比チェック
  *
- * GrayColor.gray の解釈: 0=白(インクなし), 100=黒(フルインク)。
- * Adobe公式リファレンスの「0=black, 100=white」記載は誤り (Illustrator 2026 実機検証済み, 2026-04)。
+ * GrayColor.gray は 0=白, 100=黒（公式リファレンスの逆の記載は誤り。Illustrator 2026 実機確認済み）。
  *
  * WCAG の相対輝度は sRGB 前提。CMYK / グレー / 特色は ICC プロファイルなしの素朴な変換なので
  * 比は近似値として返し、AA/AAA の合否は断定しない（null）。
@@ -23,11 +22,9 @@ if (preflight) {
     var autoDetect = (params && params.auto_detect === true);
 
     if (autoDetect) {
-      // Collect all objects with colors and bounds for overlap analysis
       var colorItems = [];
       var skippedHidden = 0;
 
-      // Path items
       for (var i = 0; i < doc.pathItems.length; i++) {
         var item = doc.pathItems[i];
         try {
@@ -47,7 +44,6 @@ if (preflight) {
         } catch(e) {}
       }
 
-      // Text frames (foreground text)
       for (var ti = 0; ti < doc.textFrames.length; ti++) {
         var tf = doc.textFrames[ti];
         try {
@@ -154,7 +150,6 @@ export function colorToRGB(color: ColorValue): { r: number; g: number; b: number
   }
   if (color.type === 'cmyk') {
     if (!isNum(color.c) || !isNum(color.m) || !isNum(color.y) || !isNum(color.k)) return null;
-    // Simple CMYK to RGB conversion (no ICC profile)
     const k = color.k / 100;
     return {
       r: Math.round(255 * (1 - color.c / 100) * (1 - k)),
@@ -270,7 +265,6 @@ export function register(server: McpServer): void {
         });
       }
 
-      // Manual mode
       if (hasManual) {
         if (!params.color1 || !params.color2) {
           return formatToolResult({ error: true, message: 'Manual mode requires both color1 and color2.' });
@@ -328,12 +322,10 @@ export function register(server: McpServer): void {
           const fg = items[i];
           const bg = items[j];
 
-          // Foreground should be text or smaller
           if (fg.type !== 'text' && fg.type !== 'path') continue;
           if (!fg.fillColor || !bg.fillColor) continue;
           if (!boundsOverlap(fg.bounds, bg.bounds)) continue;
 
-          // Background should be larger (area comparison)
           const fgArea =
             (fg.bounds.right - fg.bounds.left) * (fg.bounds.top - fg.bounds.bottom);
           const bgArea =

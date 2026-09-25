@@ -29,7 +29,6 @@ if (preflight) {
       writeResultFile(RESULT_PATH, { success: true, mode: "save" });
     } else if (mode === "save_as") {
       var savePath = params.path;
-      // Default path generation when path is omitted
       if (!savePath) {
         var dir;
         try {

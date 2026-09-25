@@ -9,12 +9,6 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
  *
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/TextFonts/ — TextFonts, TextFont
  *
- * JSX API:
- *   Application.textFonts → TextFonts コレクション
- *   TextFont.name → String (PostScript名)
- *   TextFont.family → String (ファミリー名)
- *   TextFont.style → String (スタイル名)
- *
  * ドキュメント不要。checkIllustratorVersion() のみ使用。
  */
 const jsxCode = `

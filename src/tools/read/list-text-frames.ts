@@ -24,7 +24,6 @@ if (preflight) {
     var paramOffset = (params && typeof params.offset === "number") ? params.offset : 0;
     var paramLimit = (params && typeof params.limit === "number") ? params.limit : null;
 
-    // アートボードインデックスの範囲チェック
     if (filterArtboard !== null && (filterArtboard < 0 || filterArtboard >= doc.artboards.length)) {
       writeResultFile(RESULT_PATH, {
         error: true,
@@ -32,7 +31,6 @@ if (preflight) {
       });
     } else {
 
-      // テキストフレームのソースを決定
       var sourceFrames = null;
       if (filterLayer) {
         var targetLayer = null;
@@ -89,10 +87,8 @@ if (preflight) {
         for (var i = 0; i < sourceFrames.length; i++) {
           var tf = sourceFrames[i];
 
-          // アートボードインデックスを取得
           var itemArtboardIndex = getArtboardIndexForItem(tf);
 
-          // アートボードフィルタリング
           if (filterArtboard !== null) {
             if (itemArtboardIndex !== filterArtboard) continue;
           }
@@ -119,7 +115,6 @@ if (preflight) {
 
           var textKind = getTextKind(tf);
 
-          // 座標変換用のアートボード矩形
           var boundsAbRect = artboardRect;
           if (!boundsAbRect && coordSystem === "artboard-web") {
             if (itemArtboardIndex >= 0) {
@@ -142,9 +137,7 @@ if (preflight) {
             // フォント情報が取得できない場合は null のまま
           }
 
-          // 段落スタイル名・文字スタイル名（先頭 textRange が参照するスタイル）。
-          // ParagraphAttributes / CharacterAttributes にスタイルのプロパティはなく、
-          // TextRange.paragraphStyles / characterStyles から読む
+          // スタイル名は Paragraph/CharacterAttributes になく、TextRange.paragraphStyles / characterStyles から読む
           var paragraphStyleName = "";
           var characterStyleName = "";
           try {
@@ -161,7 +154,6 @@ if (preflight) {
             // スタイル情報が取得できない場合は空文字のまま
           }
 
-          // スレッド連結（前後のフレーム）。連結がなければ null
           var nextFrameUUID = null;
           var previousFrameUUID = null;
           try { if (tf.nextFrame) nextFrameUUID = ensureUUID(tf.nextFrame); } catch (e) {}

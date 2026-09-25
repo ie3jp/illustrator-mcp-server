@@ -12,9 +12,7 @@ export const MAX_EFFECTIVE_DPI = 2400;
 /** base64 で応答に載せる画像の上限（base64 化後に約 5MB） */
 export const MAX_INLINE_IMAGE_BYTES = Math.floor(3.75 * 1024 * 1024);
 
-/**
- * Illustrator を呼ぶ前に弾ける入力エラーを検出する。問題なければ null。
- */
+/** Illustrator を呼ぶ前に弾ける入力エラーを返す（問題なければ null） */
 export function validateExportParams(params: {
   format: string;
   output_path?: string;
@@ -24,7 +22,7 @@ export function validateExportParams(params: {
   if (params.output_path !== undefined) {
     const pathError = checkAbsoluteOutputPath(params.output_path, 'output_path');
     if (pathError) return pathError;
-    // SVG は非 ASCII ファイル名で警告ダイアログが出て失敗する（自動生成パス・batch ラベルと同じ理由）
+    // SVG は非 ASCII ファイル名で警告ダイアログが出て失敗する
     if (params.format === 'svg' && /[^\x00-\x7F]/.test(basename(params.output_path))) {
       return `SVG export cannot use a non-ASCII file name (Illustrator shows a warning dialog and the export fails). Use an ASCII file name: ${params.output_path}`;
     }
@@ -38,17 +36,12 @@ export function validateExportParams(params: {
   return null;
 }
 
-/**
- * パス生成・既存ファイル検出・batch 結果判定の JSX ヘルパー。
- * jsxCode の前に連結して実行する（ユニットテストで単体評価するため分離）。
- */
+/** パス生成・既存ファイル検出・batch 結果判定の JSX ヘルパー（単体テストのため jsxCode から分離） */
 export const exportPathHelpersJsx = `
-// アートボード名をファイル名用に無害化する。
 // パス区切り・Windows 禁止文字・制御文字・空白をハイフンに置換
 function sanitizeArtboardLabel(name, format) {
   var label = String(name).replace(/[\\/\\\\:"<>|?*\\x00-\\x1F ]/g, '-');
-  // SVGは非ASCIIファイル名で警告ダイアログが出て書き出しに失敗するため
-  // ASCIIにフォールバック（一意性は _<n>- の連番が保証。実機検証: 日本語名で失敗確認済み）
+  // SVG は非 ASCII ファイル名で警告ダイアログが出て失敗する（実機確認）。一意性は _<n>- の連番が保証
   if (format === "svg" && /[^\\x00-\\x7F]/.test(label)) {
     label = "artboard";
   }
@@ -130,13 +123,11 @@ function buildBatchResult(files, failedList, total, format) {
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/ExportOptionsJPEG/
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/PageItem/ — PageItem.duplicate()
  *
- * 注意: SVGIdType / idType はリファレンスに記載がないが try/catch で安全に処理。
+ * SVGIdType / idType はリファレンスに記載がないため try/catch で扱う。
  *
- * UUID / selection は一時ドキュメントに duplicate() して書き出す。
- * exportFile() は選択書き出しに対応しておらず（ExportOptionsSVG にも該当プロパティなし）、
- * 元ドキュメントからでは全アートワークの bbox になるため。
- * クリップボード（copy/paste）もメニューコマンドも使わないので、ユーザーのクリップボードと
- * 選択状態を壊さず、Illustrator の前面化も不要。
+ * UUID / selection は一時ドキュメントに duplicate() して書き出す。exportFile() は選択書き出しに
+ * 対応しておらず全アートワークの bbox になるため。copy/paste もメニューコマンドも使わないので
+ * ユーザーのクリップボード・選択を壊さず、前面化も不要。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -158,7 +149,6 @@ if (preflight) {
     var rasterOpts = params.raster_options || {};
     var sep = Folder.fs === 'Windows' ? '\\\\' : '/';
 
-    // Default path generation when output_path is omitted
     if (!outputPath) {
       var dir;
       try {
@@ -173,7 +163,6 @@ if (preflight) {
         dir = Folder.desktop.fsName;
       }
       var baseName = doc.name.replace(/\\.[^.]+$/, '').replace(/ /g, '-');
-      // ASCII以外の文字を含む場合、SVGでは警告ダイアログが出るためフォールバック
       if (format === 'svg' && /[^\\x00-\\x7F]/.test(baseName)) {
         baseName = 'export';
       }
@@ -338,11 +327,9 @@ if (preflight) {
         }
       };
 
-      // エクスポート後のファイル存在検証。実際の出力パスを返す（存在しなければ null）
-      // 書き出し開始前から残っていた古いファイルを成功と誤認しないよう更新時刻も見る。
-      // SVG artboard exportではIllustratorが {basename}_{artboardName}.svg にリネームする。
-      // 名前のマングリング規則が不定（特殊文字の扱いが不明）のため、名前を推測せず
-      // 「同フォルダで指定ベース名から始まり、書き出し開始以降に更新された .svg」を探す
+      // 実際の出力パスを返す（なければ null）。古いファイルを成功と誤認しないよう更新時刻も見る。
+      // SVG のアートボード書き出しは {basename}_{artboardName}.svg にリネームされ規則が不定なので、
+      // 「ベース名で始まり書き出し開始以降に更新された .svg」を探す
       var isFresh = function (f, sinceMs) {
         try {
           return !f.modified || f.modified.getTime() >= sinceMs;
@@ -504,8 +491,7 @@ export function register(server: McpServer): void {
         target: z
           .string()
           .describe('UUID, "artboard:<index>", "artboard:all" (batch-export every artboard; filenames get "_<n>-<artboardName>" suffixes), or "selection". UUID and "selection" export only those objects, cropped to their visible bounds (they are duplicated into a temporary document; the clipboard and current selection are left untouched).'),
-        // WebP is not supported by ExtendScript API
-        // format: z.enum(['svg', 'png', 'webp', 'jpg']).describe('Export format'),
+        // WebP は ExtendScript API が非対応
         format: z.enum(['svg', 'png', 'jpg']).describe('Export format'),
         output_path: z.string().optional().describe('Absolute output file path (SVG file names must be ASCII). If omitted, auto-generates a non-conflicting name in the same directory as the document (or ~/Desktop for unsaved documents)'),
         overwrite: coerceBoolean.optional().default(false).describe('Replace existing files at output_path (including "artboard:all" per-artboard files). Default false: returns an error listing the existing files'),

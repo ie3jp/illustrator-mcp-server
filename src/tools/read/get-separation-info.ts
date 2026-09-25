@@ -8,9 +8,8 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Spot/ — colorType (ColorModel)
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace, inkList
  *
- * separations は「走査したアートワークで実際に使われている版」だけを載せる。
- * 使用が見つからなかったインクは unusedInks に分け、走査範囲（scope）を併記する
- * （テキストだけに使った特色が usageCount: 0 と出て「不要」と判断される事故を防ぐ）。
+ * separations は実際に使われている版だけ。使用が見つからないインクは unusedInks に分けて scope を併記する
+ * （テキストだけで使う特色を usageCount: 0 から「不要」と誤判断させないため）。
  */
 const jsxCode = `
 var preflight = preflightChecks();

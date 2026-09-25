@@ -18,17 +18,14 @@ if (preflight) {
     var doc = app.activeDocument;
     var sel = doc.selection;
 
-    // 文字にキャレットがある／文字を選択していると Document.selection は PageItem の配列ではなく
-    // TextRange（キャレットは長さ 0 の TextRange か InsertionPoint）を返す。
-    // TextRange には geometricBounds 等がなく、そのまま扱うと選択全体がエラーになるため、
-    // 親の TextFrame に置き換えて返す（テキスト編集中は常時ありうる状態）
+    // テキスト編集中の Document.selection は PageItem 配列ではなく TextRange / InsertionPoint になり、
+    // geometricBounds 等がなく選択全体がエラーになるため、親の TextFrame に置き換える
     function isTextSelection(obj) {
       var tn = "";
       try { tn = obj.typename; } catch(e) {}
       return tn === "TextRange" || tn === "InsertionPoint";
     }
 
-    // TextRange / InsertionPoint が属する TextFrame を探す（見つからなければ null）
     function findTextFrameOfRange(range) {
       var obj = range;
       for (var guard = 0; guard < 10 && obj; guard++) {
@@ -53,7 +50,6 @@ if (preflight) {
       return null;
     }
 
-    // 選択を配列に正規化（TextRange 単体が返るケースと配列のケースの両方を扱う）
     var selList = [];
     if (sel) {
       var selTn = "";
@@ -70,7 +66,6 @@ if (preflight) {
       var zIdx = getZIndex(item);
       var itemType = getItemType(item);
 
-      // artboard detection for coordinate conversion
       var abIndex = -1;
       var bounds = null;
       try { abIndex = getArtboardIndexForItem(item); } catch(e) {}

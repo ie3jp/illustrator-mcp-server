@@ -158,7 +158,6 @@ export async function resolveCoordinateSystem(
   if (explicit !== undefined) return explicit;
   if (sessionExplicit) return sessionCoordinateSystem!;
 
-  // キャッシュがあれば、現在のドキュメントキーと比較して有効性を確認
   if (autoDetectCache) {
     try {
       const keyResult = await executeJsx(GET_DOCUMENT_KEY_JSX);
@@ -167,7 +166,6 @@ export async function resolveCoordinateSystem(
         if (currentKey === autoDetectCache.documentKey) {
           return autoDetectCache.coordinateSystem;
         }
-        // ドキュメントが変わっている — キャッシュ無効化して再検出
         autoDetectCache = null;
       }
     } catch {
@@ -176,11 +174,8 @@ export async function resolveCoordinateSystem(
     }
   }
 
-  // キャッシュなし — 初回自動検出。
-  // 失敗時に artboard-web へ黙って落とすと、印刷（document 座標）のドキュメントで
-  // 座標を取り違えたまま書き込み・読み取りが成功してしまう。
-  // 検出の JSX が失敗する状況ではツール本体の JSX もほぼ確実に失敗するため、
-  // fail-closed にしても失うものはない。
+  // 検出失敗で artboard-web に黙って落とすと、印刷ドキュメントで座標を取り違えたまま成功してしまう。
+  // 検出が失敗する状況ではツール本体もほぼ失敗するため fail-closed にする
   try {
     return await autoDetectCoordinateSystem();
   } catch (e) {

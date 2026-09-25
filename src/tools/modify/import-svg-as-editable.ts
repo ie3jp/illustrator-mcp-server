@@ -123,8 +123,7 @@ if (preflight) {
                 });
               }
 
-              // CMYK 文書に取り込んでも SVG 由来の RGB 塗り・線はそのまま残る（実機確認済み）。
-              // 勝手に変換はせず、件数を数えて警告する
+              // CMYK 文書でも SVG 由来の RGB 色はそのまま残る（実機確認済み）。変換せず件数を警告する
               var importWarnings = [];
               if (isCMYKTarget) {
                 var rgbCount = countRGBColors(duplicated);

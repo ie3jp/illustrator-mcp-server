@@ -217,7 +217,6 @@ if (preflight) {
         };
       }
 
-      // 同一色が使用箇所の数だけ並ぶと読めないため、ユニーク色ごとに count を付けてまとめる（多い順）
       result.usedFillColors = summarizeColors(usedFills);
       result.usedStrokeColors = summarizeColors(usedStrokes);
       result.meshGradient = {

@@ -37,8 +37,7 @@ if (preflight) {
       return false;
     }
 
-    // info.children を設定する。深度上限で打ち切った場合は「子なし」と区別できるよう
-    // childrenTruncated: true と childCount（実際の子の数）を付ける
+    // 深度上限で打ち切った場合は「子なし」と区別できるよう childrenTruncated と childCount を付ける
     function attachChildren(info, container, currentDepth, coordSys) {
       if (currentDepth >= maxDepth) {
         info.children = [];

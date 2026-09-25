@@ -29,7 +29,6 @@ if (preflight) {
     if (!targetUUID) {
       writeResultFile(RESULT_PATH, { error: true, message: "uuid parameter is required" });
     } else {
-      // textFrames を走査して UUID が一致するテキストフレームを探す
       var found = null;
       for (var i = 0; i < doc.textFrames.length; i++) {
         var item = doc.textFrames[i];
@@ -50,7 +49,6 @@ if (preflight) {
 
         var textKind = getTextKind(tf);
 
-        // 座標
         var itemAbIdx = getArtboardIndexForItem(tf);
         var boundsAbRect = null;
         if (coordSystem === "artboard-web") {
@@ -58,11 +56,9 @@ if (preflight) {
         }
         var bounds = getBounds(tf, coordSystem, boundsAbRect);
 
-        // 組み方向（縦組み / 横組み）
         var orientation = "horizontal";
         try { if (tf.orientation === TextOrientation.VERTICAL) orientation = "vertical"; } catch (e) {}
 
-        // スレッド連結（前後のフレーム）。連結がなければ null
         var nextFrameUUID = null;
         var previousFrameUUID = null;
         try { if (tf.nextFrame) nextFrameUUID = ensureUUID(tf.nextFrame); } catch (e) {}
@@ -166,8 +162,7 @@ if (preflight) {
           try { info.verticalScale = cca.verticalScale; } catch (e2) {}
           try { info.rotation = cca.rotation; } catch (e2) {}
 
-          // ランキー生成: 属性が同一なら前のランに結合。
-          // 色は全成分（特色名・濃度・グラデーションの分岐点など）を含めて比較する
+          // 色は全成分（特色名・濃度・グラデーション分岐点など）まで比較してランを結合する
           var key = info.fontFamily + "|" + info.fontStyle + "|" + info.fontSize
             + "|" + info.tracking + "|" + info.kerningMethod
             + "|" + info.akiLeft + "|" + info.akiRight + "|" + info.tsume + "|" + info.proportionalMetrics
@@ -273,8 +268,7 @@ export function register(server: McpServer): void {
           css['letter-spacing'] = `${(tracking / 1000).toFixed(3)}em`;
         }
 
-        // proportionalMetrics（プロポーショナルメトリクス）は palt に対応する。
-        // tsume（ツメ = 文字前後の空きを詰める率 %）は palt とは別物で CSS に直接の対応がない
+        // palt は proportionalMetrics に対応。tsume（ツメ）は別物で CSS に直接の対応がない
         if (run.proportionalMetrics === true) {
           css['font-feature-settings'] = '"palt"';
         }
@@ -311,25 +305,21 @@ export function register(server: McpServer): void {
       }
 
       // --- 自然言語サマリを生成 ---
-      // フォント情報
       const fontSet = new Set(runs.map((r) => `${r.fontFamily} ${r.fontStyle}`));
       const fontSize = runs.length > 0 ? (runs[0].fontSize as number) : 0;
       cssRules.push(`font-family: "${runs[0]?.fontFamily ?? ''}", sans-serif`);
       cssRules.push(`font-size: ${fontSize}pt`);
 
-      // tracking → letter-spacing
       const trackingVal = runs.length > 0 ? (runs[0].tracking as number) : 0;
       if (trackingVal !== 0) {
         cssRules.push(`letter-spacing: ${(trackingVal / 1000).toFixed(3)}em`);
       }
 
-      // kerning method
       const kernMethod = runs.length > 0 ? (runs[0].kerningMethod as string) : 'auto';
       if (kernMethod !== 'none') {
         cssRules.push('font-kerning: auto');
       }
 
-      // kerning pairs サマリ
       if (kerningPairs.length > 0) {
         const pairDescs = kerningPairs.map(
           (p) => `"${p.left}${p.right}" ${(p.value as number) > 0 ? '+' : ''}${p.value as number}`,
@@ -342,7 +332,6 @@ export function register(server: McpServer): void {
         notes.push('手動カーニングなし。フォント内蔵のメトリクスカーニングのみ（font-kerning: auto で再現）。');
       }
 
-      // 文字単位の特殊設定を検出
       if (runs.length > 1) {
         const diffs: string[] = [];
         for (const run of runs) {
@@ -365,7 +354,6 @@ export function register(server: McpServer): void {
         }
       }
 
-      // tsume / proportionalMetrics
       const hasTsume = runs.some((r) => (r.tsume as number) > 0);
       const hasPropMetrics = runs.some((r) => r.proportionalMetrics === true);
       if (hasPropMetrics) {
@@ -376,12 +364,10 @@ export function register(server: McpServer): void {
         notes.push('ツメ（文字前後の空きを詰める率）が設定されている。CSSに直接の対応はない（"palt" とは別物）。近似するなら letter-spacing の負値で調整。');
       }
 
-      // 縦組み
       if (result.orientation === 'vertical') {
         cssRules.push('writing-mode: vertical-rl');
       }
 
-      // paragraphs
       const paras = (result.paragraphAttributes ?? []) as Array<Record<string, unknown>>;
       if (paras.length > 0) {
         const para = paras[0];

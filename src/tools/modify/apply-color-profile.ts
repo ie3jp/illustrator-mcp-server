@@ -27,9 +27,7 @@ if (preflight) {
       oldProfile = "(unavailable)";
     }
 
-    // ExtendScript does not provide a single-call color conversion API.
-    // We can assign a color profile name to embed/change the profile.
-    // For full ICC-based conversion, manual workflow or actions are needed.
+    // ExtendScript には ICC 変換 API がないため、プロファイル名の割り当てだけ行う
     var note = "";
     var hasError = false;
     try {

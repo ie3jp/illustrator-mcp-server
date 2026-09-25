@@ -8,23 +8,10 @@ import { CROP_MARKS_JSX } from '../crop-marks-shared.js';
 /**
  * create_crop_marks — トリムマーク（トンボ）の作成
  *
- * Illustrator の「トリムマークを作成」コマンド（TrimMark v25）を使い、
- * アクティブなアートボード or 選択オブジェクトにトンボを生成する。
- *
- * ■ アートボードモード（デフォルト）
- *   アートボードぴったりのサイズで作成しているケースを想定。
- *   トンボ生成後、トンボが収まるようにアートボードを拡張する。
- *
- * ■ 選択オブジェクトモード（use_selection: true）
- *   ユーザが選択したオブジェクトに対してトンボを生成。
- *   アートボードは変更しない。
- *
- * locale パラメータからユーザの国を推定し、日本式／西洋式を自動切替する。
- * - 日本 (ja) → 日本式トンボ（二重線、3mm 塗り足し表示）
- * - その他 → 西洋式トンボ（一重線）
- *
- * 生成物の特定・環境設定/選択/アクティブアートボードの復元は crop-marks-shared.ts を参照。
- * 失敗時は生成済みトンボとアートボード拡張を取り消す（transaction）。
+ * 「トリムマークを作成」コマンド（TrimMark v25）で、アクティブなアートボード（既定。
+ * 生成後にトンボが収まるようアートボードを拡張）または選択オブジェクトにトンボを生成する。
+ * style: auto は locale が ja なら日本式（二重線）、それ以外は西洋式。
+ * 生成物の特定・状態の復元は crop-marks-shared.ts。
  *
  * @see https://note.com/dtp_tranist/n/n40e3e39cf9f2
  * JSX API: app.executeMenuCommand('TrimMark v25'), app.preferences.setBooleanPreference('cropMarkStyle', ...)
@@ -34,8 +21,8 @@ var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
 } else {
-  // transaction: 結果を書き出すまで committed=false。失敗時は生成物とアートボード拡張を戻す。
-  // 環境設定・選択・アクティブアートボードは成否にかかわらず finally で復元する。
+  // 結果を書き出すまで committed=false で、失敗時は生成物とアートボード拡張を戻す。
+  // 環境設定・選択・アクティブアートボードは成否にかかわらず finally で復元する
   var doc = null;
   var cmState = null;
   var createdMarks = [];

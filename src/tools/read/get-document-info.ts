@@ -24,7 +24,6 @@ if (preflight) {
     var doc = app.activeDocument;
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
 
-    // ファイル名・パス
     var fileName = doc.name;
     var filePath = "";
     try {
@@ -38,7 +37,6 @@ if (preflight) {
     var docWidth = doc.width;
     var docHeight = doc.height;
 
-    // カラーモード
     var colorSpace = doc.documentColorSpace;
     var colorMode = "unknown";
     if (colorSpace === DocumentColorSpace.CMYK) {
@@ -47,7 +45,6 @@ if (preflight) {
       colorMode = "RGB";
     }
 
-    // カラープロファイル
     var colorProfile = "";
     try {
       colorProfile = doc.colorProfileName;
@@ -55,7 +52,6 @@ if (preflight) {
       colorProfile = "";
     }
 
-    // ルーラー単位
     var rulerUnits = "unknown";
     try {
       var ru = doc.rulerUnits;
@@ -70,9 +66,7 @@ if (preflight) {
       rulerUnits = "unknown";
     }
 
-    // 裁ち落とし設定
-    // Illustrator ExtendScript API はドキュメントの裁ち落とし（bleed）設定を
-    // 直接公開していないため、取得不可
+    // 裁ち落とし（bleed）は ExtendScript API に公開されていないため取得不可
     var bleed = {
       note: "Illustrator ExtendScript API does not expose bleed settings directly. Use File > Document Setup to check bleed values.",
       top: null,
@@ -81,7 +75,6 @@ if (preflight) {
       right: null
     };
 
-    // ラスタライズ解像度
     var rasterResolution = 0;
     try {
       rasterResolution = doc.rasterEffectSettings.resolution;

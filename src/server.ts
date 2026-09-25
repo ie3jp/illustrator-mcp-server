@@ -7,12 +7,8 @@ import { registerAllTools } from './tools/registry.js';
 import { registerAllPrompts } from './prompts/registry.js';
 
 /**
- * package.json の version を実行時に読む（serverInfo.version 用）。
- *
- * dist/server.js（tsc）・dist/bundle.cjs（esbuild）のどちらもパッケージ直下の
- * dist/ に置かれ、npm パッケージにも mcpb バンドルにも package.json が同梱されるため、
- * モジュール位置から ../package.json で解決できる。src/server.ts（vitest / tsx）でも同じ。
- * 手書きの定数はリリースのたびにずれるので持たない。
+ * serverInfo.version は package.json から読む（手書き定数はリリースのたびにずれる）。
+ * dist/server.js・dist/bundle.cjs・src/server.ts のいずれからも ../package.json で届く
  */
 export function readPackageVersion(): string {
   try {
@@ -38,10 +34,7 @@ export function createServer(): McpServer {
   return server;
 }
 
-/**
- * JSX のエラー結果を、追加情報（font_candidates / existing_files / unsavedChanges 等）ごと
- * isError のツール結果として返す。例外のまま SDK に渡すと message しか残らない。
- */
+/** JSX のエラー結果を追加情報ごと isError の結果で返す（例外のまま SDK に渡すと message しか残らない） */
 export function returnJsxErrorsAsResults(server: McpServer): void {
   const register = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   (server as { registerTool: unknown }).registerTool = (name: string, config: unknown, handler: (...a: unknown[]) => unknown) =>
