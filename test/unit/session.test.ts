@@ -7,6 +7,7 @@ import {
   getSessionCoordinateSystem,
   getSessionWorkflow,
   detectWorkflow,
+  DETECT_SIGNALS_JSX,
 } from '../../src/tools/session.js';
 
 // Mock executeJsx for auto-detection tests
@@ -157,14 +158,94 @@ describe('session state', () => {
     expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to artboard-web on JSX error', async () => {
-    mockExecuteJsx.mockResolvedValue({ error: true, message: 'No document' });
+  it('uses artboard-web without caching when no document is open', async () => {
+    mockExecuteJsx.mockResolvedValueOnce({ noDocument: true });
     expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+
+    // キャッシュされていないので、次の呼び出しは検証用 JSX ではなく検出をやり直す
+    mockExecuteJsx.mockResolvedValueOnce({
+      documentKey: '/path/to/print-doc.ai',
+      colorMode: 'CMYK',
+      rulerUnits: 'mm',
+      rasterEffectResolution: 300,
+      colorProfile: '',
+    });
+    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+    expect(mockExecuteJsx).toHaveBeenCalledTimes(2);
   });
 
-  it('falls back to artboard-web on JSX rejection', async () => {
+  // 失敗を artboard-web に黙って落とすと、印刷ドキュメントで座標を取り違えたまま成功してしまう
+  it('fails closed when detection JSX fails, with guidance to set coordinate_system', async () => {
     mockExecuteJsx.mockRejectedValue(new Error('connection failed'));
-    expect(await resolveCoordinateSystem(undefined)).toBe('artboard-web');
+    await expect(resolveCoordinateSystem(undefined)).rejects.toThrow(/connection failed/);
+    await expect(resolveCoordinateSystem(undefined)).rejects.toThrow(/coordinate_system|set_workflow/);
+  });
+
+  it('does not fail when coordinate_system is given explicitly even if Illustrator is unreachable', async () => {
+    mockExecuteJsx.mockRejectedValue(new Error('connection failed'));
+    expect(await resolveCoordinateSystem('artboard-web')).toBe('artboard-web');
+    expect(mockExecuteJsx).not.toHaveBeenCalled();
+  });
+
+  it('re-detects (and fails closed) when cache validation fails and detection also fails', async () => {
+    mockExecuteJsx.mockResolvedValueOnce({
+      documentKey: '/path/to/print-doc.ai',
+      colorMode: 'CMYK',
+      rulerUnits: 'mm',
+      rasterEffectResolution: 300,
+      colorProfile: '',
+    });
+    expect(await resolveCoordinateSystem(undefined)).toBe('document');
+
+    mockExecuteJsx.mockRejectedValue(new Error('Script execution timed out after 30000ms'));
+    await expect(resolveCoordinateSystem(undefined)).rejects.toThrow(/timed out/);
+  });
+
+});
+
+// --- DETECT_SIGNALS_JSX を偽の Illustrator オブジェクトで評価する ---
+
+const FAKE_RULER_UNITS = {
+  Pixels: 1, Points: 2, Millimeters: 3, Centimeters: 4, Inches: 5, Picas: 6, Qs: 7,
+};
+
+function runDetectSignalsJsx(app: unknown): Record<string, unknown> | undefined {
+  let written: Record<string, unknown> | undefined;
+  const fn = new Function(
+    'app', 'DocumentColorSpace', 'RulerUnits', 'preflightChecks', 'writeResultFile', 'RESULT_PATH',
+    DETECT_SIGNALS_JSX,
+  );
+  fn(
+    app,
+    { CMYK: 'CMYK', RGB: 'RGB' },
+    FAKE_RULER_UNITS,
+    () => null,
+    (_path: string, result: Record<string, unknown>) => { written = result; },
+    '/tmp/result.json',
+  );
+  return written;
+}
+
+describe('DETECT_SIGNALS_JSX', () => {
+  it('maps RulerUnits.Qs to "Q"', () => {
+    const result = runDetectSignalsJsx({
+      documents: { length: 1 },
+      activeDocument: {
+        name: 'q.ai',
+        fullName: { fsName: '/path/q.ai' },
+        documentColorSpace: 'CMYK',
+        colorProfileName: 'Japan Color 2001 Coated',
+        rulerUnits: FAKE_RULER_UNITS.Qs,
+        rasterEffectSettings: { resolution: 300 },
+      },
+    });
+    expect(result?.rulerUnits).toBe('Q');
+    expect(result?.documentKey).toBe('/path/q.ai');
+  });
+
+  it('reports noDocument (not an error) when no document is open', () => {
+    const result = runDetectSignalsJsx({ documents: { length: 0 } });
+    expect(result).toEqual({ noDocument: true });
   });
 });
 
@@ -189,6 +270,17 @@ describe('detectWorkflow', () => {
     });
     expect(hint.detectedWorkflow).toBe('print');
     expect(hint.recommendedCoordinateSystem).toBe('document');
+  });
+
+  it('treats Q (級) as a print unit', () => {
+    const hint = detectWorkflow({
+      colorMode: 'RGB',
+      rulerUnits: 'Q',
+      rasterEffectResolution: 300,
+      colorProfile: '',
+    });
+    expect(hint.detectedWorkflow).toBe('print');
+    expect(hint.reasoning).toContain('Q units');
   });
 
   it('detects video: RGB + px + 150dpi', () => {

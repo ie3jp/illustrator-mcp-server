@@ -7,6 +7,7 @@
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
+import { execFile } from 'child_process';
 import type { ExecFileException } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
@@ -284,6 +285,7 @@ describe('getExecFailureMessage powershell transport', () => {
       'Cannot create ActiveX component',
       30_000,
       'powershell',
+      100,
     );
     expect(msg).toContain('not running');
     expect(msg).toContain('Adobe Illustrator');
@@ -295,28 +297,68 @@ describe('getExecFailureMessage powershell transport', () => {
       'Error 80040154',
       30_000,
       'powershell',
+      100,
     );
     expect(msg).toContain('not running');
   });
 
-  it('タイムアウトは powershell でも同じメッセージ', () => {
+  // Node の execFile はタイムアウト時に code を付けない（code=null, killed=true, signal=SIGTERM）
+  it('タイムアウト（killed + 経過時間が timeout 相当）はタイムアウトとして報告する', () => {
     const msg = getExecFailureMessage(
-      makeError({ code: 'ETIMEDOUT', killed: true }),
+      makeError({ code: undefined, killed: true, signal: 'SIGTERM' }),
       '',
       30_000,
       'powershell',
+      30_004,
     );
-    expect(msg).toBe('Script execution timed out after 30000ms');
+    expect(msg).toContain('timed out after 30000ms');
+    expect(msg).toContain('may still be processing');
+    expect(msg).toContain('ILLUSTRATOR_MCP_TIMEOUT_NORMAL');
+    expect(msg).toContain('ILLUSTRATOR_MCP_TIMEOUT_HEAVY');
   });
 
-  it('シグナルによる強制終了メッセージ', () => {
+  it('timeout より十分早い強制終了はシグナル終了として報告する', () => {
     const msg = getExecFailureMessage(
       makeError({ killed: true, signal: 'SIGTERM' }),
       '',
       30_000,
       'powershell',
+      100,
     );
-    expect(msg).toContain('SIGTERM');
+    expect(msg).toContain('terminated by signal SIGTERM');
+    expect(msg).not.toContain('timed out');
+  });
+
+  it('killed でなければ経過時間が長くてもタイムアウト扱いしない', () => {
+    const msg = getExecFailureMessage(
+      makeError({ code: 1 }),
+      'Error 80040154',
+      30_000,
+      'powershell',
+      40_000,
+    );
+    expect(msg).toContain('not running');
+  });
+});
+
+// ─── 実際の execFile タイムアウト ──────────────────────────────────────────────
+
+describe('getExecFailureMessage with a real execFile timeout', () => {
+  it('実際に timeout で kill されたプロセスのエラーをタイムアウトと判定する', async () => {
+    const timeout = 300;
+    const startedAt = Date.now();
+    const error = await new Promise<ExecFileException>((resolve, reject) => {
+      execFile(process.execPath, ['-e', 'setTimeout(() => {}, 10000)'], { timeout }, (err) => {
+        if (err) resolve(err);
+        else reject(new Error('expected the child to be killed by timeout'));
+      });
+    });
+    // 前提: Node はタイムアウトに ETIMEDOUT を付けない（旧実装の分岐が到達しなかった理由）
+    expect(error.code).not.toBe('ETIMEDOUT');
+    expect(error.killed).toBe(true);
+
+    const msg = getExecFailureMessage(error, '', timeout, 'osascript', Date.now() - startedAt);
+    expect(msg).toContain(`timed out after ${timeout}ms`);
   });
 });
 
@@ -332,6 +374,7 @@ describe('getExecFailureMessage osascript transport', () => {
       'Connection is invalid',
       30_000,
       'osascript',
+      100,
     );
     expect(msg).toBe('Illustrator is not running. Please launch Adobe Illustrator.');
   });
@@ -342,6 +385,7 @@ describe('getExecFailureMessage osascript transport', () => {
       'not allowed to send keystrokes',
       30_000,
       'osascript',
+      100,
     );
     expect(msg).toContain('Automation permission denied');
     expect(msg).toContain('System Settings');
@@ -353,6 +397,7 @@ describe('getExecFailureMessage osascript transport', () => {
       'not allowed assistive access',
       30_000,
       'osascript',
+      100,
     );
     expect(msg).toContain('Automation permission denied');
   });
@@ -363,6 +408,7 @@ describe('getExecFailureMessage osascript transport', () => {
       'some unknown osascript error',
       30_000,
       'osascript',
+      100,
     );
     expect(msg).toBe('some unknown osascript error');
   });

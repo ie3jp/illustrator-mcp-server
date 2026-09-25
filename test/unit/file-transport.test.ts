@@ -14,6 +14,7 @@ import {
   createTempFiles,
   ensureTmpDir,
   readResult,
+  toJsxSafeJson,
   writeJsx,
   writeParams,
 } from '../../src/executor/file-transport.js';
@@ -133,6 +134,30 @@ describe('writeParams', () => {
 
     const raw = readFileSync(p, 'utf-8');
     expect(JSON.parse(raw)).toEqual({});
+  });
+
+  // ExtendScript (ES3) の eval は文字列内の生の U+2028/U+2029 を行終端子として扱い
+  // SyntaxError になる（実機確認済み）。Word/PDF からのコピペで混入する。
+  it('escapes U+2028 / U+2029 so ExtendScript eval does not break', async () => {
+    dir = await mkdtemp(path.join(tmpdir(), 'ft-test-'));
+    const p = path.join(dir, 'params.json');
+    const contents = 'line1\u2028line2\u2029line3';
+
+    await writeParams(p, { contents, nested: [{ name: '\u2028' }] });
+
+    const raw = readFileSync(p, 'utf-8');
+    expect(raw).not.toMatch(/[\u2028\u2029]/);
+    expect(raw).toContain('\\u2028');
+    expect(raw).toContain('\\u2029');
+    // 値そのものは変わらない
+    expect(JSON.parse(raw)).toEqual({ contents, nested: [{ name: '\u2028' }] });
+  });
+});
+
+describe('toJsxSafeJson', () => {
+  it('matches JSON.stringify when no line/paragraph separators are present', () => {
+    const value = { a: 'テキスト', b: [1, 2], c: 'quote " and \\ backslash\n' };
+    expect(toJsxSafeJson(value)).toBe(JSON.stringify(value));
   });
 });
 

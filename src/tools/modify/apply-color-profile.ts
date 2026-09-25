@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
+import { invalidateAutoDetectCache } from '../session.js';
 import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 /**
@@ -69,8 +70,14 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
-      return formatToolResult(result);
+      try {
+        const result = await executeJsx(jsxCode, params, { activate: true });
+        return formatToolResult(result);
+      } finally {
+        // colorProfile は座標系の自動検出（print/web 判定）の入力。
+        // 失敗時も途中まで書き換わった可能性があるので常に捨てる
+        invalidateAutoDetectCache();
+      }
     },
   );
 }

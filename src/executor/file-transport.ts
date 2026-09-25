@@ -34,8 +34,20 @@ export function createTempFiles(): TempFiles {
   };
 }
 
+/**
+ * ExtendScript の eval / ソース埋め込みで安全に読める JSON 文字列を返す。
+ *
+ * JSON.stringify は U+2028 / U+2029 を生の文字のまま出力するが、ES3 の
+ * ExtendScript では文字列リテラル内の行終端子になり SyntaxError になる
+ * （「ストリング定数が終了していません」— 実機確認済み）。
+ * Word / PDF からのコピペで実際に混入するため \u エスケープに置き換える。
+ */
+export function toJsxSafeJson(value: unknown): string {
+  return JSON.stringify(value).replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
+}
+
 export async function writeParams(paramsPath: string, params: unknown): Promise<void> {
-  await fs.writeFile(paramsPath, JSON.stringify(params ?? {}), 'utf-8');
+  await fs.writeFile(paramsPath, toJsxSafeJson(params ?? {}), 'utf-8');
 }
 
 export async function writeJsx(scriptPath: string, jsxCode: string): Promise<void> {

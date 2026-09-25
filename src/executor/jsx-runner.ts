@@ -204,14 +204,31 @@ function parsePowerShellError(stderr: string): string {
   return stderr;
 }
 
+/**
+ * execFile の timeout で強制終了されたかを判定する。
+ *
+ * Node の execFile はタイムアウト時に code: 'ETIMEDOUT' を付けない
+ * （Node v24 実測: code=null, killed=true, signal=SIGTERM）。
+ * killed は Node 自身が kill した場合にだけ true になる（外部からのシグナルでは false）が、
+ * 念のため経過時間も確認してタイムアウトと判断する。
+ */
+function isExecTimeout(error: ExecFileException, timeout: number, elapsedMs: number): boolean {
+  return error.killed === true && elapsedMs >= timeout * 0.9;
+}
+
 export function getExecFailureMessage(
   error: ExecFileException,
   stderr: string,
   timeout: number,
-  transport: Transport = 'osascript',
+  transport: Transport,
+  elapsedMs: number,
 ): string {
-  if (error.code === 'ETIMEDOUT') {
-    return `Script execution timed out after ${timeout}ms`;
+  if (isExecTimeout(error, timeout, elapsedMs)) {
+    return `Script execution timed out after ${timeout}ms. `
+      + 'Illustrator may still be processing the script in the background — '
+      + 'check the document state before retrying so the operation is not applied twice. '
+      + 'To allow more time, set the ILLUSTRATOR_MCP_TIMEOUT_NORMAL (default 30000) or '
+      + 'ILLUSTRATOR_MCP_TIMEOUT_HEAVY (default 60000) environment variable in ms.';
   }
   if (error.killed) {
     return `Script execution was terminated${error.signal ? ` by signal ${error.signal}` : ''}`;
@@ -235,10 +252,11 @@ async function executeViaOsascript(
     await writeJsx(files.scriptPath, fullJsx);
     await writeAppleScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
 
+    const startedAt = Date.now();
     await new Promise<void>((resolve, reject) => {
       execFile('osascript', [files.runnerPath], { timeout }, (error, _stdout, stderr) => {
         if (error) {
-          reject(new Error(getExecFailureMessage(error, stderr, timeout, 'osascript')));
+          reject(new Error(getExecFailureMessage(error, stderr, timeout, 'osascript', Date.now() - startedAt)));
         } else {
           resolve();
         }
@@ -264,6 +282,7 @@ async function executeViaPowerShell(
     await writeJsx(files.scriptPath, fullJsx);
     await writePowerShellScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
 
+    const startedAt = Date.now();
     await new Promise<void>((resolve, reject) => {
       execFile(
         'powershell.exe',
@@ -273,7 +292,7 @@ async function executeViaPowerShell(
         { timeout, windowsHide: true },
         (error, _stdout, stderr) => {
           if (error) {
-            reject(new Error(getExecFailureMessage(error, stderr, timeout, 'powershell')));
+            reject(new Error(getExecFailureMessage(error, stderr, timeout, 'powershell', Date.now() - startedAt)));
           } else {
             resolve();
           }

@@ -67,10 +67,14 @@ try {
 `;
 
 /** Lightweight JSX to fetch only document signals needed for workflow detection */
-const DETECT_SIGNALS_JSX = `
+export const DETECT_SIGNALS_JSX = `
 try {
-  var preflight = preflightChecks();
-  if (preflight) {
+  var noDocument = app.documents.length === 0;
+  var preflight = noDocument ? null : preflightChecks();
+  if (noDocument) {
+    // ドキュメント未オープンは検出失敗ではない（ツール本体の preflight が扱う）
+    writeResultFile(RESULT_PATH, { noDocument: true });
+  } else if (preflight) {
     writeResultFile(RESULT_PATH, preflight);
   } else {
     var doc = app.activeDocument;
@@ -93,6 +97,7 @@ try {
       else if (ru === RulerUnits.Centimeters) rulerUnits = "cm";
       else if (ru === RulerUnits.Inches) rulerUnits = "in";
       else if (ru === RulerUnits.Picas) rulerUnits = "pica";
+      else if (ru === RulerUnits.Qs) rulerUnits = "Q";
     } catch (e) {}
 
     var rasterRes = 0;
@@ -117,8 +122,9 @@ try {
  */
 async function autoDetectCoordinateSystem(): Promise<CoordinateSystem> {
   const result = await executeJsx(DETECT_SIGNALS_JSX);
-  if (!result || result.error) {
-    return 'artboard-web'; // fallback on error
+  if (result.noDocument) {
+    // 判定材料がないだけなので既定値で進める（キャッシュはしない）
+    return 'artboard-web';
   }
 
   const docKey = (result.documentKey as string) ?? '';
@@ -143,7 +149,8 @@ async function autoDetectCoordinateSystem(): Promise<CoordinateSystem> {
  *   1. explicit param (per-tool call)
  *   2. session default (set via set_workflow)
  *   3. auto-detect from document signals (cached, invalidated on document switch)
- *   4. fallback: 'artboard-web'
+ *   4. no document open: 'artboard-web'
+ *   検出自体の失敗は throw する（fail-closed）
  */
 export async function resolveCoordinateSystem(
   explicit?: CoordinateSystem,
@@ -169,11 +176,19 @@ export async function resolveCoordinateSystem(
     }
   }
 
-  // キャッシュなし — 初回自動検出
+  // キャッシュなし — 初回自動検出。
+  // 失敗時に artboard-web へ黙って落とすと、印刷（document 座標）のドキュメントで
+  // 座標を取り違えたまま書き込み・読み取りが成功してしまう。
+  // 検出の JSX が失敗する状況ではツール本体の JSX もほぼ確実に失敗するため、
+  // fail-closed にしても失うものはない。
   try {
     return await autoDetectCoordinateSystem();
-  } catch {
-    return 'artboard-web';
+  } catch (e) {
+    const reason = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `Could not auto-detect the coordinate system: ${reason} `
+      + '(Pass coordinate_system explicitly or call set_workflow to skip auto-detection.)',
+    );
   }
 }
 
@@ -209,7 +224,7 @@ export function detectWorkflow(signals: DocumentSignals): WorkflowHint {
   const isCMYK = colorMode === 'CMYK';
   const isRGB = colorMode === 'RGB';
   const isPixelUnit = rulerUnits === 'px';
-  const isPrintUnit = ['mm', 'cm', 'in', 'pica'].includes(rulerUnits);
+  const isPrintUnit = ['mm', 'cm', 'in', 'pica', 'Q'].includes(rulerUnits);
   const is72dpi = rasterEffectResolution === 72;
   const isHighRes = rasterEffectResolution >= 300;
   const isMidRes =
