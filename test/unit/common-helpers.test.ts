@@ -53,6 +53,7 @@ function loadHelpers(appVersion = '28.0') {
     reassignUUIDDeep: reassignUUIDDeep,
     summarizeColors: summarizeColors,
     pixelSizeFromMatrix: pixelSizeFromMatrix,
+    resolveTopLevelLayer: resolveTopLevelLayer,
     extractUUIDFromNote: extractUUIDFromNote,
     getNoteMeta: getNoteMeta,
     setNoteMeta: setNoteMeta,
@@ -89,6 +90,7 @@ type ExtraHelpers = {
   reassignUUIDDeep: (item: unknown) => void;
   summarizeColors: (colors: Array<Record<string, unknown>>) => Array<Record<string, unknown>>;
   pixelSizeFromMatrix: (m: Record<string, number>, w: number, h: number) => { width: number; height: number } | null;
+  resolveTopLevelLayer: (doc: unknown, name: string, warnings?: string[]) => { layer: unknown; index: number } | null;
   extractUUIDFromNote: (note: string) => string;
   getNoteMeta: (note: string, key: string) => string | null;
   setNoteMeta: (item: Note, key: string, value: string) => void;
@@ -521,6 +523,27 @@ describe('pixelSizeFromMatrix', () => {
     const h = loadHelpers();
     const v = Math.SQRT1_2;
     expect(h.pixelSizeFromMatrix({ mValueA: v, mValueB: v, mValueC: -v, mValueD: v }, 100, 100)).toBeNull();
+  });
+});
+
+describe('resolveTopLevelLayer', () => {
+  it('同名が複数あれば最上位を返して警告を積む', () => {
+    const h = loadHelpers();
+    const layers = [{ name: 'A' }, { name: 'X' }, { name: 'X' }];
+    const warnings: string[] = [];
+    const r = h.resolveTopLevelLayer({ layers }, 'X', warnings);
+    expect(r).toEqual({ layer: layers[1], index: 1 });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).toContain("2 top-level layers are named 'X'");
+  });
+
+  it('一意なら警告なし、なければ null', () => {
+    const h = loadHelpers();
+    const layers = [{ name: 'A' }];
+    const warnings: string[] = [];
+    expect(h.resolveTopLevelLayer({ layers }, 'A', warnings)).toEqual({ layer: layers[0], index: 0 });
+    expect(h.resolveTopLevelLayer({ layers }, 'B', warnings)).toBeNull();
+    expect(warnings).toEqual([]);
   });
 });
 

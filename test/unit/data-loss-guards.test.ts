@@ -8,6 +8,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 vi.mock('../../src/executor/jsx-runner.js', () => ({
   executeJsx: vi.fn(),
@@ -72,6 +74,13 @@ async function captureJsx(register: (server: McpServer) => void, name: string, r
 
 type Globals = Record<string, unknown>;
 
+// executeJsx に渡る JSX には common.jsx が含まれないため、使うヘルパーは本物を読み込んで注入する
+const COMMON_JSX = readFileSync(resolve(__dirname, '../../src/jsx/helpers/common.jsx'), 'utf-8');
+// eslint-disable-next-line no-new-func -- test-only: evaluating repo-local ES3 helpers in Node.js
+const commonLayerHelpers = new Function(
+  `${COMMON_JSX}\nreturn { findTopLevelLayerIndices: findTopLevelLayerIndices, resolveTopLevelLayer: resolveTopLevelLayer };`,
+)() as Globals; // NOSONAR
+
 /** JSX コードをフェイクグローバルの上で実行し、writeResultFile に渡された結果を返す */
 function runJsx(code: string, params: Record<string, unknown>, globals: Globals): Record<string, unknown> {
   let result: Record<string, unknown> | undefined;
@@ -96,6 +105,7 @@ function runJsx(code: string, params: Record<string, unknown>, globals: Globals)
     SaveOptions: { SAVECHANGES: 'SAVE', DONOTSAVECHANGES: 'DONOTSAVE' },
     ElementPlacement: { PLACEATBEGINNING: 'BEGIN', PLACEATEND: 'END', PLACEBEFORE: 'BEFORE', PLACEAFTER: 'AFTER' },
     Folder: { desktop: { fsName: '/Users/test/Desktop' }, fs: 'Macintosh' },
+    ...commonLayerHelpers,
     ...globals,
   };
   const names = Object.keys(base);
@@ -189,6 +199,21 @@ describe('convert_to_outlines: 失敗を隠さない', () => {
     ]);
   });
 
+  it('同名レイヤーを target にすると最上位のテキストだけを変換し、警告を返す', async () => {
+    const { code, params } = await captureJsx(registerConvertToOutlines, 'convert_to_outlines', { target: 'T' });
+    const topTf = { note: '', createOutline: vi.fn() };
+    const lowerTf = { note: '', createOutline: vi.fn() };
+    const layers = [
+      { name: 'T', textFrames: [topTf] },
+      { name: 'T', textFrames: [lowerTf] },
+    ];
+    const result = runJsx(code, params, { app: { activeDocument: { layers } } });
+    expect(topTf.createOutline).toHaveBeenCalled();
+    expect(lowerTf.createOutline).not.toHaveBeenCalled();
+    expect(result.convertedCount).toBe(1);
+    expect((result.warnings as string[])[0]).toContain("2 top-level layers are named 'T'");
+  });
+
   it('全件成功なら success: true', async () => {
     const { code, params } = await captureJsx(registerConvertToOutlines, 'convert_to_outlines', { target: 'all' });
     const app = { activeDocument: { textFrames: [{ note: '', createOutline: vi.fn() }] } };
@@ -267,7 +292,7 @@ describe('複数 UUID 操作の欠落報告', () => {
     const a = { uuid: UUID_A, move: vi.fn() };
     const b = { uuid: UUID_B, move: vi.fn(() => { throw new Error('locked'); }) };
     const dest = { name: 'Dest' };
-    const app = { activeDocument: { layers: { getByName: () => dest } } };
+    const app = { activeDocument: { layers: [{ name: 'Other' }, dest] } };
     const result = runJsx(code, params, { app, findItemByUUID: itemsById({ [UUID_A]: a, [UUID_B]: b }) });
     expect(a.move).toHaveBeenCalledWith(dest, 'BEGIN');
     expect(result.success).toBe(false);
@@ -275,6 +300,33 @@ describe('複数 UUID 操作の欠落報告', () => {
     expect(result.notFound).toEqual([UUID_MISSING]);
     expect(result.errors).toEqual([{ uuid: UUID_B, message: 'locked' }]);
     expect(result.verified).toEqual([{ uuid: UUID_A }]);
+    expect(result.warnings).toBeUndefined();
+  });
+
+  it('move_to_layer: 同名レイヤーが複数あれば最上位へ移動し、警告を返す', async () => {
+    const { code, params } = await captureJsx(registerMoveToLayer, 'move_to_layer', {
+      uuids: [UUID_A],
+      target_layer: 'Dest',
+    });
+    const a = { uuid: UUID_A, move: vi.fn() };
+    const top = { name: 'Dest' };
+    const lower = { name: 'Dest' };
+    const app = { activeDocument: { layers: [{ name: 'Other' }, top, lower] } };
+    const result = runJsx(code, params, { app, findItemByUUID: itemsById({ [UUID_A]: a }) });
+    expect(a.move).toHaveBeenCalledWith(top, 'BEGIN');
+    expect(result.success).toBe(true);
+    expect((result.warnings as string[])[0]).toContain("2 top-level layers are named 'Dest'");
+  });
+
+  it('move_to_layer: レイヤーがなければエラーで何も動かさない', async () => {
+    const { code, params } = await captureJsx(registerMoveToLayer, 'move_to_layer', {
+      uuids: [UUID_A],
+      target_layer: 'Nope',
+    });
+    const a = { uuid: UUID_A, move: vi.fn() };
+    const result = runJsx(code, params, { app: { activeDocument: { layers: [{ name: 'Dest' }] } }, findItemByUUID: itemsById({ [UUID_A]: a }) });
+    expect(result.error).toBe(true);
+    expect(a.move).not.toHaveBeenCalled();
   });
 
   it('apply_graphic_style: 見つかったものに適用し、欠落を返す', async () => {

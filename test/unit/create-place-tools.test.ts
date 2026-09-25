@@ -287,6 +287,22 @@ describe('duplicate_objects (T11-3, T11-9, E)', () => {
     expect(r.notFound).toEqual([UUID_MISSING]);
   });
 
+  it('uses the topmost of same-named target layers and warns', async () => {
+    const src = makeLayer('Src');
+    const top = makeLayer('Dup');
+    const lower = makeLayer('Dup');
+    const doc = makeDoc({ layers: [src, top, lower] });
+    const item = makeItem('PathItem', { note: UUID_A });
+    item.duplicate = (target: Fake) => target.addItem(cloneTree(item));
+    src.addItem(item);
+
+    const r = await runTool(registerDuplicateObjects, { uuids: [UUID_A], target_layer: 'Dup' }, makeApp(doc));
+    expect(r.success).toBe(true);
+    expect(top.pageItems).toHaveLength(1);
+    expect(lower.pageItems).toHaveLength(0);
+    expect(r.warnings[0]).toContain("2 top-level layers are named 'Dup'");
+  });
+
   it('resolves the coordinate system and offsets Y-up in document coordinates', async () => {
     const { params } = await captureCall(registerDuplicateObjects, { uuids: [UUID_A], offset: { x: 5, y: 7 } });
     expect(params.coordinate_system).toBe('document');

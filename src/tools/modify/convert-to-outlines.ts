@@ -20,6 +20,7 @@ if (preflight) {
     var count = 0;
     var failed = [];
     var hasError = false;
+    var warnings = [];
 
     // アウトライン化は不可逆。失敗（ロック・非表示など）を握りつぶさず、対象と理由を返す
     function convertFrame(tf) {
@@ -50,11 +51,10 @@ if (preflight) {
         convertFrame(frames[i]);
       }
     } else {
-      // target is a layer name
-      var layer = null;
-      try {
-        layer = doc.layers.getByName(target);
-      } catch(e) {
+      // target is a layer name（同名のトップレベルレイヤーが複数あるときは最上位を対象にし、警告を返す）
+      var resolvedLayer = resolveTopLevelLayer(doc, target, warnings);
+      var layer = resolvedLayer ? resolvedLayer.layer : null;
+      if (!layer) {
         hasError = true;
         writeResultFile(RESULT_PATH, { error: true, message: "Layer not found: " + target });
       }
@@ -67,13 +67,15 @@ if (preflight) {
     }
 
     if (!hasError) {
-      writeResultFile(RESULT_PATH, {
+      var convResult = {
         success: failed.length === 0,
         convertedCount: count,
         failedCount: failed.length,
         failed: failed,
         verified: { convertedCount: count }
-      });
+      };
+      if (warnings.length > 0) convResult.warnings = warnings;
+      writeResultFile(RESULT_PATH, convResult);
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to convert to outlines: " + e.message, line: e.line });
@@ -92,7 +94,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         target: z
           .string()
-          .describe('Target: "selection" (selected), "all" (all text), or layer name'),
+          .describe('Target: "selection" (selected), "all" (all text), or a top-level layer name (if several layers share the name, the topmost one is used and a warning is returned)'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },

@@ -671,6 +671,27 @@ function getUUIDDuplicates() {
 
 // --- レイヤー解決 ---
 
+// トップレベルレイヤーのうち名前が一致するもののインデックスを全件返す（上から順）。
+// getByName() は最初の 1 件しか返さず、同名レイヤーの存在に気づけない
+function findTopLevelLayerIndices(doc, name) {
+  var result = [];
+  for (var li = 0; li < doc.layers.length; li++) {
+    if (doc.layers[li].name === name) result.push(li);
+  }
+  return result;
+}
+
+// 名前でトップレベルレイヤーを解決する。見つからなければ null。
+// 同名が複数あるときは最上位（index 最小。getByName と同じ）を返し、warnings 配列に警告を積む
+function resolveTopLevelLayer(doc, name, warnings) {
+  var indices = findTopLevelLayerIndices(doc, name);
+  if (indices.length === 0) return null;
+  if (indices.length > 1 && warnings) {
+    warnings.push(indices.length + " top-level layers are named '" + name + "'; used the topmost one (position " + indices[0] + "). Rename layers to make them unique.");
+  }
+  return { layer: doc.layers[indices[0]], index: indices[0] };
+}
+
 function resolveTargetLayer(doc, layerName) {
   if (!layerName) return doc.activeLayer;
   try {

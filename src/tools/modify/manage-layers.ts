@@ -33,26 +33,8 @@ if (preflight) {
       };
     }
 
-    // トップレベルレイヤーから名前一致のインデックスを全件返す（getByName は最初の 1 件しか返さない）
-    function findLayerIndices(name) {
-      var result = [];
-      for (var li = 0; li < doc.layers.length; li++) {
-        if (doc.layers[li].name === name) result.push(li);
-      }
-      return result;
-    }
-
-    // 名前でレイヤーを解決する。見つからなければ null。
-    // 同名が複数あるときは最上位（index 最小）を返し、warnings に記録する
-    function resolveLayer(name) {
-      var indices = findLayerIndices(name);
-      if (indices.length === 0) return null;
-      if (indices.length > 1) {
-        warnings.push(indices.length + " top-level layers are named '" + name + "'; operated on the topmost one (position " + indices[0] + "). Rename layers to make them unique.");
-      }
-      return { layer: doc.layers[indices[0]], index: indices[0] };
-    }
-
+    // 同名レイヤーは findTopLevelLayerIndices / resolveTopLevelLayer（common.jsx）で解決する。
+    // 同名が複数あると最上位を対象にして warnings に記録する（delete だけは曖昧としてエラー）
     function writeResult(result) {
       if (warnings.length > 0) result.warnings = warnings;
       writeResultFile(RESULT_PATH, result);
@@ -65,12 +47,12 @@ if (preflight) {
     }
 
     if (action === "add") {
-      if (layerName && findLayerIndices(layerName).length > 0) {
+      if (layerName && findTopLevelLayerIndices(doc, layerName).length > 0) {
         warnings.push("A layer named '" + layerName + "' already exists; created another layer with the same name. Name-based operations will target the topmost one.");
       }
       var newLayer;
       if (above) {
-        var refResolved = resolveLayer(above);
+        var refResolved = resolveTopLevelLayer(doc, above, warnings);
         newLayer = doc.layers.add();
         if (refResolved) {
           newLayer.move(refResolved.layer, ElementPlacement.PLACEBEFORE);
@@ -88,7 +70,7 @@ if (preflight) {
 
     } else if (action === "delete") {
       // 削除は取り返しがつきにくいので、同名が複数あるときは曖昧としてエラーにする
-      var delIndices = findLayerIndices(layerName);
+      var delIndices = findTopLevelLayerIndices(doc, layerName);
       if (delIndices.length === 0) {
         layerNotFound(layerName);
       } else if (delIndices.length > 1) {
@@ -105,7 +87,7 @@ if (preflight) {
       }
 
     } else {
-      var resolved = resolveLayer(layerName);
+      var resolved = resolveTopLevelLayer(doc, layerName, warnings);
       if (!resolved) {
         layerNotFound(layerName);
 

@@ -29,10 +29,13 @@ if (preflight) {
 
     var targetLayer = null;
     var layerError = false;
+    var warnings = [];
     if (params.target_layer) {
-      try {
-        targetLayer = doc.layers.getByName(params.target_layer);
-      } catch(e) {
+      // 同名のトップレベルレイヤーが複数あるときは最上位を使い、警告を返す
+      var resolvedLayer = resolveTopLevelLayer(doc, params.target_layer, warnings);
+      if (resolvedLayer) {
+        targetLayer = resolvedLayer.layer;
+      } else {
         writeResultFile(RESULT_PATH, { error: true, message: "Layer not found: " + params.target_layer });
         layerError = true;
       }
@@ -97,6 +100,7 @@ if (preflight) {
       };
       if (notFound.length > 0) result.notFound = notFound;
       if (failed.length > 0) result.failed = failed;
+      if (warnings.length > 0) result.warnings = warnings;
       writeResultFile(RESULT_PATH, result);
     }
   } catch (e) {
@@ -121,7 +125,7 @@ export function register(server: McpServer): void {
           })
           .optional()
           .describe('Offset for duplicated objects'),
-        target_layer: z.string().optional().describe('Layer name to place duplicates in'),
+        target_layer: z.string().optional().describe('Top-level layer name to place duplicates in. If several layers share the name, the topmost one is used and a warning is returned'),
         coordinate_system: coordinateSystemSchema,
       },
       annotations: WRITE_ANNOTATIONS,
