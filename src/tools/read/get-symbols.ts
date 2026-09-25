@@ -18,17 +18,13 @@ if (preflight) {
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var doc = app.activeDocument;
 
-    // Build instance count map by symbol name
+    // シンボル名 → インスタンス数。名前は任意なので Object のプロパティ名と衝突しないよう接頭辞を付ける
     var instanceCountMap = {};
     for (var i = 0; i < doc.symbolItems.length; i++) {
       var si = doc.symbolItems[i];
       try {
         var sName = si.symbol.name;
-        if (instanceCountMap[sName]) {
-          instanceCountMap[sName] = instanceCountMap[sName] + 1;
-        } else {
-          instanceCountMap[sName] = 1;
-        }
+        instanceCountMap["s:" + sName] = (instanceCountMap["s:" + sName] || 0) + 1;
       } catch (e) {}
     }
 
@@ -40,7 +36,7 @@ if (preflight) {
       try { defName = sym.name; } catch(e) {}
       definitions.push({
         name: defName,
-        instanceCount: instanceCountMap[defName] || 0
+        instanceCount: instanceCountMap["s:" + defName] || 0
       });
     }
 

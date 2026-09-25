@@ -309,7 +309,8 @@ if (preflight) {
     setCoverage("missing_font", "checked");
     // 白のオーバープリントは文字属性（overprintFill / overprintStroke）もここで見る（5. はパス）
     setCoverage("white_overprint", "checked");
-    var usedFonts = {}; // フォント名 → 最初に使用しているテキストフレームのUUID
+    // "f:" + フォント名 → 最初に使用しているテキストフレームの UUID（名前が Object のプロパティ名と衝突しないよう接頭辞）
+    var usedFonts = {};
     var sampledTextFrames = 0;
     try {
       for (var tf = 0; tf < doc.textFrames.length; tf++) {
@@ -340,7 +341,7 @@ if (preflight) {
               var tFont = ca.textFont;
               if (tFont && tFont.name) {
                 if (!fontName) fontName = tFont.name;
-                if (!usedFonts[tFont.name]) usedFonts[tFont.name] = frameUuid;
+                if (!usedFonts["f:" + tFont.name]) usedFonts["f:" + tFont.name] = frameUuid;
               }
             } catch(eFont) { countInspectError("missing_font"); }
             if (isCMYKDoc) {
@@ -382,15 +383,17 @@ if (preflight) {
         }
       }
       for (var fontKey in usedFonts) {
+        if (!usedFonts.hasOwnProperty(fontKey)) continue;
+        var usedFontName = fontKey.substring(2);
         var isInstalled = true;
-        try { app.textFonts.getByName(fontKey); } catch (eGet) { isInstalled = false; }
+        try { app.textFonts.getByName(usedFontName); } catch (eGet) { isInstalled = false; }
         if (!isInstalled) {
           results.push({
             level: "error",
             category: "missing_font",
-            message: "Font is not installed on this system: " + fontKey,
+            message: "Font is not installed on this system: " + usedFontName,
             uuid: usedFonts[fontKey],
-            details: { font: fontKey }
+            details: { font: usedFontName }
           });
         }
       }

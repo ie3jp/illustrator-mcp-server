@@ -121,7 +121,11 @@ if (preflight) {
       var usedFills = [];
       var usedStrokes = [];
       var meshItems = [];
+      // 特色名は任意なので Object のプロパティ名と衝突しないよう接頭辞付きのキーで数える
       var spotUsageCount = {};
+      function countSpotUsage(name) {
+        spotUsageCount["s:" + name] = (spotUsageCount["s:" + name] || 0) + 1;
+      }
       var rgbInCmyk = 0;
       var cmykInRgb = 0;
 
@@ -141,8 +145,7 @@ if (preflight) {
             usedFills.push(fc);
             if (fc.type === "spot") {
               var spName = fc.name;
-              if (spotUsageCount[spName] === undefined) spotUsageCount[spName] = 0;
-              spotUsageCount[spName] = spotUsageCount[spName] + 1;
+              countSpotUsage(spName);
             }
           }
         } catch (e) {}
@@ -159,8 +162,7 @@ if (preflight) {
             usedStrokes.push(sc);
             if (sc.type === "spot") {
               var spName2 = sc.name;
-              if (spotUsageCount[spName2] === undefined) spotUsageCount[spName2] = 0;
-              spotUsageCount[spName2] = spotUsageCount[spName2] + 1;
+              countSpotUsage(spName2);
             }
           }
         } catch (e) {}
@@ -184,8 +186,7 @@ if (preflight) {
               usedFills.push(tfc);
               if (tfc.type === "spot") {
                 var tSpName = tfc.name;
-                if (spotUsageCount[tSpName] === undefined) spotUsageCount[tSpName] = 0;
-                spotUsageCount[tSpName] = spotUsageCount[tSpName] + 1;
+                countSpotUsage(tSpName);
               }
             } catch (e3) {}
             try {
@@ -205,8 +206,7 @@ if (preflight) {
 
       // 特色使用箇所数を spots に追加
       for (var sci = 0; sci < spots.length; sci++) {
-        var count = spotUsageCount[spots[sci].name];
-        spots[sci].usageCount = (count !== undefined) ? count : 0;
+        spots[sci].usageCount = spotUsageCount["s:" + spots[sci].name] || 0;
       }
 
       if (includeDiagnostics) {

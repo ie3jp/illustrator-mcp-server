@@ -21,18 +21,19 @@ if (preflight) {
     var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
     var PROCESS_NAMES = ["Cyan", "Magenta", "Yellow", "Black"];
 
-    // 版の候補: name → { name, type, usageCount, hiddenUsageCount, ... }
+    // 版の候補: "p:" + 版名 → { name, type, usageCount, hiddenUsageCount, ... }。
+    // 特色名は任意なので、"hasOwnProperty" 等が辞書のメソッドや内部キーと衝突しないよう接頭辞を付ける
     var plates = {};
     var plateOrder = [];
+    function plateKey(name) { return "p:" + name; }
     function addPlate(info) {
       info.usageCount = 0;
       info.hiddenUsageCount = 0;
-      plates[info.name] = info;
+      plates[plateKey(info.name)] = info;
       plateOrder.push(info.name);
     }
-    // 特色名が "toString" 等でも Object.prototype を拾わないよう hasOwnProperty で引く
     function getPlate(name) {
-      return plates.hasOwnProperty(name) ? plates[name] : null;
+      return plates[plateKey(name)] || null;
     }
     if (isCMYKDoc) {
       for (var pn = 0; pn < PROCESS_NAMES.length; pn++) {
@@ -75,19 +76,19 @@ if (preflight) {
     var registrationUsageCount = 0;
     var patternFillCount = 0;
 
-    // 色が載る版名を hit に集める（1 オブジェクト内の重複は 1 回と数える）
+    // 色が載る版を hit に集める（キーは plateKey()。1 オブジェクト内の重複は 1 回と数える）
     function collectPlates(color, hit) {
       if (!color) return;
       var tn = "";
       try { tn = color.typename; } catch(e) { return; }
       if (tn === "CMYKColor") {
         if (!isCMYKDoc) return;
-        if (color.cyan > 0) hit.Cyan = true;
-        if (color.magenta > 0) hit.Magenta = true;
-        if (color.yellow > 0) hit.Yellow = true;
-        if (color.black > 0) hit.Black = true;
+        if (color.cyan > 0) hit[plateKey("Cyan")] = true;
+        if (color.magenta > 0) hit[plateKey("Magenta")] = true;
+        if (color.yellow > 0) hit[plateKey("Yellow")] = true;
+        if (color.black > 0) hit[plateKey("Black")] = true;
       } else if (tn === "GrayColor") {
-        if (isCMYKDoc && color.gray > 0) hit.Black = true;
+        if (isCMYKDoc && color.gray > 0) hit[plateKey("Black")] = true;
       } else if (tn === "SpotColor") {
         var sp = color.spot;
         var m = spotModel(sp);
@@ -98,7 +99,7 @@ if (preflight) {
           try { tint = color.tint; } catch(e) {}
           if (tint > 0) collectPlates(sp.color, hit);
         } else if (getPlate(sp.name) && getPlate(sp.name).type === "spot") {
-          hit[sp.name] = true;
+          hit[plateKey(sp.name)] = true;
         }
       } else if (tn === "GradientColor") {
         var stops = color.gradient.gradientStops;
@@ -117,25 +118,25 @@ if (preflight) {
       var colorants = [];
       try { colorants = item.colorants || []; } catch(e) {}
       for (var ci = 0; ci < colorants.length; ci++) {
-        if (getPlate(colorants[ci])) hit[colorants[ci]] = true;
+        if (getPlate(colorants[ci])) hit[plateKey(colorants[ci])] = true;
       }
       if (!isCMYKDoc) return;
       if (cs === ImageColorSpace.Grayscale) {
-        hit.Black = true;
+        hit[plateKey("Black")] = true;
       } else if (cs === ImageColorSpace.DeviceN || cs === ImageColorSpace.Separation) {
         // colorants で判定済み
       } else {
         // CMYK / RGB / LAB / Indexed は出力時にプロセス 4 版へ載りうる
-        for (var pi = 0; pi < PROCESS_NAMES.length; pi++) hit[PROCESS_NAMES[pi]] = true;
+        for (var pi = 0; pi < PROCESS_NAMES.length; pi++) hit[plateKey(PROCESS_NAMES[pi])] = true;
       }
     }
 
     function recordUsage(item, hit) {
       var hidden = !isItemEffectivelyVisible(item);
-      for (var name in hit) {
-        if (name === "__registration") { registrationUsageCount++; continue; }
-        if (name === "__pattern") { patternFillCount++; continue; }
-        var p = getPlate(name);
+      for (var key in hit) {
+        if (key === "__registration") { registrationUsageCount++; continue; }
+        if (key === "__pattern") { patternFillCount++; continue; }
+        var p = plates[key] || null;
         if (!p) continue;
         p.usageCount++;
         if (hidden) p.hiddenUsageCount++;
@@ -179,7 +180,7 @@ if (preflight) {
     var separations = [];
     var unusedInks = [];
     for (var oi = 0; oi < plateOrder.length; oi++) {
-      var plate = plates[plateOrder[oi]];
+      var plate = getPlate(plateOrder[oi]);
       if (plate.usageCount > 0) separations.push(plate);
       else unusedInks.push({ name: plate.name, type: plate.type });
     }

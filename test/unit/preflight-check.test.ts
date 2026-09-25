@@ -190,6 +190,11 @@ describe('preflight_check JSX: text scan', () => {
     expect(r.coverage.rgb_in_cmyk.status).toBe('partial');
   });
 
+  it('reports a missing font even if its name is an Object property name', () => {
+    const r = runPreflightJsx(makeDoc([textFrame([charRange(cmyk(), 'toString')])]), {}, ['toString']);
+    expect(byCategory(r, 'missing_font').map((e) => e.details.font)).toEqual(['toString']);
+  });
+
   it('reports missing fonts found in any character', () => {
     const r = runPreflightJsx(makeDoc([textFrame([charRange(cmyk()), charRange(cmyk(), 'Gone')])]), {}, ['Gone']);
     expect(byCategory(r, 'missing_font').map((e) => e.details.font)).toEqual(['Gone']);
