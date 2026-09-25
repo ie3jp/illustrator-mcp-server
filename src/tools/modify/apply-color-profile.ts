@@ -72,7 +72,7 @@ export function register(server: McpServer): void {
     'assign_color_profile',
     {
       title: 'Assign Color Profile',
-      description: 'Assign (tag) a color profile to the document. WARNING: This only changes the profile tag — it does NOT convert color values (ICC conversion). For full conversion, use Edit > Convert to Profile in Illustrator. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Try to assign (tag) a color profile to the document. Illustrator\'s scripting API often ignores this silently (observed even for a matching RGB profile on an RGB document), so the result is verified by reading the profile back: an error is returned when it was not applied — then ask the user to use Edit > Assign Profile in Illustrator. Even when applied, color values are NOT converted (use Edit > Convert to Profile). Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         profile: z.string().describe('Color profile name or path'),
       },

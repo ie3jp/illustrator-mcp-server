@@ -56,6 +56,8 @@ async function main(): Promise<void> {
   let modifiedRectName = '__e2e_rect_modified';
 
   // テスト用ディレクトリとPNG画像を生成
+  // 中断した前回の実行が残したファイルで上書き拒否のテストが誤爆しないよう、毎回空にしてから始める
+  rmSync(TMP_DIR, { recursive: true, force: true });
   mkdirSync(TMP_DIR, { recursive: true });
   generateTestPng(TEST_IMG_PATH_LINKED, TEST_IMG_WIDTH, TEST_IMG_HEIGHT);
   generateTestPng(TEST_IMG_PATH_EMBEDDED, TEST_IMG_WIDTH, TEST_IMG_HEIGHT);
