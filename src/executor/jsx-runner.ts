@@ -239,8 +239,10 @@ async function executeViaPowerShell(
     await new Promise<void>((resolve, reject) => {
       execFile(
         'powershell.exe',
-        ['-ExecutionPolicy', 'Bypass', '-NonInteractive', '-File', files.runnerPath],
-        { timeout },
+        // Automation must not load interactive profiles (e.g. conda/mamba hooks)
+        // or flash a console window for every tool call.
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', files.runnerPath],
+        { timeout, windowsHide: true },
         (error, _stdout, stderr) => {
           if (error) {
             reject(new Error(getExecFailureMessage(error, stderr, timeout, 'powershell')));
