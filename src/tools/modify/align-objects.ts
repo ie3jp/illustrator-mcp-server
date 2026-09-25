@@ -28,15 +28,24 @@ if (preflight) {
     } else {
       // Collect items by UUID
       var items = [];
+      var notFound = [];
       for (var i = 0; i < uuids.length; i++) {
         var found = findItemByUUID(uuids[i]);
         if (found) {
           items.push(found);
+        } else {
+          notFound.push(uuids[i]);
         }
       }
 
-      if (items.length < 2) {
-        writeResultFile(RESULT_PATH, { error: true, message: "Could not find at least 2 objects with the given UUIDs" });
+      // 整列基準（selection の外接矩形）や分布間隔は全体集合で決まるため、
+      // 一部だけで実行すると意図と違う位置になる。1 件でも欠けたら何も動かさない
+      if (notFound.length > 0) {
+        writeResultFile(RESULT_PATH, {
+          error: true,
+          message: "Objects not found for " + notFound.length + " of " + uuids.length + " UUIDs. Nothing was moved.",
+          notFound: notFound
+        });
       } else {
         // Pre-cache all bounds (1回のDOM アクセスで済ませる)
         var boundsCache = [];
@@ -177,7 +186,7 @@ export function register(server: McpServer): void {
     'align_objects',
     {
       title: 'Align Objects',
-      description: 'Align and/or distribute multiple objects by their UUIDs',
+      description: 'Align and/or distribute multiple objects by their UUIDs. If any UUID is not found, nothing is moved and the missing UUIDs are returned in notFound.',
       inputSchema: {
         uuids: z
           .array(z.string())

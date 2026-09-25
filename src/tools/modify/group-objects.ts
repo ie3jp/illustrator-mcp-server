@@ -25,13 +25,24 @@ if (preflight) {
     var uuids = params.uuids;
 
     var items = [];
+    var notFound = [];
     for (var i = 0; i < uuids.length; i++) {
       var item = findItemByUUID(uuids[i]);
-      if (item) items.push(item);
+      if (item) {
+        items.push(item);
+      } else {
+        notFound.push(uuids[i]);
+      }
     }
 
-    if (items.length === 0) {
-      writeResultFile(RESULT_PATH, { error: true, message: "No valid objects found for the given UUIDs" });
+    // 一部だけでグループ化すると構造が変わる（clipped では別アイテムがクリップパスになる）ため、
+    // 1 件でも見つからなければ何も変更せずエラーにする
+    if (notFound.length > 0) {
+      writeResultFile(RESULT_PATH, {
+        error: true,
+        message: "Objects not found for " + notFound.length + " of " + uuids.length + " UUIDs. Nothing was grouped.",
+        notFound: notFound
+      });
     } else {
       var parentLayer = items[0].layer;
       var group = parentLayer.groupItems.add();
@@ -69,7 +80,7 @@ export function register(server: McpServer): void {
     {
       title: 'Group Objects',
       description:
-        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. If any UUID is not found, nothing is grouped and the missing UUIDs are returned in notFound. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group. Order matters: first=bottom, last=top in layer panel.'),
         name: z.string().optional().describe('Name for the new group'),

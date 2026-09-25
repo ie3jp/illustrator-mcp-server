@@ -34,24 +34,34 @@ if (preflight) {
         ? ElementPlacement.PLACEATEND
         : ElementPlacement.PLACEATBEGINNING;
 
-      var movedCount = 0;
+      // アイテムごとに独立した操作なので見つかったものは移動し、欠落・失敗は結果で報告する
+      var moved = [];
+      var notFound = [];
+      var errors = [];
       for (var i = 0; i < params.uuids.length; i++) {
         var item = findItemByUUID(params.uuids[i]);
-        if (item) {
+        if (!item) {
+          notFound.push(params.uuids[i]);
+          continue;
+        }
+        try {
           item.move(targetLayer, placement);
-          movedCount++;
+          moved.push(item);
+        } catch (moveErr) {
+          errors.push({ uuid: params.uuids[i], message: moveErr.message });
         }
       }
 
       var verifiedItems = [];
-      for (var vi = 0; vi < params.uuids.length; vi++) {
-        var vItem = findItemByUUID(params.uuids[vi]);
-        if (vItem) verifiedItems.push(verifyItem(vItem));
+      for (var vi = 0; vi < moved.length; vi++) {
+        verifiedItems.push(verifyItem(moved[vi]));
       }
       writeResultFile(RESULT_PATH, {
-        success: true,
-        movedCount: movedCount,
+        success: notFound.length === 0 && errors.length === 0,
+        movedCount: moved.length,
         targetLayer: params.target_layer,
+        notFound: notFound,
+        errors: errors,
         verified: verifiedItems
       });
     }
@@ -67,7 +77,7 @@ export function register(server: McpServer): void {
     {
       title: 'Move to Layer',
       description:
-        'Move one or more objects to a different layer. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Move one or more objects to a different layer. Objects that are found are moved; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty). Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to move'),
         target_layer: z.string().describe('Target layer name'),

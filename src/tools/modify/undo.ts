@@ -25,19 +25,39 @@ try {
     var action = params.action || "undo";
     var count = params.count || 1;
 
+    // 途中で失敗（履歴の終端など）しても、実際に何ステップ戻した/進めたかを返す
+    var done = 0;
+    var stepErr = null;
     for (var i = 0; i < count; i++) {
-      if (action === "undo") {
-        app.undo();
-      } else {
-        app.redo();
+      try {
+        if (action === "undo") {
+          app.undo();
+        } else {
+          app.redo();
+        }
+      } catch (e2) {
+        stepErr = e2;
+        break;
       }
+      done++;
     }
 
-    writeResultFile(RESULT_PATH, {
-      success: true,
-      action: action,
-      count: count
-    });
+    if (stepErr) {
+      writeResultFile(RESULT_PATH, {
+        error: true,
+        action: action,
+        count: done,
+        requestedCount: count,
+        message: action + " stopped after " + done + " of " + count + " step(s): " + stepErr.message
+      });
+    } else {
+      writeResultFile(RESULT_PATH, {
+        success: true,
+        action: action,
+        count: done,
+        requestedCount: count
+      });
+    }
   }
 } catch (e) {
   writeResultFile(RESULT_PATH, { error: true, message: "undo failed: " + e.message, line: e.line });
@@ -50,7 +70,8 @@ export function register(server: McpServer): void {
     {
       title: 'Undo / Redo',
       description:
-        'Undo or redo actions in Illustrator. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Undo or redo steps in Illustrator\'s history. Steps are Illustrator history entries, not MCP tool calls (one tool call may create several steps). ' +
+        'Returns count = steps actually performed; if a step fails, the result is an error that still reports how many were performed. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         action: z.enum(['undo', 'redo']).optional().default('undo'),
         count: z

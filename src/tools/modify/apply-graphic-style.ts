@@ -32,28 +32,38 @@ if (preflight) {
     }
 
     if (style) {
-      var appliedCount = 0;
+      // アイテムごとに独立した操作なので見つかったものには適用し、欠落・失敗は結果で報告する
+      var applied = [];
+      var notFound = [];
+      var errors = [];
       for (var i = 0; i < params.uuids.length; i++) {
         var item = findItemByUUID(params.uuids[i]);
-        if (item) {
+        if (!item) {
+          notFound.push(params.uuids[i]);
+          continue;
+        }
+        try {
           if (params.merge === true) {
             style.mergeTo(item);
           } else {
             style.applyTo(item);
           }
-          appliedCount++;
+          applied.push(item);
+        } catch (applyErr) {
+          errors.push({ uuid: params.uuids[i], message: applyErr.message });
         }
       }
       var verifiedItems = [];
-      for (var vi = 0; vi < params.uuids.length; vi++) {
-        var vItem = findItemByUUID(params.uuids[vi]);
-        if (vItem) verifiedItems.push(verifyItem(vItem));
+      for (var vi = 0; vi < applied.length; vi++) {
+        verifiedItems.push(verifyItem(applied[vi]));
       }
       writeResultFile(RESULT_PATH, {
-        success: true,
+        success: notFound.length === 0 && errors.length === 0,
         styleName: params.style_name,
-        appliedCount: appliedCount,
+        appliedCount: applied.length,
         merge: params.merge === true,
+        notFound: notFound,
+        errors: errors,
         verified: verifiedItems
       });
     }
@@ -87,7 +97,7 @@ export function register(server: McpServer): void {
     {
       title: 'Apply Graphic Style',
       description:
-        'Apply a graphic style to objects. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Apply a graphic style to objects. Objects that are found are styled; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty). Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         style_name: z.string().describe('Name of the graphic style to apply'),
         uuids: z.array(z.string()).min(1).describe('UUIDs of target objects'),

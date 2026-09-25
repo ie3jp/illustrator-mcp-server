@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { WRITE_IDEMPOTENT_ANNOTATIONS } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
 /**
  * save_document — ドキュメントの上書き保存・別名保存
@@ -51,8 +51,19 @@ if (preflight) {
         }
       }
       var saveFile = new File(savePath);
-      doc.saveAs(saveFile);
-      writeResultFile(RESULT_PATH, { success: true, mode: "save_as", path: savePath });
+      // 明示パスの既存ファイルは overwrite: true のときだけ上書きする（無関係なファイルの破壊を防ぐ）
+      var existed = saveFile.exists;
+      if (existed && params.overwrite !== true) {
+        writeResultFile(RESULT_PATH, {
+          error: true,
+          fileExists: true,
+          path: savePath,
+          message: "File already exists: " + savePath + ". Nothing was saved. Pass overwrite: true to replace it, or choose another path."
+        });
+      } else {
+        doc.saveAs(saveFile);
+        writeResultFile(RESULT_PATH, { success: true, mode: "save_as", path: savePath, overwritten: existed });
+      }
     } else {
       writeResultFile(RESULT_PATH, { error: true, message: "Unknown mode: " + mode });
     }
@@ -68,7 +79,7 @@ export function register(server: McpServer): void {
     {
       title: 'Save Document',
       description:
-        'Save the active Illustrator document. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Save the active Illustrator document. save_as refuses to replace an existing file unless overwrite is true. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         mode: z
           .enum(['save', 'save_as'])
@@ -78,9 +89,14 @@ export function register(server: McpServer): void {
         path: z
           .string()
           .optional()
-          .describe('File path for save_as mode. If omitted, auto-generates in the same directory as the document (or ~/Desktop for unsaved documents)'),
+          .describe('File path for save_as mode. If omitted, auto-generates a new non-conflicting name (<name>_2.ai, ...) in the same directory as the document (or ~/Desktop for unsaved documents)'),
+        overwrite: coerceBoolean
+          .optional()
+          .default(false)
+          .describe('save_as only: allow replacing an existing file at path (default: false = error if the file exists)'),
       },
-      annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
+      // save_as のパス省略時は毎回別名で新規ファイルを作るため冪等ではない。overwrite: true は既存ファイルを置き換えうる
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });

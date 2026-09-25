@@ -58,8 +58,9 @@ if (preflight) {
       }
     }
 
+    // 見つからなかった UUID も失敗扱い（全 UUID 不存在で success: true を返さない）
     writeResultFile(RESULT_PATH, {
-      success: errors.length === 0,
+      success: errors.length === 0 && notFound.length === 0,
       deletedCount: deleted.length,
       deleted: deleted,
       notFound: notFound,
@@ -78,7 +79,8 @@ export function register(server: McpServer): void {
       title: 'Delete Objects',
       description:
         'Delete one or more objects by UUID (get UUIDs from find_objects / get_layers / get_selection). ' +
-        'Locked objects are skipped unless force_unlock is true. Reversible with the undo tool. ' +
+        'Locked objects are skipped unless force_unlock is true. success is false if any UUID was not found or could not be deleted (see notFound / errors). ' +
+        'The undo tool may revert it, but undo steps are Illustrator history steps, not tied to MCP calls. ' +
         'To delete a whole layer use manage_layers instead. ' +
         'Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {

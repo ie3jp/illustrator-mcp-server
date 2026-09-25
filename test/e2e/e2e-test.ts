@@ -2002,6 +2002,21 @@ create visually appealing and effective compositions.
   // ============================================================
   printPhase(7, 'Cleanup');
 
+  await test('close_document (save omitted, unsaved changes) → refused, document stays open', async () => {
+    // 未保存の変更を確実に作る
+    const rect = await callTool(client, 'create_rectangle', {
+      x: 10, y: 10, width: 20, height: 20,
+      fill: { type: 'rgb', r: 0, g: 0, b: 0 },
+      name: '__e2e_close_guard',
+    }) as any;
+    assert(rect.success === true, 'create_rectangle should succeed: ' + JSON.stringify(rect));
+    const result = await callTool(client, 'close_document') as any;
+    assert(result.error === true, 'close_document without save should be refused: ' + JSON.stringify(result));
+    assert(result.unsavedChanges === true, 'should report unsavedChanges');
+    const info = await callTool(client, 'get_document_info') as any;
+    assert(!info.error, 'document should still be open: ' + JSON.stringify(info));
+  });
+
   await test('close_document (save: false)', async () => {
     const result = await callTool(client, 'close_document', { save: false }) as any;
     assert(result.success === true, 'close_document should succeed');
@@ -2142,10 +2157,16 @@ create visually appealing and effective compositions.
     }) as any;
     assert(createResult.success === true, 'create temp doc should succeed');
     const savePath = `${TMP_DIR}/e2e-open-test.ai`;
+    // 前回の中断で残ったファイルがあっても通るよう overwrite: true
     const saveResult = await callTool(client, 'save_document', {
-      mode: 'save_as', path: savePath,
+      mode: 'save_as', path: savePath, overwrite: true,
     }) as any;
     assert(saveResult.success === true, 'save_as should succeed: ' + JSON.stringify(saveResult));
+    // 既存ファイルへの save_as は overwrite なしでは拒否される
+    const refused = await callTool(client, 'save_document', {
+      mode: 'save_as', path: savePath,
+    }) as any;
+    assert(refused.error === true && refused.fileExists === true, 'save_as onto existing file should be refused: ' + JSON.stringify(refused));
     await callTool(client, 'close_document', { save: false });
     // re-open
     const openResult = await callTool(client, 'open_document', { path: savePath }) as any;
