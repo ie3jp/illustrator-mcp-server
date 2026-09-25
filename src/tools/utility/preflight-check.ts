@@ -56,51 +56,46 @@ if (preflight) {
       inspectErrors[key] = (inspectErrors[key] || 0) + 1;
     }
 
+    // 以下の色判定は読めなかったら例外をそのまま投げる。「RGB なし」「不透明」と扱うと
+    // 検査できなかったものが問題なしに化けるため、呼び出し側で countInspectError() して partial にする
     function isRGBColor(color) {
-      try {
-        if (color.typename === "RGBColor") return true;
-      } catch(e) {}
-      return false;
+      if (!color) return false;
+      return color.typename === "RGBColor";
     }
 
     // RGB 色、または RGB の stop を含むグラデーションか
     function colorHasRGB(color) {
       if (isRGBColor(color)) return true;
-      try {
-        if (color.typename === "GradientColor") {
-          var stops = color.gradient.gradientStops;
-          for (var gs = 0; gs < stops.length; gs++) {
-            if (isRGBColor(stops[gs].color)) return true;
-          }
+      if (color && color.typename === "GradientColor") {
+        var stops = color.gradient.gradientStops;
+        for (var gs = 0; gs < stops.length; gs++) {
+          if (isRGBColor(stops[gs].color)) return true;
         }
-      } catch(e) {}
+      }
       return false;
     }
 
     function minGradientStopOpacity(color) {
       var minOp = 100;
-      try {
-        if (color.typename === "GradientColor") {
-          var stops = color.gradient.gradientStops;
-          for (var gs = 0; gs < stops.length; gs++) {
-            if (stops[gs].opacity < minOp) minOp = stops[gs].opacity;
-          }
+      if (color && color.typename === "GradientColor") {
+        var stops = color.gradient.gradientStops;
+        for (var gs = 0; gs < stops.length; gs++) {
+          if (stops[gs].opacity < minOp) minOp = stops[gs].opacity;
         }
-      } catch(e) {}
+      }
       return minOp;
     }
 
     function isWhiteColor(color) {
-      try {
-        if (color.typename === "CMYKColor") {
-          if (color.cyan === 0 && color.magenta === 0 && color.yellow === 0 && color.black === 0) return true;
-        } else if (color.typename === "RGBColor") {
-          if (color.red === 255 && color.green === 255 && color.blue === 255) return true;
-        } else if (color.typename === "GrayColor") {
-          // GrayColor.gray は 0=白, 100=黒（公式リファレンスの記載は逆。Illustrator 2026 で実機確認）
-          if (color.gray === 0) return true;
-        }
-      } catch(e) {}
+      if (!color) return false;
+      if (color.typename === "CMYKColor") {
+        return color.cyan === 0 && color.magenta === 0 && color.yellow === 0 && color.black === 0;
+      } else if (color.typename === "RGBColor") {
+        return color.red === 255 && color.green === 255 && color.blue === 255;
+      } else if (color.typename === "GrayColor") {
+        // GrayColor.gray は 0=白, 100=黒（公式リファレンスの記載は逆。Illustrator 2026 で実機確認）
+        return color.gray === 0;
+      }
       return false;
     }
 
@@ -264,6 +259,7 @@ if (preflight) {
 
     // 3b. Collect linked image data for Node.js-side DPI check
     var placedImageData = [];
+    var unreadPlaced = 0;
     try {
       for (var pli = 0; pli < doc.placedItems.length; pli++) {
         var pItem = doc.placedItems[pli];
@@ -297,10 +293,13 @@ if (preflight) {
             pData.heightPt = pHPt;
             placedImageData.push(pData);
           }
-        } catch(e) {}
+        } catch(e) { unreadPlaced++; }
       }
     } catch(e) {
       markPartial("low_resolution", "Linked images could not be enumerated: " + e.message);
+    }
+    if (unreadPlaced > 0) {
+      markPartial("low_resolution", unreadPlaced + " linked image(s) could not be read for the resolution check.");
     }
 
     // 4. テキスト走査（1パス）: 非アウトライン文字 / 使用フォント / 文字の塗り・線の RGB
@@ -308,6 +307,8 @@ if (preflight) {
     //    getByName() は未インストールのフォント名で例外を投げることを利用する
     setCoverage("non_outlined_text", "checked");
     setCoverage("missing_font", "checked");
+    // 白のオーバープリントは文字属性（overprintFill / overprintStroke）もここで見る（5. はパス）
+    setCoverage("white_overprint", "checked");
     var usedFonts = {}; // フォント名 → 最初に使用しているテキストフレームのUUID
     var sampledTextFrames = 0;
     try {
@@ -323,27 +324,47 @@ if (preflight) {
           if (tStep > 1) sampledTextFrames++;
           var rgbFill = false;
           var rgbStroke = false;
+          var whiteOPFill = false;
+          var whiteOPStroke = false;
           for (var tc = 0; tc < tLen; tc += tStep) {
+            var ca = null;
             try {
-              var ca = tRanges[tc].characterAttributes;
+              ca = tRanges[tc].characterAttributes;
+            } catch(eChar) {
+              countInspectError("missing_font");
+              countInspectError("white_overprint");
+              if (isCMYKDoc) countInspectError("rgb_in_cmyk");
+              continue;
+            }
+            try {
+              var tFont = ca.textFont;
+              if (tFont && tFont.name) {
+                if (!fontName) fontName = tFont.name;
+                if (!usedFonts[tFont.name]) usedFonts[tFont.name] = frameUuid;
+              }
+            } catch(eFont) { countInspectError("missing_font"); }
+            if (isCMYKDoc) {
               try {
-                var tFont = ca.textFont;
-                if (tFont && tFont.name) {
-                  if (!fontName) fontName = tFont.name;
-                  if (!usedFonts[tFont.name]) usedFonts[tFont.name] = frameUuid;
-                }
-              } catch(eFont) { countInspectError("missing_font"); }
-              if (isCMYKDoc) {
                 if (!rgbFill && colorHasRGB(ca.fillColor)) rgbFill = true;
                 if (!rgbStroke && colorHasRGB(ca.strokeColor)) rgbStroke = true;
-              }
-            } catch(eChar) { countInspectError("missing_font"); }
+              } catch(eRGB) { countInspectError("rgb_in_cmyk"); }
+            }
+            try {
+              if (!whiteOPFill && ca.overprintFill === true && isWhiteColor(ca.fillColor)) whiteOPFill = true;
+              if (!whiteOPStroke && ca.overprintStroke === true && ca.strokeWeight > 0 && isWhiteColor(ca.strokeColor)) whiteOPStroke = true;
+            } catch(eOP) { countInspectError("white_overprint"); }
           }
           if (rgbFill) {
             pushItemResult(textFrame, "error", "rgb_in_cmyk", "RGB text fill color detected in CMYK document", "text_fill");
           }
           if (rgbStroke) {
             pushItemResult(textFrame, "error", "rgb_in_cmyk", "RGB text stroke color detected in CMYK document", "text_stroke");
+          }
+          if (whiteOPFill) {
+            pushItemResult(textFrame, "error", "white_overprint", "White text fill has overprint enabled (may disappear when printed)", "text_fill");
+          }
+          if (whiteOPStroke) {
+            pushItemResult(textFrame, "error", "white_overprint", "White text stroke has overprint enabled (may disappear when printed)", "text_stroke");
           }
           var contents = "";
           try { contents = textFrame.contents.substring(0, 50); } catch(eC) {}
@@ -356,6 +377,7 @@ if (preflight) {
           });
         } catch(e) {
           countInspectError("missing_font");
+          countInspectError("white_overprint");
           if (isCMYKDoc) countInspectError("rgb_in_cmyk");
         }
       }
@@ -375,12 +397,14 @@ if (preflight) {
     } catch(e) {
       setCoverage("non_outlined_text", "skipped", "Check failed: " + e.message);
       setCoverage("missing_font", "skipped", "Check failed: " + e.message);
+      markPartial("white_overprint", "Text was not checked: " + e.message);
       if (isCMYKDoc) markPartial("rgb_in_cmyk", "Text colors were not checked: " + e.message);
     }
     if (sampledTextFrames > 0) {
       var sampleNote = sampledTextFrames + " text frame(s) longer than " + TEXT_SAMPLE_LIMIT +
         " characters were sampled (not every character was inspected).";
       markPartial("missing_font", sampleNote);
+      markPartial("white_overprint", sampleNote);
       if (isCMYKDoc) markPartial("rgb_in_cmyk", sampleNote);
     }
 
@@ -398,18 +422,14 @@ if (preflight) {
       }
     }
 
-    // 5. White overprint
-    setCoverage("white_overprint", "checked");
+    // 5. White overprint（パス。テキストは 4. で検査済み）
     try {
       for (var layerIdx2 = 0; layerIdx2 < doc.layers.length; layerIdx2++) {
         iterateAllItems(doc.layers[layerIdx2], function(item) {
           if (item.typename !== "PathItem") return;
           try {
-            var hasFillOP = false;
-            var hasStrokeOP = false;
-            try { hasFillOP = item.fillOverprint; } catch(e2) {}
-            try { hasStrokeOP = item.strokeOverprint; } catch(e2) {}
-
+            var hasFillOP = item.fillOverprint;
+            var hasStrokeOP = item.strokeOverprint;
             if (hasFillOP && item.filled && isWhiteColor(item.fillColor)) {
               pushItemResult(item, "error", "white_overprint", "White fill has overprint enabled (may disappear when printed)", "fill");
             }
@@ -420,7 +440,7 @@ if (preflight) {
         });
       }
     } catch(e) {
-      setCoverage("white_overprint", "skipped", "Check failed: " + e.message);
+      markPartial("white_overprint", "Paths were not checked: " + e.message);
     }
 
     // 6. Bleed — cannot check via API
@@ -466,12 +486,8 @@ if (preflight) {
             var isInnerPath = (reportOwner(item) !== item);
             // 複合パス内部のパスの不透明度・描画モードは本体（CompoundPathItem）側で判定する
             if (!isInnerPath) {
-              try {
-                if (item.opacity < 100) reasons.push("opacity: " + item.opacity + "%");
-              } catch(e2) {}
-              try {
-                if (item.blendingMode !== BlendModes.NORMAL) reasons.push("blendingMode: " + item.blendingMode);
-              } catch(e2) {}
+              if (item.opacity < 100) reasons.push("opacity: " + item.opacity + "%");
+              if (item.blendingMode !== BlendModes.NORMAL) reasons.push("blendingMode: " + item.blendingMode);
             }
             if (item.typename === "PathItem") {
               var fillStopOp = item.filled ? minGradientStopOpacity(item.fillColor) : 100;
@@ -479,9 +495,7 @@ if (preflight) {
               if (fillStopOp < 100) reasons.push("gradient stop opacity (fill): " + fillStopOp + "%");
               if (strokeStopOp < 100) reasons.push("gradient stop opacity (stroke): " + strokeStopOp + "%");
             } else if (item.typename === "RasterItem") {
-              try {
-                if (item.transparent) reasons.push("image has transparent areas");
-              } catch(e2) {}
+              if (item.transparent) reasons.push("image has transparent areas");
             }
             if (reasons.length === 0) return;
 
@@ -835,7 +849,7 @@ export function register(server: McpServer): void {
     {
       title: 'Preflight Check',
       description:
-        'Run pre-press quality checks (RGB in CMYK incl. gradient stops, text colors and embedded images; broken links; low resolution; fonts; white overprint; transparency; spot colors). ' +
+        'Run pre-press quality checks (RGB in CMYK incl. gradient stops, text colors and embedded images; broken links; low resolution; fonts; white overprint on paths and text; transparency; spot colors). ' +
         '`coverage` reports per check whether it was fully checked, partial (sampled or uninspectable contents such as symbols, linked files, live effects under x1a) or skipped — a check marked partial/skipped is not a clean pass. ' +
         `Results are capped at ${MAX_RESULTS_PER_CATEGORY} per category; the rest are summarized in one entry with counts and UUIDs (\`categoryCounts\` has totals). ` +
         'Not exhaustive — does not replace a human final review. GrayColor uses ink-quantity interpretation (0=white/no ink, 100=black/full ink), which differs from the API reference.',

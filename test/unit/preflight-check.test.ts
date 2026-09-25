@@ -8,6 +8,7 @@ import {
   type PreflightRawResult,
   type PreflightEntry,
 } from '../../src/tools/utility/preflight-check.js';
+import { throwOnRead } from './helpers/fake-illustrator.js';
 
 // preflight_check の JSX を common.jsx と一緒にフェイク DOM 上で評価する（動的評価はテスト専用）
 const commonJsx = fs.readFileSync(
@@ -193,6 +194,54 @@ describe('preflight_check JSX: text scan', () => {
     const r = runPreflightJsx(makeDoc([textFrame([charRange(cmyk()), charRange(cmyk(), 'Gone')])]), {}, ['Gone']);
     expect(byCategory(r, 'missing_font').map((e) => e.details.font)).toEqual(['Gone']);
     expect(r.coverage.missing_font.status).toBe('checked');
+  });
+});
+
+describe('preflight_check JSX: white overprint', () => {
+  it('flags white text characters with overprint fill (like get_overprint_info)', () => {
+    const white = cmyk(0);
+    const range = charRange(white);
+    (range.characterAttributes as Fake).overprintFill = true;
+    const r = runPreflightJsx(makeDoc([textFrame([charRange(cmyk()), range])]));
+    const hits = byCategory(r, 'white_overprint');
+    expect(hits.map((e) => e.details.attribute)).toEqual(['text_fill']);
+    expect(r.coverage.white_overprint.status).toBe('checked');
+  });
+
+  it('marks white overprint partial when text frames were sampled', () => {
+    const ranges = Array.from({ length: 1200 }, () => charRange(cmyk()));
+    const r = runPreflightJsx(makeDoc([textFrame(ranges)]));
+    expect(r.coverage.white_overprint.status).toBe('partial');
+  });
+});
+
+describe('preflight_check JSX: inspection failures are not clean results', () => {
+  it('a gradient whose stops cannot be read makes RGB and transparency partial', () => {
+    const gradient = throwOnRead({}, 'gradientStops');
+    const p = pathItem({ fillColor: { typename: 'GradientColor', gradient } });
+    const r = runPreflightJsx(makeDoc([p]));
+    expect(r.coverage.rgb_in_cmyk.status).toBe('partial');
+    expect(r.coverage.transparency.status).toBe('partial');
+  });
+
+  it('text colors that cannot be read make RGB partial (not only missing_font)', () => {
+    const range = charRange(cmyk());
+    throwOnRead(range.characterAttributes as Fake, 'fillColor');
+    const r = runPreflightJsx(makeDoc([textFrame([range])]));
+    expect(r.coverage.rgb_in_cmyk.status).toBe('partial');
+    expect(r.coverage.missing_font.status).toBe('checked');
+  });
+
+  it('overprint flags that cannot be read make white overprint partial', () => {
+    const p = throwOnRead(pathItem({ fillColor: cmyk(0) }), 'fillOverprint');
+    const r = runPreflightJsx(makeDoc([p]));
+    expect(r.coverage.white_overprint.status).toBe('partial');
+  });
+
+  it('a linked image that cannot be read for the DPI check makes low_resolution partial', () => {
+    const placed = throwOnRead({ typename: 'PlacedItem', name: 'photo', note: '' }, 'file');
+    const r = runPreflightJsx(makeDoc([], { placedItems: [placed] }));
+    expect(r.coverage.low_resolution.status).toBe('partial');
   });
 });
 
