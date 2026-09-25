@@ -120,7 +120,7 @@ const STOPS = [
   { color: { type: 'cmyk', c: 0, m: 0, y: 100, k: 0 }, position: 100 },
 ];
 
-describe('create_gradient: グループ・複合パスは末端に塗って末端を検証する', async () => {
+describe('create_gradient: グループ・複合パスは末端に塗って末端を検証する', () => {
   it('グループ自身ではなく配下のパス・複合パス内部・テキストに適用する', async () => {
     const p1 = path();
     const inner = path();
@@ -156,7 +156,7 @@ describe('create_gradient: グループ・複合パスは末端に塗って末�
   });
 });
 
-describe('find_objects: 複合パスの色は内部パスで判定し、複合パスを返す', async () => {
+describe('find_objects: 複合パスの色は内部パスで判定し、複合パスを返す', () => {
   it('黒い内部パスを持つ複合パスを塗り色で見つける', async () => {
     const compound = container('CompoundPathItem', [path(), path()], { name: 'logo' });
     const other = path({ name: 'red', fillColor: cmyk(0, 100, 100, 0) });
@@ -177,7 +177,7 @@ describe('find_objects: 複合パスの色は内部パスで判定し、複合�
 const RED = { type: 'cmyk', c: 0, m: 100, y: 100, k: 0 };
 const GRAY50 = { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 };
 
-describe('replace_color: レイヤー指定はグループ・サブレイヤーまで辿る', async () => {
+describe('replace_color: レイヤー指定はグループ・サブレイヤーまで辿る', () => {
   it('グループ内・サブレイヤー内のパスとテキストも置換する', async () => {
     const inGroup = path({ fillColor: cmyk(0, 100, 100, 0) });
     const tf = text(cmyk(0, 100, 100, 0));
@@ -193,7 +193,7 @@ describe('replace_color: レイヤー指定はグループ・サブレイヤー�
   });
 });
 
-describe('replace_color: 置換の失敗を隠さない', async () => {
+describe('replace_color: 置換の失敗を隠さない', () => {
   it('文字色の書き込みが例外なら失敗として数え、対象を返す', async () => {
     const tf = text(cmyk(0, 100, 100, 0), { name: 'headline' });
     rejectWrites(tf.textRanges[0].characterAttributes, 'fillColor');
@@ -217,7 +217,7 @@ describe('replace_color: 置換の失敗を隠さない', async () => {
   });
 });
 
-describe('convert_to_outlines: レイヤー指定はグループ・サブレイヤーまで辿る', async () => {
+describe('convert_to_outlines: レイヤー指定はグループ・サブレイヤーまで辿る', () => {
   it('グループ内・サブレイヤー内のテキストも変換する（変換で構造が変わっても取りこぼさない）', async () => {
     const outline = function (this: Obj) {
       const siblings = this.parent.pageItems as Obj[];
