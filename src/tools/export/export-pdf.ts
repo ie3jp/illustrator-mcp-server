@@ -250,6 +250,10 @@ if (preflight) {
         }
       }
 
+      // artboardRange を指定しないと saveAs で作業中の文書自体が PDF に切り替わる。
+      // 指定すると「複製を保存」として動き、元の文書のまま残る（実機確認）
+      pdfOpts.artboardRange = doc.artboards.length > 1 ? ("1-" + doc.artboards.length) : "1";
+
       var saveError = null;
       try {
         doc.saveAs(outFile, pdfOpts);

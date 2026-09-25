@@ -1227,11 +1227,15 @@ async function main(): Promise<void> {
 
   // PDF
   await test('export_pdf', async () => {
+    const before = await callTool(client, 'get_document_info') as any;
     const result = await callTool(client, 'export_pdf', {
       output_path: `${TMP_DIR}/e2e-export.pdf`,
       options: { trim_marks: true },
     }) as any;
     assert(result.success === true, 'PDF export should succeed');
+    // 作業中の文書が書き出した PDF に切り替わっていないこと
+    const after = await callTool(client, 'get_document_info') as any;
+    assert(after.fileName === before.fileName, `document should stay ${before.fileName}, got ${after.fileName}`);
   });
 
   await test('export_pdf to non-existent directory (should error)', async () => {
