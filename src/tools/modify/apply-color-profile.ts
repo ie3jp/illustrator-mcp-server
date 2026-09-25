@@ -41,14 +41,25 @@ if (preflight) {
     if (!hasError) {
       var actualProfile = "";
       try { actualProfile = doc.colorProfileName; } catch(e2) { actualProfile = "(unavailable)"; }
-      writeResultFile(RESULT_PATH, {
-        assigned: true,
-        converted: false,
-        previousProfile: oldProfile,
-        newProfile: profile,
-        note: note,
-        verified: { actualProfile: actualProfile }
-      });
+      // 例外なしで無視されることがある（RGB 文書に CMYK プロファイル等。実機確認）ので読み戻しで判定する
+      if (actualProfile !== profile) {
+        writeResultFile(RESULT_PATH, {
+          error: true,
+          message: "Profile was not applied: the document still reports '" + actualProfile + "'. Illustrator ignores profiles that don't match the document color mode (e.g. a CMYK profile on an RGB document).",
+          previousProfile: oldProfile,
+          requestedProfile: profile,
+          verified: { actualProfile: actualProfile }
+        });
+      } else {
+        writeResultFile(RESULT_PATH, {
+          assigned: true,
+          converted: false,
+          previousProfile: oldProfile,
+          newProfile: profile,
+          note: note,
+          verified: { actualProfile: actualProfile }
+        });
+      }
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to operate color profile: " + e.message, line: e.line });
