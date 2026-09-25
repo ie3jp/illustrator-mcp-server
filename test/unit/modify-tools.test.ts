@@ -6,6 +6,8 @@ import { register as registerConvertToOutlines } from '../../src/tools/modify/co
 import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
 import { register as registerDeleteObjects } from '../../src/tools/modify/delete-objects.js';
 import { register as registerCreateLine } from '../../src/tools/modify/create-line.js';
+import { register as registerCreateTextFrame } from '../../src/tools/modify/create-text-frame.js';
+import { register as registerCreatePathText } from '../../src/tools/modify/create-path-text.js';
 import { register as registerPlaceImage } from '../../src/tools/modify/place-image.js';
 import { register as registerImportSvgAsEditable } from '../../src/tools/modify/import-svg-as-editable.js';
 import { colorSchema } from '../../src/tools/modify/shared.js';
@@ -34,6 +36,42 @@ describe('modify tool schemas', () => {
         stroke: { width: 2 },
       },
     }).success).toBe(true);
+  });
+
+  it('accepts tracking within Illustrator range in create_text_frame', () => {
+    const schema = captureInputSchema(registerCreateTextFrame);
+    const base = { x: 0, y: 0, contents: 'NGG' };
+
+    expect(schema.safeParse({ ...base, tracking: 0 }).success).toBe(true);
+    expect(schema.safeParse({ ...base, tracking: 120 }).success).toBe(true);
+    expect(schema.safeParse({ ...base, tracking: -1000 }).success).toBe(true);
+    expect(schema.safeParse({ ...base, tracking: 10000 }).success).toBe(true);
+
+    // out of range
+    expect(schema.safeParse({ ...base, tracking: -1001 }).success).toBe(false);
+    expect(schema.safeParse({ ...base, tracking: 10001 }).success).toBe(false);
+    // wrong type
+    expect(schema.safeParse({ ...base, tracking: '120' }).success).toBe(false);
+    // optional
+    expect(schema.safeParse(base).success).toBe(true);
+  });
+
+  it('accepts tracking in create_path_text and modify_object', () => {
+    const pathTextSchema = captureInputSchema(registerCreatePathText);
+    expect(pathTextSchema.safeParse({
+      path_uuid: 'example-uuid', contents: 'NGG', tracking: 80,
+    }).success).toBe(true);
+    expect(pathTextSchema.safeParse({
+      path_uuid: 'example-uuid', contents: 'NGG', tracking: 99999,
+    }).success).toBe(false);
+
+    const modifySchema = captureInputSchema(registerModifyObject);
+    expect(modifySchema.safeParse({
+      uuid: 'example-uuid', properties: { tracking: -50 },
+    }).success).toBe(true);
+    expect(modifySchema.safeParse({
+      uuid: 'example-uuid', properties: { tracking: 'loose' },
+    }).success).toBe(false);
   });
 
   it('accepts hidden / locked booleans in modify_object', () => {
