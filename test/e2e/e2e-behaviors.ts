@@ -438,21 +438,6 @@ async function runPhases(): Promise<void> {
         assert(normalized === 'Alpha|Beta|Gamma', `contents should keep all three parts, got ${J(d.contents)}`);
       });
 
-      await t('assign_color_profile: a profile Illustrator ignores is an error, a matching one is applied', async () => {
-        // RGB 文書への CMYK プロファイルは例外なしで無視される（実機確認）→ 読み戻しでエラーにする
-        const bad = await call('assign_color_profile', { profile: 'Japan Color 2001 Coated' });
-        assert(bad.error === true, `CMYK profile on RGB doc should be an error: ${brief(bad)}`);
-        assert(!/japan color/i.test(String(bad.verified?.actualProfile ?? '')), `profile should be unchanged: ${brief(bad)}`);
-        // 同じ色モードのプロファイルでも無視されることがある（Illustrator 2025 で実機確認）。
-        // 「成功と言うなら実際に適用されている／されていないならエラー」だけを確かめる
-        const ok = await call('assign_color_profile', { profile: 'Adobe RGB (1998)' });
-        const info = await call('get_document_info', {});
-        if (ok.error) {
-          assert(info.colorProfile === ok.verified?.actualProfile, `error result should report the real profile: ${brief(ok)} vs ${info.colorProfile}`);
-        } else {
-          assert(ok.assigned === true && info.colorProfile === 'Adobe RGB (1998)', `success must mean applied: ${brief(ok)} vs ${info.colorProfile}`);
-        }
-      });
     });
   }
 

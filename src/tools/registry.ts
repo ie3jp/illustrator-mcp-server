@@ -39,7 +39,6 @@ import { register as registerCreateTextFrame } from './modify/create-text-frame.
 import { register as registerCreatePath } from './modify/create-path.js';
 import { register as registerModifyObject } from './modify/modify-object.js';
 import { register as registerConvertToOutlines } from './modify/convert-to-outlines.js';
-import { register as registerApplyColorProfile } from './modify/apply-color-profile.js';
 import { register as registerPlaceImage } from './modify/place-image.js';
 import { register as registerImportSvgAsEditable } from './modify/import-svg-as-editable.js';
 import { register as registerResizeForVariation } from './modify/resize-for-variation.js';
@@ -117,7 +116,6 @@ export function registerAllTools(server: McpServer): void {
   registerCreatePath(server);
   registerModifyObject(server);
   registerConvertToOutlines(server);
-  registerApplyColorProfile(server);
   registerPlaceImage(server);
   registerImportSvgAsEditable(server);
   registerResizeForVariation(server);

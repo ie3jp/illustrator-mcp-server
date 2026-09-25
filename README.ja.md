@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Adobe Illustrator のデザインデータを読み取り・操作・書き出しする [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー — 67 のツールを内蔵。
+Adobe Illustrator のデザインデータを読み取り・操作・書き出しする [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー — 66 のツールを内蔵。
 
 Claude などの AI アシスタントから Illustrator を直接操作し、Web 実装に必要なデザイン情報の取得や、印刷用データの確認・書き出しを行えます。
 
@@ -192,7 +192,7 @@ Claude:  → get_document_info → resize_for_variation
 |---|---|---|
 | 入手方法 | npm（`npx illustrator-mcp-server`）または `.mcpb` のワンクリックインストール | Illustrator Beta に内蔵 — アプリの設定画面から認証キーと URL を取得し `mcp-remote` で接続 |
 | 対応バージョン | Illustrator 2024+ 検証済み / 2020+ 未検証（macOS / Windows） | Illustrator Beta 30.4+ のみ |
-| ツール数 | 67 | 約 40 |
+| ツール数 | 66 | 約 40 |
 | 既存ドキュメントの分析・一括処理 | ✅ 構造 / カラー / フォント分析、一括リカラー、バリエーション生成・データセット、全アートボード一括書き出し（`artboard:all`）、フォント / リンク切れチェック | ✅ 主要フォーカス |
 | オブジェクトのゼロからの作成 | ✅ フルセット — ドキュメント、図形、パス、テキストフレーム、パス上文字、グラデーション | ❌ 新規オブジェクト・テキストフレーム・ドキュメントの作成は不可 \* |
 | 保存 | ✅ `save_document`（保存 / 別名保存） | ❌ 書き出しのみ \* |
@@ -342,7 +342,7 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 
 </details>
 
-### 操作系 (40)
+### 操作系 (39)
 
 <details>
 <summary>クリックして展開</summary>
@@ -358,7 +358,6 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 | `import_svg_as_editable` | SVG ファイルを編集可能なパス・テキスト・グループとして取り込み（リンク画像ではなく編集可能オブジェクトとして） |
 | `modify_object` | 既存オブジェクトのプロパティ変更（テキストのトラッキング・行送り・段落揃えを含む）。グループ・複合パスへの塗り/線は内側のパスとテキストすべてに適用 |
 | `convert_to_outlines` | テキストのアウトライン化 |
-| `assign_color_profile` | カラープロファイルの割り当て（色値の変換は行わない） |
 | `create_document` | 新規ドキュメントの作成（サイズ、カラーモード指定） |
 | `close_document` | アクティブドキュメントを閉じる（未保存の変更がある場合、`save` を指定しないと閉じない） |
 | `resize_for_variation` | サイズ展開（ソースアートボードから複数サイズを一括生成） |

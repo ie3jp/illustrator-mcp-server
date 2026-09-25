@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { register as registerExport } from '../../src/tools/export/export.js';
 import { register as registerExportPdf } from '../../src/tools/export/export-pdf.js';
-import { register as registerApplyColorProfile } from '../../src/tools/modify/apply-color-profile.js';
 import { register as registerConvertToOutlines } from '../../src/tools/modify/convert-to-outlines.js';
 import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
 import { register as registerDeleteObjects } from '../../src/tools/modify/delete-objects.js';
@@ -145,11 +144,9 @@ describe('modify tool schemas', () => {
     const exportSchema = captureInputSchema(registerExport);
     const exportPdfSchema = captureInputSchema(registerExportPdf);
     const outlinesSchema = captureInputSchema(registerConvertToOutlines);
-    const colorProfileSchema = captureInputSchema(registerApplyColorProfile);
 
     expect(exportSchema.shape).not.toHaveProperty('coordinate_system');
     expect(exportPdfSchema.shape).not.toHaveProperty('coordinate_system');
     expect(outlinesSchema.shape).not.toHaveProperty('coordinate_system');
-    expect(colorProfileSchema.shape).not.toHaveProperty('coordinate_system');
   });
 });

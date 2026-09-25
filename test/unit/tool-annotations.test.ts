@@ -41,7 +41,7 @@ const ADDITIVE_IDEMPOTENT = ['select_objects', 'set_illustrator_version', 'set_w
 
 // 消す・既存の値やファイルを上書きしうるもの
 const DESTRUCTIVE = [
-  'apply_graphic_style', 'apply_text_style', 'assign_color_profile', 'close_document', 'convert_to_outlines',
+  'apply_graphic_style', 'apply_text_style', 'close_document', 'convert_to_outlines',
   'create_crop_marks', 'create_gradient', 'delete_objects', 'export', 'export_pdf', 'extract_design_tokens',
   'group_objects', 'manage_artboards', 'manage_datasets', 'manage_layers', 'manage_linked_images',
   'manage_swatches', 'modify_object', 'place_symbol', 'replace_color', 'save_document', 'undo', 'ungroup_objects',

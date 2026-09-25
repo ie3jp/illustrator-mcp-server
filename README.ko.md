@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Adobe Illustrator의 디자인 데이터를 읽고, 조작하고, 내보내기 위한 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 서버 — 67개의 내장 도구 제공.
+Adobe Illustrator의 디자인 데이터를 읽고, 조작하고, 내보내기 위한 [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) 서버 — 66개의 내장 도구 제공.
 
 Claude와 같은 AI 어시스턴트에서 Illustrator를 직접 제어 — 웹 구현을 위한 디자인 정보 추출, 인쇄 납품용 데이터 검증, 에셋 내보내기까지.
 
@@ -193,7 +193,7 @@ Claude:  → get_document_info → resize_for_variation
 |---|---|---|
 | 설치 방법 | npm(`npx illustrator-mcp-server`) 또는 `.mcpb` 원클릭 설치 | Illustrator Beta 내장 — 앱 설정에서 인증 키와 URL을 받아 `mcp-remote`로 연결 |
 | 지원 버전 | Illustrator 2024+ 검증됨 / 2020+ 미검증 (macOS / Windows) | Illustrator Beta 30.4+ 한정 |
-| 도구 수 | 67 | 약 40 |
+| 도구 수 | 66 | 약 40 |
 | 기존 문서 분석・일괄 처리 | ✅ 구조 / 컬러 / 폰트 분석, 일괄 리컬러, 바리에이션 생성・데이터셋, 전체 아트보드 일괄 내보내기(`artboard:all`), 폰트 / 링크 누락 프리플라이트 | ✅ 주요 포커스 |
 | 제로부터 오브젝트 생성 | ✅ 풀셋 — 문서, 도형, 패스, 텍스트 프레임, 패스 문자, 그라디언트 | ❌ 새 오브젝트・텍스트 프레임・문서 생성 불가 \* |
 | 문서 저장 | ✅ `save_document` (저장 / 다른 이름으로 저장) | ❌ 내보내기만 가능 \* |
@@ -343,7 +343,7 @@ Claude Desktop의 프롬프트 피커에서 사용할 수 있는 사전 구축�
 
 </details>
 
-### 수정 도구 (40)
+### 수정 도구 (39)
 
 <details>
 <summary>클릭하여 펼치기</summary>
@@ -359,7 +359,6 @@ Claude Desktop의 프롬프트 피커에서 사용할 수 있는 사전 구축�
 | `import_svg_as_editable` | SVG 파일을 편집 가능한 Illustrator 패스/텍스트/그룹으로 가져오기 (링크 이미지가 아님) |
 | `modify_object` | 기존 객체의 속성 수정 (텍스트 자간·행간·정렬 포함). 그룹이나 컴파운드 패스에 칠/선을 지정하면 내부의 모든 패스와 텍스트에 적용 |
 | `convert_to_outlines` | 텍스트를 윤곽선화 |
-| `assign_color_profile` | 컬러 프로파일 지정(태그) (컬러 값은 변환하지 않음) |
 | `create_document` | 새 문서 생성 (크기, 컬러 모드) |
 | `close_document` | 활성 문서 닫기 (저장하지 않은 변경 사항이 있으면 `save`를 지정하지 않는 한 닫지 않음) |
 | `resize_for_variation` | 소스 아트보드에서 사이즈 바리에이션 생성 (비례 스케일링) |

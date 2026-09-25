@@ -1321,14 +1321,6 @@ async function main(): Promise<void> {
     assert(!result.error, 'should not error: ' + (result.message || ''));
   });
 
-  await test('assign_color_profile (sRGB)', async () => {
-    const result = await callTool(client, 'assign_color_profile', {
-      profile: 'sRGB IEC61966-2.1',
-    }) as any;
-    assert(typeof result === 'object', 'should return a result object');
-    assert(!result.error, 'should not return error: ' + (result.message || ''));
-  });
-
   // --- resize_for_variation ---
 
   await test('resize_for_variation → create 2 size variations', async () => {

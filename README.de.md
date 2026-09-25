@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Ein [MCP-Server (Model Context Protocol)](https://modelcontextprotocol.io/) zum Auslesen, Bearbeiten und Exportieren von Adobe-Illustrator-Designdaten — mit 67 integrierten Werkzeugen.
+Ein [MCP-Server (Model Context Protocol)](https://modelcontextprotocol.io/) zum Auslesen, Bearbeiten und Exportieren von Adobe-Illustrator-Designdaten — mit 66 integrierten Werkzeugen.
 
 Steuere Illustrator direkt aus KI-Assistenten wie Claude — extrahiere Designinformationen für die Webumsetzung, prüfe druckfertige Daten und exportiere Assets.
 
@@ -193,7 +193,7 @@ Claude:  → get_document_info → resize_for_variation
 |---|---|---|
 | Installation | npm (`npx illustrator-mcp-server`) oder `.mcpb` per Ein-Klick-Installation | In Illustrator Beta integriert — Auth-Schlüssel + URL in den App-Einstellungen abrufen, Verbindung über `mcp-remote` |
 | Unterstützte Versionen | Illustrator 2024+ verifiziert / 2020+ unverifiziert (macOS / Windows) | Nur Illustrator Beta 30.4+ |
-| Anzahl der Werkzeuge | 67 | ca. 40 |
+| Anzahl der Werkzeuge | 66 | ca. 40 |
 | Analyse & Stapelverarbeitung bestehender Dokumente | ✅ Struktur- / Farb- / Schriftanalyse, Massen-Umfärbung, Varianten & Datensätze, Stapel-Export aller Zeichenflächen (`artboard:all`), Preflight für Schriften & defekte Verknüpfungen | ✅ Sein Hauptfokus |
 | Objekte von Grund auf erstellen | ✅ Kompletter Satz — Dokumente, Formen, Pfade, Textrahmen, Pfadtext, Verläufe | ❌ Keine neuen Objekte, Textrahmen oder Dokumente \* |
 | Dokumente speichern | ✅ `save_document` (Speichern / Speichern unter) | ❌ Nur Export \* |
@@ -343,7 +343,7 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 
 </details>
 
-### Modify-Werkzeuge (40)
+### Modify-Werkzeuge (39)
 
 <details>
 <summary>Zum Aufklappen klicken</summary>
@@ -359,7 +359,6 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 | `import_svg_as_editable` | Eine SVG-Datei als bearbeitbare Illustrator-Pfade/-Texte/-Gruppen importieren (nicht als verknüpftes Bild) |
 | `modify_object` | Eigenschaften eines vorhandenen Objekts ändern (inkl. Laufweite, Zeilenabstand und Ausrichtung von Text). Füllung/Kontur auf einer Gruppe oder einem zusammengesetzten Pfad wird auf alle enthaltenen Pfade und Texte angewendet |
 | `convert_to_outlines` | Text in Pfade umwandeln |
-| `assign_color_profile` | Ein Farbprofil zuweisen (taggen) (konvertiert keine Farbwerte) |
 | `create_document` | Neues Dokument erstellen (Größe, Farbmodus) |
 | `close_document` | Aktives Dokument schließen (bei ungespeicherten Änderungen wird ohne Angabe von `save` nicht geschlossen) |
 | `resize_for_variation` | Größenvarianten aus einer Quell-Zeichenfläche erstellen (proportionale Skalierung) |

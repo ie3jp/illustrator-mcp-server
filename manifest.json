@@ -58,7 +58,6 @@
     { "name": "create_path", "description": "Create a custom path" },
     { "name": "modify_object", "description": "Modify properties of an existing object" },
     { "name": "convert_to_outlines", "description": "Convert text to outlines" },
-    { "name": "assign_color_profile", "description": "Assign a color profile to the document" },
     { "name": "place_image", "description": "Place an image file into the document" },
     { "name": "resize_for_variation", "description": "Create size variations from a source artboard" },
     { "name": "align_objects", "description": "Align and/or distribute multiple objects" },

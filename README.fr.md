@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Un serveur [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) pour lire, manipuler et exporter les données de conception Adobe Illustrator — avec 67 outils intégrés.
+Un serveur [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) pour lire, manipuler et exporter les données de conception Adobe Illustrator — avec 66 outils intégrés.
 
 Pilotez Illustrator directement depuis des assistants IA comme Claude — extrayez les informations de conception pour l'implémentation web, vérifiez les données prêtes à l'impression et exportez vos assets.
 
@@ -193,7 +193,7 @@ Claude:  → get_document_info → resize_for_variation
 |---|---|---|
 | Installation | npm (`npx illustrator-mcp-server`) ou installation en un clic via `.mcpb` | Intégré à Illustrator Beta — récupérez une clé d'authentification + URL dans les réglages de l'application, connexion via `mcp-remote` |
 | Versions prises en charge | Illustrator 2024+ vérifié / 2020+ non vérifié (macOS / Windows) | Illustrator Beta 30.4+ uniquement |
-| Nombre d'outils | 67 | ~40 |
+| Nombre d'outils | 66 | ~40 |
 | Analyse & traitement par lot de documents existants | ✅ Analyse de structure / couleurs / polices, recoloration en masse, déclinaisons & jeux de données, export par lot des plans de travail (`artboard:all`), preflight polices & liens manquants | ✅ Son axe principal |
 | Création d'objets à partir de zéro | ✅ Ensemble complet — documents, formes, tracés, blocs de texte, texte sur tracé, dégradés | ❌ Pas de nouveaux objets, blocs de texte ni documents \* |
 | Enregistrement des documents | ✅ `save_document` (enregistrer / enregistrer sous) | ❌ Export uniquement \* |
@@ -343,7 +343,7 @@ Des modèles de workflow prédéfinis sont disponibles dans le sélecteur de pro
 
 </details>
 
-### Outils de modification (40)
+### Outils de modification (39)
 
 <details>
 <summary>Cliquez pour déployer</summary>
@@ -359,7 +359,6 @@ Des modèles de workflow prédéfinis sont disponibles dans le sélecteur de pro
 | `import_svg_as_editable` | Importe un fichier SVG sous forme de tracés/textes/groupes Illustrator modifiables (et non comme image liée) |
 | `modify_object` | Modifie les propriétés d'un objet existant (y compris l'approche, l'interlignage et l'alignement du texte). Un fond/contour appliqué à un groupe ou à un tracé composé s'applique à tous les tracés et textes qu'il contient |
 | `convert_to_outlines` | Vectorise le texte |
-| `assign_color_profile` | Attribue (marque) un profil colorimétrique (ne convertit pas les valeurs de couleur) |
 | `create_document` | Crée un nouveau document (taille, mode colorimétrique) |
 | `close_document` | Ferme le document actif (en cas de modifications non enregistrées, ne ferme pas tant que `save` n'est pas précisé) |
 | `resize_for_variation` | Crée des déclinaisons de taille à partir d'un plan de travail source (mise à l'échelle proportionnelle) |

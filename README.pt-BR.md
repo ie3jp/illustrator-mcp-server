@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Um servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) para ler, manipular e exportar dados de design do Adobe Illustrator — com 67 ferramentas integradas.
+Um servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) para ler, manipular e exportar dados de design do Adobe Illustrator — com 66 ferramentas integradas.
 
 Controle o Illustrator diretamente a partir de assistentes de IA como o Claude — extraia informações de design para implementação web, verifique dados prontos para impressão e exporte assets.
 
@@ -193,7 +193,7 @@ Claude:  → get_document_info → resize_for_variation
 |---|---|---|
 | Instalação | npm (`npx illustrator-mcp-server`) ou instalação em um clique via `.mcpb` | Integrado ao Illustrator Beta — obtenha a chave de autenticação + URL nas configurações do app e conecte via `mcp-remote` |
 | Versões suportadas | Illustrator 2024+ verificado / 2020+ não verificado (macOS / Windows) | Apenas Illustrator Beta 30.4+ |
-| Número de ferramentas | 67 | ~40 |
+| Número de ferramentas | 66 | ~40 |
 | Análise e processamento em lote de documentos existentes | ✅ Análise de estrutura / cores / fontes, recolorização em massa, variações e conjuntos de dados, exportação em lote de pranchetas (`artboard:all`), preflight de fontes e links quebrados | ✅ Seu foco principal |
 | Criação de objetos do zero | ✅ Conjunto completo — documentos, formas, caminhos, quadros de texto, texto em caminho, gradientes | ❌ Sem novos objetos, quadros de texto ou documentos \* |
 | Salvar documentos | ✅ `save_document` (salvar / salvar como) | ❌ Apenas exportação \* |
@@ -343,7 +343,7 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 
 </details>
 
-### Ferramentas de Modificação (40)
+### Ferramentas de Modificação (39)
 
 <details>
 <summary>Clique para expandir</summary>
@@ -359,7 +359,6 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 | `import_svg_as_editable` | Importa um arquivo SVG como paths/textos/grupos editáveis do Illustrator (não como imagem vinculada) |
 | `modify_object` | Modifica propriedades de um objeto existente (incl. tracking, entrelinha e alinhamento de texto). Preenchimento/traçado em um grupo ou path composto é aplicado a todos os paths e textos dentro dele |
 | `convert_to_outlines` | Converte texto em curvas |
-| `assign_color_profile` | Atribui (marca) um perfil de cor (não converte os valores de cor) |
 | `create_document` | Cria um novo documento (tamanho, modo de cor) |
 | `close_document` | Fecha o documento ativo (se houver alterações não salvas, não fecha a menos que `save` seja informado) |
 | `resize_for_variation` | Cria variações de tamanho a partir de uma prancheta de origem (escala proporcional) |
