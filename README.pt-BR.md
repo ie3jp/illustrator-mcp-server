@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Um servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) para ler, manipular e exportar dados de design do Adobe Illustrator — com 63 ferramentas integradas.
+Um servidor [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) para ler, manipular e exportar dados de design do Adobe Illustrator — com 67 ferramentas integradas.
 
 Controle o Illustrator diretamente a partir de assistentes de IA como o Claude — extraia informações de design para implementação web, verifique dados prontos para impressão e exporte assets.
 
@@ -109,7 +109,10 @@ Na barra de menu do Claude Desktop:
 > **macOS:** Na primeira execução, permita o acesso de automação em Ajustes do Sistema > Privacidade e Segurança > Automação.
 
 > [!NOTE]
-> As ferramentas de modificação e exportação trarão o Illustrator para o primeiro plano durante a execução.
+> A maioria das ferramentas de modificação traz o Illustrator para o primeiro plano durante a execução. As ferramentas de leitura e o `export` rodam sem trocar de aplicativo; o `export_pdf` só traz o Illustrator para a frente ao desenhar marcas de corte japonesas.
+
+> [!NOTE]
+> **Seus arquivos são protegidos por padrão.** O `close_document` não descarta alterações não salvas a menos que você peça explicitamente (`save: false`), e `export`, `save_document` (salvar como) e `extract_design_tokens` não substituem um arquivo existente sem `overwrite: true`. Se for isso que você quer, basta pedir ao Claude para "fechar sem salvar" ou "sobrescrever o arquivo".
 
 ### Múltiplas versões do Illustrator
 
@@ -119,6 +122,32 @@ Se você tem várias versões do Illustrator instaladas, pode dizer ao Claude qu
 **Versões suportadas:** Illustrator 2024 (v28) e posteriores são verificadas. Espera-se que o Illustrator 2020–2023 (v24–v27) funcione — todas as APIs do ExtendScript que este servidor usa existem desde a v24 —, mas elas **não são verificadas**, então as ferramentas retornam um aviso ao rodar nelas. Versões anteriores a 2020 (v24) não são suportadas. Se algo quebrar em uma versão não verificada, [abra uma issue](https://github.com/ie3jp/illustrator-mcp-server/issues).
 > [!NOTE]
 > Se o Illustrator já estiver em execução, o servidor se conecta à instância em execução independentemente da configuração de versão. A versão só é usada para iniciar a versão correta quando o Illustrator ainda não está em execução.
+
+### Variáveis de Ambiente
+
+| Variável | Padrão | Descrição |
+|---|---|---|
+| `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Tempo limite em milissegundos para ferramentas normais |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Tempo limite em milissegundos para ferramentas pesadas (inserir ou importar arquivos, exportação, preflight, guias de estilo e amostras de cor, variações de tamanho) |
+
+Aumente esses valores quando uma única chamada precisar de mais tempo que o padrão: por exemplo, ao importar um SVG grande com `import_svg_as_editable` (mais de 100 objetos) ou ao executar `get_document_structure` / `export_pdf` em um documento grande.
+
+Os valores devem ser inteiros positivos em milissegundos. Qualquer outro valor (`0`, um número negativo, uma string não numérica ou um valor acima de 2147483647) volta ao padrão. Eles são lidos uma única vez na inicialização do servidor.
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
+        "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -244,9 +273,9 @@ Você:    Verifique a qualidade das imagens inseridas para impressão
 Claude:  → get_images (include_print_info: true)
 
          ■ Relatório de Qualidade de Imagem:
-         ✅ hero.psd — CMYK, 350dpi, escala 98%
-         ⚠ icon_set.png — RGB (incompatível com documento CMYK), 300dpi, escala 100%
-         ❌ photo_bg.jpg — CMYK, 72dpi, escala 400% (ampliada em excesso)
+         ✅ hero.psd — CMYK, 350ppi efetivos
+         ⚠ icon_set.png — RGB (incompatível com documento CMYK), 300ppi efetivos
+         ❌ photo_bg.jpg — CMYK, 72ppi efetivos (ampliada em excesso)
            → Substituir por imagem de 300dpi+ em tamanho real
 ```
 
@@ -296,25 +325,25 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 | `get_document_structure` | Árvore completa: camadas → grupos → objetos em uma única chamada |
 | `list_text_frames` | Lista de frames de texto (fonte, tamanho, nome do estilo) |
 | `get_text_frame_detail` | Todos os atributos de um frame de texto específico (kerning, configurações de parágrafo, etc.) |
-| `get_colors` | Informações de cores em uso (amostras, gradientes, cores especiais). `include_diagnostics` para análise de impressão |
+| `get_colors` | Informações de cores em uso (amostras, gradientes, cores especiais; cada cor usada aparece uma vez com sua contagem de uso). `include_diagnostics` para análise de impressão |
 | `get_path_items` | Dados de paths/formas (preenchimento, traço, pontos de ancoragem) |
 | `get_groups` | Grupos, máscaras de recorte e estrutura de paths compostos |
 | `get_effects` | Efeitos e informações de aparência (opacidade, modo de mesclagem) |
-| `get_images` | Informações de imagens incorporadas/vinculadas (resolução, detecção de links quebrados). `include_print_info` para incompatibilidade de espaço de cor e fator de escala |
+| `get_images` | Informações de imagens incorporadas/vinculadas (resolução, detecção de links quebrados). `include_print_info` para resolução efetiva por eixo e incompatibilidade de espaço de cor |
 | `get_symbols` | Definições e instâncias de símbolos |
 | `get_guidelines` | Informações de guias |
-| `get_overprint_info` | Configurações de sobreimpressão + detecção de K100/preto rico e classificação de intenção |
-| `get_separation_info` | Informações de separação de cores (placas de processo CMYK + placas de cores especiais com contagem de uso) |
+| `get_overprint_info` | Configurações de sobreimpressão em paths, texto e imagens raster + detecção de K100/preto rico, com um rótulo heurístico inferido apenas pelas cores (não consegue saber a intenção) |
+| `get_separation_info` | Informações de separação de cores (placas de processo e de cores especiais realmente usadas, com contagem de uso; tintas sem uso detectado são listadas à parte) |
 | `get_selection` | Detalhes dos objetos atualmente selecionados |
 | `find_objects` | Busca por critérios (nome, tipo, cor, fonte, etc.) |
 | `check_contrast` | Verificação de razão de contraste de cor WCAG (manual ou detecção automática de pares sobrepostos) |
-| `extract_design_tokens` | Extrai design tokens como CSS custom properties, JSON ou configuração do Tailwind |
+| `extract_design_tokens` | Extrai design tokens como CSS custom properties, JSON ou configuração do Tailwind (ao gravar em arquivo, nunca substitui um existente sem `overwrite: true`) |
 | `list_fonts` | Lista as fontes disponíveis no Illustrator (não requer documento aberto) |
 | `convert_coordinate` | Converte pontos entre os sistemas de coordenadas de prancheta e documento |
 
 </details>
 
-### Ferramentas de Modificação (38)
+### Ferramentas de Modificação (40)
 
 <details>
 <summary>Clique para expandir</summary>
@@ -324,27 +353,28 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 | `create_rectangle` | Cria um retângulo (suporta cantos arredondados) |
 | `create_ellipse` | Cria uma elipse |
 | `create_line` | Cria uma linha |
-| `create_text_frame` | Cria um frame de texto (ponto ou área) |
+| `create_text_frame` | Cria um frame de texto (ponto ou área) com tracking, entrelinha e alinhamento de parágrafo opcionais. `font_name` deve ser o nome exato de `list_fonts` — uma fonte desconhecida gera erro em vez de ser substituída silenciosamente |
 | `create_path` | Cria um path customizado (com alças Bezier) |
-| `place_image` | Insere um arquivo de imagem como vinculado ou incorporado |
-| `modify_object` | Modifica propriedades de um objeto existente |
+| `place_image` | Insere um arquivo de imagem raster/PDF como vinculado ou incorporado (SVG é recusado — use `import_svg_as_editable`) |
+| `import_svg_as_editable` | Importa um arquivo SVG como paths/textos/grupos editáveis do Illustrator (não como imagem vinculada) |
+| `modify_object` | Modifica propriedades de um objeto existente (incl. tracking, entrelinha e alinhamento de texto). Preenchimento/traçado em um grupo ou path composto é aplicado a todos os paths e textos dentro dele |
 | `convert_to_outlines` | Converte texto em curvas |
 | `assign_color_profile` | Atribui (marca) um perfil de cor (não converte os valores de cor) |
 | `create_document` | Cria um novo documento (tamanho, modo de cor) |
-| `close_document` | Fecha o documento ativo |
+| `close_document` | Fecha o documento ativo (se houver alterações não salvas, não fecha a menos que `save` seja informado) |
 | `resize_for_variation` | Cria variações de tamanho a partir de uma prancheta de origem (escala proporcional) |
 | `align_objects` | Alinha e distribui múltiplos objetos |
 | `replace_color` | Localiza e substitui cores em todo o documento (com tolerância) |
 | `manage_layers` | Adiciona, renomeia, mostra/esconde, bloqueia/desbloqueia, reordena ou exclui camadas |
 | `place_color_chips` | Extrai cores únicas e posiciona amostras de color chips fora da prancheta |
-| `save_document` | Salva ou salva como do documento ativo |
+| `save_document` | Salva ou salva como do documento ativo (salvar como não substitui um arquivo existente sem `overwrite: true`) |
 | `open_document` | Abre um documento a partir de um caminho de arquivo |
 | `group_objects` | Agrupa objetos (suporta máscaras de recorte) |
 | `ungroup_objects` | Desagrupa um grupo, liberando os filhos |
 | `duplicate_objects` | Duplica objetos com deslocamento opcional |
 | `set_z_order` | Muda a ordem de empilhamento (frente/fundo) |
 | `move_to_layer` | Move objetos para outra camada |
-| `delete_objects` | Exclui objetos por UUID (objetos bloqueados exigem `force_unlock`; reversível com `undo`) |
+| `delete_objects` | Exclui objetos por UUID (objetos bloqueados exigem `force_unlock`; `undo` pode revertê-lo, mas seus passos seguem o histórico do Illustrator, não as chamadas MCP) |
 | `manage_artboards` | Adiciona, remove, redimensiona, renomeia, reorganiza pranchetas |
 | `manage_swatches` | Adiciona, atualiza ou exclui amostras de cor |
 | `manage_linked_images` | Re-vincula ou incorpora imagens inseridas |
@@ -354,11 +384,11 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 | `apply_text_style` | Aplica estilo de caractere ou parágrafo ao texto |
 | `list_text_styles` | Lista todos os estilos de caractere e parágrafo |
 | `create_gradient` | Cria gradientes e aplica aos objetos |
-| `create_path_text` | Cria texto ao longo de um path |
+| `create_path_text` | Cria texto ao longo de um path (tracking e alinhamento opcionais; `font_name` segue a mesma regra de nome exato do `create_text_frame`) |
 | `place_symbol` | Insere ou substitui instâncias de símbolos |
 | `select_objects` | Seleciona objetos por UUID (seleção múltipla suportada) |
 | `create_crop_marks` | Cria marcas de corte com detecção automática de estilo por locale (linha dupla japonesa / linha única ocidental) |
-| `place_style_guide` | Posiciona um guia de estilo visual fora da prancheta (cores, fontes, espaçamentos, margens, distâncias entre guias) |
+| `place_style_guide` | Posiciona um guia de estilo visual fora da prancheta em uma camada não imprimível (cores, fontes, espaçamentos, margens, distâncias entre guias). Marcações de medida sobre a própria prancheta são opcionais (`annotate_artboard`) |
 | `undo` | Operações de undo/redo (múltiplos passos) |
 
 </details>
@@ -370,21 +400,22 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 
 | Ferramenta | Descrição |
 |---|---|
-| `export` | Exportação SVG / PNG / JPG (por prancheta, seleção ou UUID) |
+| `export` | Exportação SVG / PNG / JPG (por prancheta, seleção ou UUID; com seleção/UUID, apenas esse objeto é exportado; não substitui um arquivo existente sem `overwrite: true`) |
 | `export_pdf` | Exportação de PDF pronto para impressão (marcas de corte, sangria, downsampling seletivo, output intent) |
 
 </details>
 
-### Utilitários (3)
+### Utilitários (4)
 
 <details>
 <summary>Clique para expandir</summary>
 
 | Ferramenta | Descrição |
 |---|---|
-| `preflight_check` | Verificação preflight de pré-impressão (mistura de RGB, links quebrados, baixa resolução, sobreimpressão branca, interação transparência+sobreimpressão, conformidade PDF/X, etc.) |
+| `preflight_check` | Verificação preflight de pré-impressão (mistura de RGB, links quebrados, baixa resolução, sobreimpressão branca, interação transparência+sobreimpressão, conformidade PDF/X, etc.). Informa quais verificações foram completas ou apenas parciais (`coverage`) |
 | `check_text_consistency` | Verificação de consistência de texto (detecção de placeholders, padrões de variação de grafia, listagem completa de texto para análise por LLM) |
 | `set_workflow` | Define o modo de fluxo de trabalho (web/print) para sobrescrever o sistema de coordenadas detectado automaticamente |
+| `set_illustrator_version` | Escolhe qual versão do Illustrator usar quando há várias instaladas |
 
 </details>
 
@@ -403,6 +434,7 @@ O servidor detecta automaticamente o sistema de coordenadas a partir do document
 - **Documentos RGB** usam um sistema de coordenadas estilo web, mais fácil para a IA trabalhar
 - Use `set_workflow` para sobrescrever o sistema detectado automaticamente, se necessário
 - Todas as respostas das ferramentas incluem um campo `coordinateSystem` indicando qual sistema está ativo
+- Se a detecção automática falhar, as ferramentas retornam um erro em vez de adivinhar — informe `coordinate_system` explicitamente ou use `set_workflow`
 
 ---
 
@@ -488,9 +520,11 @@ Uma arte de paisagem geométrica abstrata — criada inteiramente pelo Claude, s
 | Perfis de cor | Apenas atribuição de perfil de cor — conversão completa não está disponível |
 | Configurações de sangria | Configurações de sangria não podem ser lidas (limitação da API do Illustrator) |
 | Exportação WebP | Não suportado — use PNG ou SVG em vez disso |
-| Marcas de corte japonesas | A exportação em PDF usa automaticamente a abordagem via comando TrimMark: gera as marcas como paths do documento, exporta e depois as remove via undo |
+| Marcas de corte japonesas | A exportação em PDF gera temporariamente as marcas no documento com o comando TrimMark, exporta e depois as remove. Apenas documentos com uma prancheta — com várias pranchetas, retorna um erro |
 | Incorporação de fontes | O modo de incorporação (full/subset) não pode ser controlado diretamente — use PDF presets |
 | Variações de tamanho | Apenas escala proporcional — o texto pode precisar de ajuste manual posteriormente |
+| Fallback de glifos em texto SVG | O Illustrator não faz fallback glifo a glifo entre as fontes de uma lista `font-family`. Se a primeira família estiver instalada mas não tiver um glifo, o `import_svg_as_editable` descarta esse caractere silenciosamente e ainda assim informa sucesso. Use uma única `font-family` por elemento de texto e escolha uma que contenha os glifos necessários. Uma família *não instalada* é substituída e não é afetada; o `preflight_check` cobre esse outro caso |
+| Notas de objetos | As ferramentas identificam objetos por um UUID armazenado na nota de cada objeto (painel Atributos). Uma nota escrita por você é mantida — o UUID é adicionado antes dela |
 
 ---
 
@@ -554,9 +588,13 @@ O teste E2E cria documentos novos (RGB + CMYK), insere objetos de teste, executa
 
 ## Agradecimentos
 
-Obrigado às seguintes pessoas pelo feedback que moldou este projeto:
+Obrigado às seguintes pessoas pelo feedback e pelas contribuições que moldaram este projeto:
 
 - [OKI Yoshiya (@448jp)](https://github.com/448jp)
+- [shadow (@shadowcz007)](https://github.com/shadowcz007)
+- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
+- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
+- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
 
 ---
 

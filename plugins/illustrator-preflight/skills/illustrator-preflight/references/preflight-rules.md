@@ -2,13 +2,15 @@
 
 Severity levels and judgment criteria for each check category.
 
+A check whose `coverage` status is `partial` or `skipped` was not fully inspected. Report it as "not fully checked" rather than as a pass, whatever its category.
+
 ## Critical (Must Fix Before Submission)
 
 ### RGB in CMYK Document (`rgb_in_cmyk`)
-- **What**: RGB color objects in a CMYK color space document
+- **What**: RGB colors in a CMYK color space document — path fills/strokes, text characters, gradient stops, and embedded RGB images. A compound path is reported once, under its own UUID.
 - **Why critical**: Printing press uses CMYK plates. RGB colors cause unexpected color shifts or print failure.
 - **Auto-fixable**: No (color conversion changes appearance; requires designer decision)
-- **Action**: Report all occurrences with UUID. Suggest `modify_object` to convert, but warn that color appearance will change.
+- **Action**: Report all occurrences with UUID. Suggest `replace_color` (RGB → CMYK) or `modify_object` to convert, but warn that color appearance will change. Embedded RGB images cannot be converted by these tools — convert them in Photoshop (or Illustrator's Edit Colors) and re-embed or relink.
 
 ### Broken Links (`broken_link`)
 - **What**: Placed images whose source file is missing or inaccessible
@@ -24,6 +26,13 @@ Severity levels and judgment criteria for each check category.
 - **Why critical**: Low-res images appear pixelated/blurry in print.
 - **Auto-fixable**: No (requires higher resolution source)
 - **Action**: Report effective PPI, pixel dimensions, and UUID.
+- **Coverage**: Linked files whose resolution cannot be measured (PDF/AI/EPS or unreadable files) are listed in `coverage.low_resolution` as `partial` — check them manually.
+
+### Missing Fonts (`missing_font`)
+- **What**: Fonts used in live text that are not installed on this system
+- **Why critical**: The text will be substituted when opened, exported or printed, and the font cannot be embedded in a PDF.
+- **Auto-fixable**: No (install/activate the font, or outline on a system that has it)
+- **Action**: Report the font name and a UUID that uses it. Ask the user to install or activate the font before exporting.
 
 ### White Overprint (`white_overprint`)
 - **What**: White-colored objects with overprint enabled
@@ -56,7 +65,8 @@ Severity levels and judgment criteria for each check category.
 - **Action**: List all spot colors. Ask if they are intentional for this print job.
 
 ### Transparency (`transparency`)
-- **What**: Objects with opacity < 100% or non-normal blend modes
+- **What**: Objects with opacity < 100% or non-normal blend modes, gradient stops with opacity < 100%, and embedded images with transparent areas
+- **Not detectable**: Live effects (drop shadow, glow, feather) and extra fills/strokes added in the Appearance panel are invisible to scripting. Under `target_pdf_profile: "x1a"` the check is therefore never fully `checked` (it becomes `partial`) — ask the user to check Window > Flattener Preview.
 - **Context-dependent**:
   - **PDF/X-4**: Transparency is allowed
   - **PDF/X-1a**: All transparency must be flattened
@@ -81,7 +91,7 @@ Severity levels and judgment criteria for each check category.
 ### PDF/X-1a (Strictest)
 - No transparency allowed
 - All colors must be CMYK or spot (no RGB)
-- All fonts must be embedded (or outlined)
+- All fonts must be embedded (or outlined). The tool raises a `pdfx_compliance` error only for fonts that are not installed (they cannot be embedded); installed live text is embedded at export and is not flagged as a violation
 - ICC profile not required but recommended
 
 ### PDF/X-4 (Modern)
@@ -90,12 +100,15 @@ Severity levels and judgment criteria for each check category.
 - ICC color profile strongly recommended
 - Fonts must be embedded
 
-## Overprint Intent Classification
+## Overprint Heuristic Labels
 
-From `get_overprint_info`:
-- **`intentional_k100`**: K100 (pure black) with overprint. This is standard practice to prevent white gaps around black text/objects. Usually correct.
+From the `heuristic` field of each `get_overprint_info` item. Labels are inferred from color values only — they cannot know intent, so confirm with Separations Preview. Paths (incl. compound paths), text (per character) and raster images are inspected; placed files, symbols and meshes are not (see `scope`).
+- **`k100_overprint`**: K100 (pure black) with overprint. This is standard practice to prevent white gaps around black text/objects. Usually correct.
 - **`rich_black_overprint`**: Rich black (K>=90 + CMY) with overprint. Acceptable but review ink coverage against paper type limits (uncoated: 300%, coated: 350%, newspaper: 240%).
-- **`likely_accidental`**: Non-black color with overprint. Almost always a mistake. Flag for review.
+- **`spot_overprint`**: Spot color with overprint. Common and usually intentional (varnish, special inks, die lines).
+- **`likely_accidental`**: Overprint on a fill/stroke that is not K100, rich black or spot (e.g. white overprint makes the object disappear). Almost always a mistake. Flag for review.
+- **`no_effect`**: Overprint is set on a side with no paint (e.g. stroke overprint with no stroke). Harmless.
+- **`raster_overprint`**: Overprint on a raster image. Needs manual review.
 
 ## Text Consistency Checks
 

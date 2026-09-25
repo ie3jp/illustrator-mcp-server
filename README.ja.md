@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Adobe Illustrator のデザインデータを読み取り・操作・書き出しする [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー — 63 のツールを内蔵。
+Adobe Illustrator のデザインデータを読み取り・操作・書き出しする [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) サーバー — 67 のツールを内蔵。
 
 Claude などの AI アシスタントから Illustrator を直接操作し、Web 実装に必要なデザイン情報の取得や、印刷用データの確認・書き出しを行えます。
 
@@ -107,7 +107,10 @@ Claude Desktop のメニューバーから:
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
 
 > [!NOTE]
-> 操作系・書き出し系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。
+> ほとんどの操作系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。読み取り系ツールと `export` はアプリを切り替えずに実行します（`export_pdf` は日本式トンボを描くときだけ前面に出します）。
+
+> [!NOTE]
+> **ファイルは既定で保護されます。** `close_document` は、明示的に指定しない限り（`save: false`）未保存の変更を破棄しません。`export`・`save_document`（別名保存）・`extract_design_tokens` は、`overwrite: true` を指定しない限り既存ファイルを上書きしません。破棄・上書きしたいときは「保存せずに閉じて」「上書きして」と伝えてください。
 
 ### 複数バージョンの Illustrator
 
@@ -123,7 +126,7 @@ Illustrator が複数インストールされている場合、会話で使用�
 | 変数 | 既定値 | 説明 |
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | 通常ツールのタイムアウト（ミリ秒） |
-| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 重いツール（取り込み・書き出し・構造取得）のタイムアウト（ミリ秒） |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 重いツール（ファイルの配置・取り込み、書き出し、プリフライト、スタイルガイド・カラーチップ、サイズ展開）のタイムアウト（ミリ秒） |
 
 1 回の呼び出しが既定値では足りない場合に延ばしてください。`import_svg_as_editable` で 100 個以上のオブジェクトを含む SVG を取り込む場合や、巨大なドキュメントで `get_document_structure` / `export_pdf` を実行する場合などです。
 
@@ -261,7 +264,7 @@ Claude:  → preflight_check (target_pdf_profile: "x1a")
 </details>
 
 <details>
-<summary><b>画像の色空間やスケール率を確認して品質を担保したい</b></summary>
+<summary><b>画像の色空間や実効解像度を確認して品質を担保したい</b></summary>
 
 ```
 あなた: 配置画像の印刷品質をチェックして
@@ -269,9 +272,9 @@ Claude:  → preflight_check (target_pdf_profile: "x1a")
 Claude:  → get_images (include_print_info: true)
 
          ■ 画像品質レポート:
-         ✅ hero.psd — CMYK, 350dpi, スケール 98%
-         ⚠ icon_set.png — RGB (CMYK ドキュメントと不一致), 300dpi, スケール 100%
-         ❌ photo_bg.jpg — CMYK, 72dpi, スケール 400% (大幅拡大)
+         ✅ hero.psd — CMYK, 実効 350ppi
+         ⚠ icon_set.png — RGB (CMYK ドキュメントと不一致), 実効 300ppi
+         ❌ photo_bg.jpg — CMYK, 実効 72ppi (大幅拡大)
            → 原寸 300dpi 以上の画像に差し替えてください
 ```
 
@@ -321,25 +324,25 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 | `get_document_structure` | レイヤー→グループ→オブジェクトのツリー一括取得 |
 | `list_text_frames` | テキストフレーム一覧（フォント、サイズ、スタイル名） |
 | `get_text_frame_detail` | 特定テキストの全属性（カーニング、段落設定等） |
-| `get_colors` | 使用カラー情報（スウォッチ、グラデーション、スポットカラー等）。`include_diagnostics` で印刷診断 |
+| `get_colors` | 使用カラー情報（スウォッチ、グラデーション、スポットカラー等。使用色は重複なしで使用数つき）。`include_diagnostics` で印刷診断 |
 | `get_path_items` | パス・シェイプデータ（塗り、線、アンカーポイント） |
 | `get_groups` | グループ・クリッピングマスク・複合パスの構造 |
 | `get_effects` | エフェクト・アピアランス情報（不透明度、描画モード） |
-| `get_images` | 埋め込み/リンク画像の情報（解像度、リンク切れ検出）。`include_print_info` で色空間ミスマッチ・スケール率 |
+| `get_images` | 埋め込み/リンク画像の情報（解像度、リンク切れ検出）。`include_print_info` で縦横別の実効解像度・色空間ミスマッチ |
 | `get_symbols` | シンボル定義とインスタンス |
 | `get_guidelines` | ガイドライン情報 |
-| `get_overprint_info` | オーバープリント設定 + K100/リッチブラック検出・意図判定 |
-| `get_separation_info` | 色分解情報（CMYK プロセス版 + スポットカラー版の使用数） |
+| `get_overprint_info` | パス・テキスト・ラスター画像のオーバープリント設定 + K100/リッチブラック検出。色の値だけから推定したヒューリスティック判定（制作意図までは判定できません） |
+| `get_separation_info` | 色分解情報（実際に使われているプロセス版・スポットカラー版と使用数。使用が見つからないインキは別枠で表示） |
 | `get_selection` | 選択中オブジェクトの詳細 |
 | `find_objects` | 条件検索（名前、タイプ、色、フォント等） |
 | `check_contrast` | WCAG カラーコントラスト比チェック（手動 or 自動検出） |
-| `extract_design_tokens` | デザイントークン抽出（CSS / JSON / Tailwind 形式） |
+| `extract_design_tokens` | デザイントークン抽出（CSS / JSON / Tailwind 形式）。ファイル出力時は `overwrite: true` なしで既存ファイルを上書きしない |
 | `list_fonts` | Illustrator で利用可能なフォント一覧（ドキュメント不要） |
 | `convert_coordinate` | アートボード座標系⇔ドキュメント座標系の変換 |
 
 </details>
 
-### 操作系 (39)
+### 操作系 (40)
 
 <details>
 <summary>クリックして展開</summary>
@@ -349,28 +352,28 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 | `create_rectangle` | 長方形の作成（角丸対応） |
 | `create_ellipse` | 楕円の作成 |
 | `create_line` | 直線の作成 |
-| `create_text_frame` | テキストフレームの作成（ポイント/エリア） |
+| `create_text_frame` | テキストフレームの作成（ポイント/エリア）。トラッキング・行送り・段落揃えを指定可能。`font_name` は `list_fonts` の名前と完全一致が必要（見つからなければ既定フォントで代用せずエラー） |
 | `create_path` | 任意パスの作成（ベジェハンドル対応） |
 | `place_image` | ラスター/PDF画像ファイルの配置（リンク/埋め込み）。SVG は拒否される — `import_svg_as_editable` を使用 |
 | `import_svg_as_editable` | SVG ファイルを編集可能なパス・テキスト・グループとして取り込み（リンク画像ではなく編集可能オブジェクトとして） |
-| `modify_object` | 既存オブジェクトのプロパティ変更 |
+| `modify_object` | 既存オブジェクトのプロパティ変更（テキストのトラッキング・行送り・段落揃えを含む）。グループ・複合パスへの塗り/線は内側のパスとテキストすべてに適用 |
 | `convert_to_outlines` | テキストのアウトライン化 |
 | `assign_color_profile` | カラープロファイルの割り当て（色値の変換は行わない） |
 | `create_document` | 新規ドキュメントの作成（サイズ、カラーモード指定） |
-| `close_document` | アクティブドキュメントを閉じる |
+| `close_document` | アクティブドキュメントを閉じる（未保存の変更がある場合、`save` を指定しないと閉じない） |
 | `resize_for_variation` | サイズ展開（ソースアートボードから複数サイズを一括生成） |
 | `align_objects` | 複数オブジェクトの整列・等間隔分布 |
 | `replace_color` | 色の一括検索・置換（許容誤差指定可） |
 | `manage_layers` | レイヤーの追加/リネーム/表示/ロック/順序変更/削除 |
 | `place_color_chips` | 使用カラーをアートボード外にカラーチップとして配置 |
-| `save_document` | ドキュメントの上書き保存・別名保存 |
+| `save_document` | ドキュメントの上書き保存・別名保存（別名保存は `overwrite: true` なしで既存ファイルを上書きしない） |
 | `open_document` | ファイルパスからドキュメントを開く |
 | `group_objects` | オブジェクトのグループ化（クリッピングマスク対応） |
 | `ungroup_objects` | グループの解除 |
 | `duplicate_objects` | オブジェクトの複製（オフセット指定可） |
 | `set_z_order` | 重なり順の変更（最前面/前面/背面/最背面） |
 | `move_to_layer` | オブジェクトを別レイヤーに移動 |
-| `delete_objects` | UUID 指定でオブジェクトを削除（ロック中は `force_unlock` が必要、`undo` で戻せる） |
+| `delete_objects` | UUID 指定でオブジェクトを削除（ロック中は `force_unlock` が必要。`undo` で戻せる場合もあるが、取り消しの単位は MCP の呼び出しではなく Illustrator の履歴） |
 | `manage_artboards` | アートボードの追加・削除・リサイズ・リネーム・整列 |
 | `manage_swatches` | スウォッチの追加・更新・削除 |
 | `manage_linked_images` | リンク画像の差し替え・埋め込み |
@@ -380,11 +383,11 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 | `apply_text_style` | 文字/段落スタイルの適用 |
 | `list_text_styles` | 文字/段落スタイル一覧の取得 |
 | `create_gradient` | グラデーションの作成・オブジェクトへの適用 |
-| `create_path_text` | パスに沿ったテキストの作成 |
+| `create_path_text` | パスに沿ったテキストの作成（トラッキング・揃えを指定可能。`font_name` は `create_text_frame` と同じく完全一致） |
 | `place_symbol` | シンボルインスタンスの配置・差し替え |
 | `select_objects` | UUID指定でオブジェクトを選択（複数選択対応） |
 | `create_crop_marks` | トンボ（トリムマーク）の作成。ロケールに応じた自動スタイル選択（日本式ダブルライン / 西洋式シングルライン） |
-| `place_style_guide` | アートボード外にビジュアルスタイルガイドを配置（カラー・フォント・スペーシング・マージン・ガイド間隔） |
+| `place_style_guide` | アートボード外にビジュアルスタイルガイドを非印刷レイヤーで配置（カラー・フォント・スペーシング・マージン・ガイド間隔）。アートボード上への計測表示は `annotate_artboard` 指定時のみ |
 | `undo` | 操作の取り消し/やり直し（複数ステップ対応） |
 
 </details>
@@ -396,21 +399,22 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 
 | ツール | 概要 |
 |---|---|
-| `export` | SVG / PNG / JPG 書き出し（アートボード、選択範囲、UUID 指定） |
+| `export` | SVG / PNG / JPG 書き出し（アートボード、選択範囲、UUID 指定。選択範囲・UUID 指定では対象だけを書き出す。`overwrite: true` なしで既存ファイルを上書きしない） |
 | `export_pdf` | 印刷用 PDF 書き出し（トンボ、裁ち落とし、選択的ダウンサンプリング、出力インテント） |
 
 </details>
 
-### ユーティリティ (3)
+### ユーティリティ (4)
 
 <details>
 <summary>クリックして展開</summary>
 
 | ツール | 概要 |
 |---|---|
-| `preflight_check` | 入稿前チェック（RGB 混在、リンク切れ、低解像度、白オーバープリント、透明+オーバープリント相互作用、PDF/X 適合等） |
+| `preflight_check` | 入稿前チェック（RGB 混在、リンク切れ、低解像度、白オーバープリント、透明+オーバープリント相互作用、PDF/X 適合等）。各検査が完了したか一部のみかを `coverage` で報告 |
 | `check_text_consistency` | テキスト整合性チェック（ダミーテキスト検出、表記揺れパターン検出、全テキスト一覧） |
 | `set_workflow` | ワークフロー設定（Web/Print モード切り替え、自動検出された座標系のオーバーライド） |
+| `set_illustrator_version` | 複数の Illustrator がインストールされているときに使用するバージョンを指定 |
 
 </details>
 
@@ -429,6 +433,7 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 - **RGB ドキュメント**では Web スタイルの座標系を使用。AI が扱いやすい形式です
 - `set_workflow` で自動検出された座標系を手動でオーバーライドできます
 - すべてのツールレスポンスに `coordinateSystem` フィールドが含まれ、使用中の座標系を確認できます
+- 自動検出に失敗した場合は、推測で進めずにエラーを返します。`coordinate_system` を明示するか `set_workflow` を使ってください
 
 ---
 
@@ -514,10 +519,11 @@ Color Bars
 | カラープロファイル | プロファイルの割り当てのみ対応。完全な変換はできません |
 | 裁ち落とし設定 | 裁ち落とし設定の読み取りはできません（Illustrator API の制限） |
 | WebP 書き出し | 非対応です（PNG / SVG をお使いください） |
-| 日本式トンボ | PDF 書き出し時は TrimMark コマンド方式で自動対応。ドキュメント上にトンボを生成→書き出し→undo で除去します |
+| 日本式トンボ | PDF 書き出し時は TrimMark コマンドでドキュメント上に一時的にトンボを生成→書き出し→除去します。単一アートボードのドキュメントのみ対応（複数アートボードではエラー） |
 | フォント埋め込み | 埋め込み方式（完全/サブセット）の制御はできません。PDF プリセットで設定してください |
 | サイズ展開 | 比例縮小のみ。テキストのはみ出し等は手動での調整が必要です |
 | SVG テキストのグリフ代替 | Illustrator は `font-family` のリストをグリフ単位でフォールバックしません。先頭のフォントがインストール済みで該当グリフを持たない場合、`import_svg_as_editable` はその文字を警告なく落としたうえで成功を返します。テキスト要素ごとに `font-family` を 1 つだけ指定し、使用するグリフを実際に含むフォントを選んでください。*未インストール*のフォントは Illustrator が代替フォントに置き換えるため、この問題は起きません（そちらは `preflight_check` の missing font 検出が対象です） |
+| オブジェクトのメモ | ツールはオブジェクトを「属性」パネルのメモに書き込んだ UUID で識別します。自分で書いたメモは残り、その先頭に UUID が付加されます |
 
 ---
 
@@ -581,9 +587,13 @@ E2E テストは新規ドキュメント（RGB + CMYK）を作成し、テスト
 
 ## Special Thanks
 
-フィードバックでこのプロジェクトを良くしてくれた方々に感謝します:
+フィードバックやコントリビューションでこのプロジェクトを良くしてくれた方々に感謝します:
 
 - [OKI Yoshiya (@448jp)](https://github.com/448jp)
+- [shadow (@shadowcz007)](https://github.com/shadowcz007)
+- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
+- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
+- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
 
 ---
 

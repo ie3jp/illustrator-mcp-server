@@ -11,7 +11,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for reading, manipulating, and exporting Adobe Illustrator design data — with 63 built-in tools.
+An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for reading, manipulating, and exporting Adobe Illustrator design data — with 67 built-in tools.
 
 Control Illustrator directly from AI assistants like Claude — extract design information for web implementation, verify print-ready data, and export assets.
 
@@ -111,7 +111,10 @@ From the Claude Desktop menu bar:
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
 > [!NOTE]
-> Modify and export tools will bring Illustrator to the foreground during execution.
+> Most modify tools bring Illustrator to the foreground during execution. Read tools and `export` run without switching apps; `export_pdf` brings Illustrator forward only when drawing Japanese crop marks.
+
+> [!NOTE]
+> **Your files are protected by default.** `close_document` will not throw away unsaved changes unless you explicitly choose to (`save: false`), and `export`, `save_document` (save as) and `extract_design_tokens` will not replace an existing file unless `overwrite: true` is set. If that is what you want, just tell Claude to "close without saving" or "overwrite the file".
 
 ### Multiple Illustrator Versions
 
@@ -127,7 +130,7 @@ If you have multiple versions of Illustrator installed, you can tell Claude whic
 | Variable | Default | Description |
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Timeout in milliseconds for normal tools |
-| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Timeout in milliseconds for heavy tools (import, export, structure dumps) |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Timeout in milliseconds for heavy tools (placing or importing files, export, preflight, style guides and color chips, size variations) |
 
 Raise these when a single call needs longer than the default: importing a large SVG with `import_svg_as_editable` (100+ objects), or running `get_document_structure` / `export_pdf` on a big document.
 
@@ -272,9 +275,9 @@ You:    Check placed image quality for print
 Claude:  → get_images (include_print_info: true)
 
          ■ Image Quality Report:
-         ✅ hero.psd — CMYK, 350dpi, scale 98%
-         ⚠ icon_set.png — RGB (mismatch with CMYK document), 300dpi, scale 100%
-         ❌ photo_bg.jpg — CMYK, 72dpi, scale 400% (over-enlarged)
+         ✅ hero.psd — CMYK, 350ppi effective
+         ⚠ icon_set.png — RGB (mismatch with CMYK document), 300ppi effective
+         ❌ photo_bg.jpg — CMYK, 72ppi effective (over-enlarged)
            → Replace with a 300dpi+ image at actual size
 ```
 
@@ -324,25 +327,25 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 | `get_document_structure` | Full tree: layers → groups → objects in one call |
 | `list_text_frames` | List of text frames (font, size, style name) |
 | `get_text_frame_detail` | All attributes of a specific text frame (kerning, paragraph settings, etc.) |
-| `get_colors` | Color information in use (swatches, gradients, spot colors). `include_diagnostics` for print analysis |
+| `get_colors` | Color information in use (swatches, gradients, spot colors; each used color listed once with a usage count). `include_diagnostics` for print analysis |
 | `get_path_items` | Path/shape data (fill, stroke, anchor points) |
 | `get_groups` | Groups, clipping masks, and compound path structure |
 | `get_effects` | Effects and appearance info (opacity, blend mode) |
-| `get_images` | Embedded/linked image info (resolution, broken link detection). `include_print_info` for color space mismatch & scale factor |
+| `get_images` | Embedded/linked image info (resolution, broken link detection). `include_print_info` for effective resolution per axis & color space mismatch |
 | `get_symbols` | Symbol definitions and instances |
 | `get_guidelines` | Guide information |
-| `get_overprint_info` | Overprint settings + K100/rich black detection & intent classification |
-| `get_separation_info` | Color separation info (CMYK process plates + spot color plates with usage counts) |
+| `get_overprint_info` | Overprint settings on paths, text and raster images + K100/rich black detection, with a heuristic label inferred from colors only (it cannot know your intent) |
+| `get_separation_info` | Color separation info (process and spot plates actually used, with usage counts; inks with no detected usage are listed separately) |
 | `get_selection` | Details of currently selected objects |
 | `find_objects` | Search by criteria (name, type, color, font, etc.) |
 | `check_contrast` | WCAG color contrast ratio check (manual or auto-detect overlapping pairs) |
-| `extract_design_tokens` | Extract design tokens as CSS custom properties, JSON, or Tailwind config |
+| `extract_design_tokens` | Extract design tokens as CSS custom properties, JSON, or Tailwind config (writing to a file never replaces an existing one without `overwrite: true`) |
 | `list_fonts` | List fonts available in Illustrator (no document required) |
 | `convert_coordinate` | Convert points between artboard and document coordinate systems |
 
 </details>
 
-### Modify Tools (39)
+### Modify Tools (40)
 
 <details>
 <summary>Click to expand</summary>
@@ -352,28 +355,28 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 | `create_rectangle` | Create a rectangle (supports rounded corners) |
 | `create_ellipse` | Create an ellipse |
 | `create_line` | Create a line |
-| `create_text_frame` | Create a text frame (point or area type) |
+| `create_text_frame` | Create a text frame (point or area type) with optional tracking, leading and paragraph alignment. `font_name` must be the exact name from `list_fonts` — an unknown font is an error, not a silent fallback |
 | `create_path` | Create a custom path (with Bezier handles) |
 | `place_image` | Place a raster/PDF image file as linked or embedded (SVG is rejected — use `import_svg_as_editable`) |
 | `import_svg_as_editable` | Import an SVG file as editable Illustrator paths/text/groups (not as a linked image) |
-| `modify_object` | Modify properties of an existing object |
+| `modify_object` | Modify properties of an existing object (incl. text tracking, leading and alignment). Fill/stroke on a group or compound path is applied to every path and text inside it |
 | `convert_to_outlines` | Convert text to outlines |
 | `assign_color_profile` | Assign (tag) a color profile (does not convert color values) |
 | `create_document` | Create a new document (size, color mode) |
-| `close_document` | Close the active document |
+| `close_document` | Close the active document (with unsaved changes, it won't close unless `save` is specified) |
 | `resize_for_variation` | Create size variations from a source artboard (proportional scaling) |
 | `align_objects` | Align and distribute multiple objects |
 | `replace_color` | Find and replace colors across document (with tolerance) |
 | `manage_layers` | Add, rename, show/hide, lock/unlock, reorder, or delete layers |
 | `place_color_chips` | Extract unique colors and place color chip swatches outside artboard |
-| `save_document` | Save or save-as the active document |
+| `save_document` | Save or save-as the active document (save-as won't replace an existing file without `overwrite: true`) |
 | `open_document` | Open a document from file path |
 | `group_objects` | Group objects (supports clipping masks) |
 | `ungroup_objects` | Ungroup a group, releasing children |
 | `duplicate_objects` | Duplicate objects with optional offset |
 | `set_z_order` | Change stacking order (front/back) |
 | `move_to_layer` | Move objects to a different layer |
-| `delete_objects` | Delete objects by UUID (locked objects need `force_unlock`; reversible with `undo`) |
+| `delete_objects` | Delete objects by UUID (locked objects need `force_unlock`; `undo` may revert it, but undo steps follow Illustrator's history, not MCP calls) |
 | `manage_artboards` | Add, remove, resize, rename, rearrange artboards |
 | `manage_swatches` | Add, update, or delete swatches |
 | `manage_linked_images` | Relink or embed placed images |
@@ -383,11 +386,11 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 | `apply_text_style` | Apply character or paragraph style to text |
 | `list_text_styles` | List all character and paragraph styles |
 | `create_gradient` | Create gradients and apply to objects |
-| `create_path_text` | Create text along a path |
+| `create_path_text` | Create text along a path (optional tracking and alignment; same exact-`font_name` rule as `create_text_frame`) |
 | `place_symbol` | Place or replace symbol instances |
 | `select_objects` | Select objects by UUID (multi-select supported) |
 | `create_crop_marks` | Create crop marks (trim marks) with locale-based style auto-detection (Japanese double-line / Western single-line) |
-| `place_style_guide` | Place a visual style guide outside the artboard (colors, fonts, spacing, margins, guide gaps) |
+| `place_style_guide` | Place a visual style guide outside the artboard on a non-printing layer (colors, fonts, spacing, margins, guide gaps). Measurement marks on the artboard itself are opt-in (`annotate_artboard`) |
 | `undo` | Undo/redo operations (multi-step) |
 
 </details>
@@ -399,21 +402,22 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 
 | Tool | Description |
 |---|---|
-| `export` | SVG / PNG / JPG export (by artboard, selection, or UUID) |
+| `export` | SVG / PNG / JPG export (by artboard, selection, or UUID — selection/UUID export only that object; won't replace an existing file without `overwrite: true`) |
 | `export_pdf` | Print-ready PDF export (crop marks, bleed, selective downsampling, output intent) |
 
 </details>
 
-### Utility (3)
+### Utility (4)
 
 <details>
 <summary>Click to expand</summary>
 
 | Tool | Description |
 |---|---|
-| `preflight_check` | Pre-press check (RGB mixing, broken links, low resolution, white overprint, transparency+overprint interaction, PDF/X compliance, etc.) |
+| `preflight_check` | Pre-press check (RGB mixing, broken links, low resolution, white overprint, transparency+overprint interaction, PDF/X compliance, etc.). Reports which checks were complete or only partial (`coverage`) |
 | `check_text_consistency` | Text consistency check (placeholder detection, notation variation patterns, full text listing for LLM analysis) |
 | `set_workflow` | Set workflow mode (web/print) to override auto-detected coordinate system |
+| `set_illustrator_version` | Choose which Illustrator version to use when several are installed |
 
 </details>
 
@@ -432,6 +436,7 @@ The server automatically detects the coordinate system from the document:
 - **RGB documents** use a web-style coordinate system that is easier for AI to work with
 - Use `set_workflow` to override the auto-detected coordinate system if needed
 - All tool responses include a `coordinateSystem` field indicating which system is active
+- If auto-detection fails, tools return an error instead of guessing — pass `coordinate_system` explicitly or call `set_workflow`
 
 ---
 
@@ -517,10 +522,11 @@ An abstract geometric landscape artwork — created entirely by Claude, with no 
 | Color profiles | Color profile assignment only — full conversion is not available |
 | Bleed settings | Bleed settings cannot be read (Illustrator API limitation) |
 | WebP export | Not supported — use PNG or SVG instead |
-| Japanese crop marks | PDF export automatically uses the TrimMark command approach: generates marks as document paths, exports, then removes via undo |
+| Japanese crop marks | PDF export draws the marks temporarily on the document with the TrimMark command, exports, then removes them. Single-artboard documents only — multi-artboard documents return an error |
 | Font embedding | Embedding mode (full/subset) cannot be controlled directly — use PDF presets |
 | Size variations | Proportional scaling only — text may need manual adjustment afterward |
 | SVG text glyph fallback | Illustrator does not fall back per glyph across a `font-family` list. If the first family is installed but lacks a glyph, `import_svg_as_editable` drops that character silently and still reports success. Use one font-family per text element and choose one that contains the glyphs you need. An *uninstalled* family is substituted instead and is unaffected; `preflight_check` covers that separate case |
+| Object notes | Tools identify objects by a UUID stored in each object's note (Attributes panel). A note you wrote yourself is kept — the UUID is added in front of it |
 
 ---
 
@@ -584,9 +590,13 @@ The E2E test creates fresh documents (RGB + CMYK), places test objects, runs 182
 
 ## Special Thanks
 
-Thanks to the following people for feedback that shaped this project:
+Thanks to the following people for feedback and contributions that shaped this project:
 
 - [OKI Yoshiya (@448jp)](https://github.com/448jp)
+- [shadow (@shadowcz007)](https://github.com/shadowcz007)
+- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
+- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
+- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
 
 ---
 

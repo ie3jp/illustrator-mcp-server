@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-Ein [MCP-Server (Model Context Protocol)](https://modelcontextprotocol.io/) zum Auslesen, Bearbeiten und Exportieren von Adobe-Illustrator-Designdaten — mit 63 integrierten Werkzeugen.
+Ein [MCP-Server (Model Context Protocol)](https://modelcontextprotocol.io/) zum Auslesen, Bearbeiten und Exportieren von Adobe-Illustrator-Designdaten — mit 67 integrierten Werkzeugen.
 
 Steuere Illustrator direkt aus KI-Assistenten wie Claude — extrahiere Designinformationen für die Webumsetzung, prüfe druckfertige Daten und exportiere Assets.
 
@@ -109,7 +109,10 @@ Aus der Claude-Desktop-Menüleiste:
 > **macOS:** Erlaube beim ersten Start den Automatisierungszugriff unter Systemeinstellungen > Datenschutz & Sicherheit > Automation.
 
 > [!NOTE]
-> Werkzeuge zum Bearbeiten und Exportieren bringen Illustrator während der Ausführung in den Vordergrund.
+> Die meisten Bearbeitungswerkzeuge bringen Illustrator während der Ausführung in den Vordergrund. Lesewerkzeuge und `export` laufen ohne App-Wechsel; `export_pdf` holt Illustrator nur beim Erzeugen japanischer Schnittmarken nach vorn.
+
+> [!NOTE]
+> **Deine Dateien sind standardmäßig geschützt.** `close_document` verwirft ungespeicherte Änderungen nur, wenn Du das ausdrücklich angibst (`save: false`), und `export`, `save_document` (Speichern unter) sowie `extract_design_tokens` ersetzen eine vorhandene Datei nur mit `overwrite: true`. Wenn Du genau das willst, sag Claude einfach „ohne Speichern schließen" oder „Datei überschreiben".
 
 ### Mehrere Illustrator-Versionen
 
@@ -119,6 +122,32 @@ Wenn Du mehrere Versionen von Illustrator installiert hast, kannst Du Claude im 
 **Unterstützte Versionen:** Illustrator 2024 (v28) und neuer sind verifiziert. Illustrator 2020–2023 (v24–v27) sollten funktionieren – sämtliche von diesem Server genutzten ExtendScript-APIs existieren seit v24 –, sind aber **nicht verifiziert**. Die Werkzeuge geben auf diesen Versionen daher eine Warnung zurück. Versionen älter als 2020 (v24) werden abgelehnt. Wenn auf einer nicht verifizierten Version etwas nicht funktioniert, [erstelle bitte ein Issue](https://github.com/ie3jp/illustrator-mcp-server/issues).
 > [!NOTE]
 > Wenn Illustrator bereits läuft, verbindet sich der Server unabhängig von der Versionseinstellung mit der laufenden Instanz. Die Version wird nur verwendet, um die korrekte Version zu starten, solange Illustrator noch nicht läuft.
+
+### Umgebungsvariablen
+
+| Variable | Standard | Beschreibung |
+|---|---|---|
+| `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Timeout in Millisekunden für normale Werkzeuge |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Timeout in Millisekunden für aufwendige Werkzeuge (Platzieren/Importieren von Dateien, Export, Preflight, Styleguides und Farbchips, Größenvarianten) |
+
+Erhöhe diese Werte, wenn ein einzelner Aufruf länger als der Standard braucht: etwa beim Import eines großen SVG mit `import_svg_as_editable` (100+ Objekte) oder bei `get_document_structure` / `export_pdf` auf einem umfangreichen Dokument.
+
+Die Werte müssen positive ganze Zahlen in Millisekunden sein. Alles andere (`0`, eine negative Zahl, eine nicht numerische Zeichenkette oder ein Wert über 2147483647) fällt auf den Standardwert zurück. Sie werden einmalig beim Serverstart eingelesen.
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
+        "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -244,9 +273,9 @@ Du:     Prüfe die Qualität der platzierten Bilder für den Druck
 Claude:  → get_images (include_print_info: true)
 
          ■ Bildqualitätsbericht:
-         ✅ hero.psd — CMYK, 350dpi, Skalierung 98%
-         ⚠ icon_set.png — RGB (Diskrepanz zum CMYK-Dokument), 300dpi, Skalierung 100%
-         ❌ photo_bg.jpg — CMYK, 72dpi, Skalierung 400% (zu stark vergrößert)
+         ✅ hero.psd — CMYK, effektiv 350ppi
+         ⚠ icon_set.png — RGB (Diskrepanz zum CMYK-Dokument), effektiv 300ppi
+         ❌ photo_bg.jpg — CMYK, effektiv 72ppi (zu stark vergrößert)
            → Durch ein Bild mit 300dpi+ in Originalgröße ersetzen
 ```
 
@@ -296,25 +325,25 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 | `get_document_structure` | Vollständiger Baum: Ebenen → Gruppen → Objekte in einem Aufruf |
 | `list_text_frames` | Liste der Textrahmen (Schrift, Größe, Stilname) |
 | `get_text_frame_detail` | Alle Attribute eines bestimmten Textrahmens (Unterschneidung, Absatzeinstellungen usw.) |
-| `get_colors` | Verwendete Farbinformationen (Farbfelder, Verläufe, Sonderfarben). `include_diagnostics` für Druckanalyse |
+| `get_colors` | Verwendete Farbinformationen (Farbfelder, Verläufe, Sonderfarben; jede verwendete Farbe einmal mit Nutzungszahl). `include_diagnostics` für Druckanalyse |
 | `get_path_items` | Pfad-/Formdaten (Füllung, Kontur, Ankerpunkte) |
 | `get_groups` | Gruppen, Schnittmasken und zusammengesetzte Pfadstruktur |
 | `get_effects` | Effekte und Aussehen-Infos (Deckkraft, Füllmethode) |
-| `get_images` | Info zu eingebetteten/verknüpften Bildern (Auflösung, Erkennung defekter Verknüpfungen). `include_print_info` für Farbraum-Diskrepanz und Skalierungsfaktor |
+| `get_images` | Info zu eingebetteten/verknüpften Bildern (Auflösung, Erkennung defekter Verknüpfungen). `include_print_info` für effektive Auflösung je Achse und Farbraum-Diskrepanz |
 | `get_symbols` | Symboldefinitionen und -instanzen |
 | `get_guidelines` | Informationen zu Hilfslinien |
-| `get_overprint_info` | Überdrucken-Einstellungen + K100/Tiefschwarz-Erkennung und Klassifizierung der Absicht |
-| `get_separation_info` | Farbauszugs-Info (CMYK-Prozessplatten + Sonderfarbenplatten mit Nutzungszählung) |
+| `get_overprint_info` | Überdrucken-Einstellungen von Pfaden, Text und Rasterbildern + K100/Tiefschwarz-Erkennung, mit einer heuristischen Einstufung allein anhand der Farbwerte (die Absicht kann sie nicht erkennen) |
+| `get_separation_info` | Farbauszugs-Info (tatsächlich verwendete Prozess- und Sonderfarbenplatten mit Nutzungszählung; Druckfarben ohne erkannte Nutzung werden separat aufgeführt) |
 | `get_selection` | Details der aktuell ausgewählten Objekte |
 | `find_objects` | Suche nach Kriterien (Name, Typ, Farbe, Schrift usw.) |
 | `check_contrast` | Prüfung des WCAG-Farbkontrasts (manuell oder automatische Erkennung überlappender Paare) |
-| `extract_design_tokens` | Design-Tokens als CSS Custom Properties, JSON oder Tailwind-Config extrahieren |
+| `extract_design_tokens` | Design-Tokens als CSS Custom Properties, JSON oder Tailwind-Config extrahieren (beim Schreiben in eine Datei wird eine vorhandene nur mit `overwrite: true` ersetzt) |
 | `list_fonts` | Listet in Illustrator verfügbare Schriften auf (kein Dokument erforderlich) |
 | `convert_coordinate` | Punkte zwischen Zeichenflächen- und Dokument-Koordinatensystemen umrechnen |
 
 </details>
 
-### Modify-Werkzeuge (38)
+### Modify-Werkzeuge (40)
 
 <details>
 <summary>Zum Aufklappen klicken</summary>
@@ -324,27 +353,28 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 | `create_rectangle` | Rechteck erstellen (unterstützt abgerundete Ecken) |
 | `create_ellipse` | Ellipse erstellen |
 | `create_line` | Linie erstellen |
-| `create_text_frame` | Textrahmen erstellen (Punkt- oder Flächentext) |
+| `create_text_frame` | Textrahmen erstellen (Punkt- oder Flächentext), optional mit Laufweite, Zeilenabstand und Absatzausrichtung. `font_name` muss exakt dem Namen aus `list_fonts` entsprechen — eine unbekannte Schrift führt zu einem Fehler statt zu einem stillen Ersatz |
 | `create_path` | Benutzerdefinierten Pfad erstellen (mit Bézier-Griffen) |
-| `place_image` | Eine Bilddatei verknüpft oder eingebettet platzieren |
-| `modify_object` | Eigenschaften eines vorhandenen Objekts ändern |
+| `place_image` | Eine Raster-/PDF-Bilddatei verknüpft oder eingebettet platzieren (SVG wird abgelehnt — nutze `import_svg_as_editable`) |
+| `import_svg_as_editable` | Eine SVG-Datei als bearbeitbare Illustrator-Pfade/-Texte/-Gruppen importieren (nicht als verknüpftes Bild) |
+| `modify_object` | Eigenschaften eines vorhandenen Objekts ändern (inkl. Laufweite, Zeilenabstand und Ausrichtung von Text). Füllung/Kontur auf einer Gruppe oder einem zusammengesetzten Pfad wird auf alle enthaltenen Pfade und Texte angewendet |
 | `convert_to_outlines` | Text in Pfade umwandeln |
 | `assign_color_profile` | Ein Farbprofil zuweisen (taggen) (konvertiert keine Farbwerte) |
 | `create_document` | Neues Dokument erstellen (Größe, Farbmodus) |
-| `close_document` | Aktives Dokument schließen |
+| `close_document` | Aktives Dokument schließen (bei ungespeicherten Änderungen wird ohne Angabe von `save` nicht geschlossen) |
 | `resize_for_variation` | Größenvarianten aus einer Quell-Zeichenfläche erstellen (proportionale Skalierung) |
 | `align_objects` | Mehrere Objekte ausrichten und verteilen |
 | `replace_color` | Farben dokumentweit suchen und ersetzen (mit Toleranz) |
 | `manage_layers` | Ebenen hinzufügen, umbenennen, ein-/ausblenden, sperren/entsperren, neu anordnen oder löschen |
 | `place_color_chips` | Eindeutige Farben extrahieren und Farbfeld-Swatches außerhalb der Zeichenfläche platzieren |
-| `save_document` | Aktives Dokument speichern oder „Speichern unter" |
+| `save_document` | Aktives Dokument speichern oder „Speichern unter" („Speichern unter" ersetzt eine vorhandene Datei nur mit `overwrite: true`) |
 | `open_document` | Ein Dokument aus einem Dateipfad öffnen |
 | `group_objects` | Objekte gruppieren (unterstützt Schnittmasken) |
 | `ungroup_objects` | Eine Gruppe auflösen und Kinder freigeben |
 | `duplicate_objects` | Objekte duplizieren mit optionalem Versatz |
 | `set_z_order` | Stapelreihenfolge ändern (vorn/hinten) |
 | `move_to_layer` | Objekte auf eine andere Ebene verschieben |
-| `delete_objects` | Objekte per UUID löschen (gesperrte Objekte benötigen `force_unlock`; mit `undo` rückgängig machbar) |
+| `delete_objects` | Objekte per UUID löschen (gesperrte Objekte benötigen `force_unlock`; `undo` kann es rückgängig machen, die Schritte folgen aber dem Illustrator-Protokoll, nicht den MCP-Aufrufen) |
 | `manage_artboards` | Zeichenflächen hinzufügen, entfernen, skalieren, umbenennen, neu anordnen |
 | `manage_swatches` | Farbfelder hinzufügen, aktualisieren oder löschen |
 | `manage_linked_images` | Platzierte Bilder neu verknüpfen oder einbetten |
@@ -354,11 +384,11 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 | `apply_text_style` | Zeichen- oder Absatzformat auf Text anwenden |
 | `list_text_styles` | Alle Zeichen- und Absatzformate auflisten |
 | `create_gradient` | Verläufe erstellen und auf Objekte anwenden |
-| `create_path_text` | Text entlang eines Pfads erstellen |
+| `create_path_text` | Text entlang eines Pfads erstellen (optional Laufweite und Ausrichtung; für `font_name` gilt dieselbe exakte Namensregel wie bei `create_text_frame`) |
 | `place_symbol` | Symbolinstanzen platzieren oder ersetzen |
 | `select_objects` | Objekte nach UUID auswählen (Mehrfachauswahl unterstützt) |
 | `create_crop_marks` | Schnittmarken (Beschnittzeichen) erstellen mit automatischer Stilerkennung nach Locale (japanische Doppellinie / westliche Einzellinie) |
-| `place_style_guide` | Einen visuellen Styleguide außerhalb der Zeichenfläche platzieren (Farben, Schriften, Abstände, Ränder, Hilfslinienabstände) |
+| `place_style_guide` | Einen visuellen Styleguide außerhalb der Zeichenfläche auf einer nicht druckenden Ebene platzieren (Farben, Schriften, Abstände, Ränder, Hilfslinienabstände). Messmarkierungen auf der Zeichenfläche selbst nur auf Wunsch (`annotate_artboard`) |
 | `undo` | Rückgängig-/Wiederholen-Operationen (mehrstufig) |
 
 </details>
@@ -370,21 +400,22 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 
 | Werkzeug | Beschreibung |
 |---|---|
-| `export` | SVG- / PNG- / JPG-Export (nach Zeichenfläche, Auswahl oder UUID) |
+| `export` | SVG- / PNG- / JPG-Export (nach Zeichenfläche, Auswahl oder UUID — bei Auswahl/UUID wird nur dieses Objekt exportiert; eine vorhandene Datei wird nur mit `overwrite: true` ersetzt) |
 | `export_pdf` | Druckfertiger PDF-Export (Schnittmarken, Beschnitt, selektive Neuberechnung der Auflösung, Output Intent) |
 
 </details>
 
-### Utility (3)
+### Utility (4)
 
 <details>
 <summary>Zum Aufklappen klicken</summary>
 
 | Werkzeug | Beschreibung |
 |---|---|
-| `preflight_check` | Druckvorstufen-Prüfung (RGB-Vermischung, defekte Verknüpfungen, niedrige Auflösung, Weißüberdruck, Zusammenspiel von Transparenz und Überdrucken, PDF/X-Konformität usw.) |
+| `preflight_check` | Druckvorstufen-Prüfung (RGB-Vermischung, defekte Verknüpfungen, niedrige Auflösung, Weißüberdruck, Zusammenspiel von Transparenz und Überdrucken, PDF/X-Konformität usw.). Meldet, welche Prüfungen vollständig oder nur teilweise erfolgt sind (`coverage`) |
 | `check_text_consistency` | Textkonsistenzprüfung (Platzhaltererkennung, Schreibweisen-Abweichungen, vollständige Textauflistung für LLM-Analyse) |
 | `set_workflow` | Workflow-Modus setzen (web/print), um das automatisch erkannte Koordinatensystem zu überschreiben |
+| `set_illustrator_version` | Festlegen, welche Illustrator-Version verwendet wird, wenn mehrere installiert sind |
 
 </details>
 
@@ -403,6 +434,7 @@ Der Server erkennt das Koordinatensystem automatisch anhand des Dokuments:
 - **RGB-Dokumente** verwenden ein web-artiges Koordinatensystem, mit dem die KI leichter arbeiten kann
 - Verwende `set_workflow`, um das automatisch erkannte Koordinatensystem bei Bedarf zu überschreiben
 - Alle Tool-Antworten enthalten ein Feld `coordinateSystem`, das angibt, welches System aktiv ist
+- Schlägt die automatische Erkennung fehl, geben die Werkzeuge einen Fehler zurück, statt zu raten — gib `coordinate_system` explizit an oder nutze `set_workflow`
 
 ---
 
@@ -488,9 +520,11 @@ Eine abstrakte, geometrische Landschaftsgrafik — vollständig von Claude erste
 | Farbprofile | Nur Zuweisung von Farbprofilen — eine vollständige Konvertierung ist nicht verfügbar |
 | Beschnittseinstellungen | Beschnittseinstellungen können nicht ausgelesen werden (Einschränkung der Illustrator-API) |
 | WebP-Export | Nicht unterstützt — verwende stattdessen PNG oder SVG |
-| Japanische Schnittmarken | Der PDF-Export verwendet automatisch den TrimMark-Befehl: Marken werden als Dokumentpfade erzeugt, exportiert und anschließend per Undo entfernt |
+| Japanische Schnittmarken | Der PDF-Export erzeugt die Marken mit dem TrimMark-Befehl vorübergehend im Dokument, exportiert und entfernt sie anschließend. Nur für Dokumente mit einer Zeichenfläche — bei mehreren Zeichenflächen wird ein Fehler zurückgegeben |
 | Einbetten von Schriften | Einbettungsmodus (vollständig/Subset) kann nicht direkt gesteuert werden — nutze PDF-Vorgaben |
 | Größenvarianten | Nur proportionale Skalierung — Text muss ggf. anschließend manuell nachjustiert werden |
+| Glyphen-Fallback bei SVG-Text | Illustrator greift innerhalb einer `font-family`-Liste nicht Glyphe für Glyphe auf die nächste Schrift zurück. Ist die erste Schrift installiert, enthält eine Glyphe aber nicht, verwirft `import_svg_as_editable` dieses Zeichen stillschweigend und meldet trotzdem Erfolg. Verwende pro Textelement nur eine `font-family` und wähle eine Schrift, die die benötigten Glyphen enthält. Eine *nicht installierte* Schrift wird dagegen ersetzt und ist nicht betroffen; diesen anderen Fall deckt `preflight_check` ab |
+| Objektnotizen | Die Werkzeuge identifizieren Objekte über eine UUID in der Notiz des Objekts (Attribute-Bedienfeld). Eine selbst geschriebene Notiz bleibt erhalten — die UUID wird davor eingefügt |
 
 ---
 
@@ -554,9 +588,13 @@ Der E2E-Test erstellt frische Dokumente (RGB + CMYK), platziert Testobjekte, fü
 
 ## Besonderer Dank
 
-Dank an die folgenden Personen für Feedback, das dieses Projekt geprägt hat:
+Dank an die folgenden Personen für Feedback und Beiträge, die dieses Projekt geprägt haben:
 
 - [OKI Yoshiya (@448jp)](https://github.com/448jp)
+- [shadow (@shadowcz007)](https://github.com/shadowcz007)
+- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
+- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
+- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
 
 ---
 

@@ -9,7 +9,7 @@
 [![MCP](https://img.shields.io/badge/MCP-Compatible-18181B.svg?style=flat-square&colorA=18181B)](https://modelcontextprotocol.io/)
 [![Ko-fi](https://img.shields.io/badge/Ko--fi-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/cyocun)
 
-一个用于读取、操作和导出 Adobe Illustrator 设计数据的 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/) 服务器 —— 内置 63 个工具。
+一个用于读取、操作和导出 Adobe Illustrator 设计数据的 [MCP（Model Context Protocol）](https://modelcontextprotocol.io/) 服务器 —— 内置 67 个工具。
 
 通过 Claude 等 AI 助手直接控制 Illustrator —— 提取设计信息用于 Web 实现、验证印前数据、导出素材资源。
 
@@ -109,7 +109,10 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 > **macOS：** 首次运行时，请在「系统设置 > 隐私与安全性 > 自动化」中授权自动化访问权限。
 
 > [!NOTE]
-> 修改和导出类工具在执行时会将 Illustrator 切换到前台。
+> 大多数修改类工具在执行时会将 Illustrator 切换到前台。读取类工具和 `export` 不会切换应用；`export_pdf` 仅在绘制日式裁切标记时才会将 Illustrator 切换到前台。
+
+> [!NOTE]
+> **文件默认受到保护。** 除非明确指定（`save: false`），`close_document` 不会丢弃未保存的更改；除非设置 `overwrite: true`，`export`、`save_document`（另存为）和 `extract_design_tokens` 不会覆盖已有文件。如果确实需要，直接告诉 Claude“不保存直接关闭”或“覆盖文件”即可。
 
 ### 多版本 Illustrator
 
@@ -119,6 +122,32 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 **支持版本：** 已在 Illustrator 2024（v28）及更高版本上验证。Illustrator 2020–2023（v24–v27）预计可以正常工作——本服务器使用的所有 ExtendScript API 自 v24 起就已存在——但**未经验证**，因此在这些版本上运行时工具会返回警告。早于 2020（v24）的版本不受支持。如果在未验证的版本上出现问题，请[提交 issue](https://github.com/ie3jp/illustrator-mcp-server/issues)。
 > [!NOTE]
 > 如果 Illustrator 已经在运行，服务器会连接到当前运行的实例，与版本设置无关。版本设置仅在 Illustrator 尚未启动时用于启动指定版本。
+
+### 环境变量
+
+| 变量 | 默认值 | 说明 |
+|---|---|---|
+| `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | 普通工具的超时时间（毫秒） |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 重型工具（置入/导入文件、导出、印前预检、样式指南与色卡、尺寸变体）的超时时间（毫秒） |
+
+当单次调用需要的时间超过默认值时，可以调大这些值。例如用 `import_svg_as_editable` 导入大型 SVG（100 个以上对象），或在大型文档上运行 `get_document_structure` / `export_pdf`。
+
+值必须是以毫秒为单位的正整数。其他任何值（`0`、负数、非数字字符串或大于 2147483647 的值）都会回退为默认值。这些值仅在服务器启动时读取一次。
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
+        "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"
+      }
+    }
+  }
+}
+```
 
 ---
 
@@ -244,9 +273,9 @@ Claude:  → preflight_check (target_pdf_profile: "x1a")
 Claude:  → get_images (include_print_info: true)
 
          ■ 图像质量报告：
-         ✅ hero.psd —— CMYK, 350dpi, 缩放 98%
-         ⚠ icon_set.png —— RGB（与 CMYK 文档不一致），300dpi，缩放 100%
-         ❌ photo_bg.jpg —— CMYK, 72dpi, 缩放 400%（过度放大）
+         ✅ hero.psd —— CMYK, 有效 350ppi
+         ⚠ icon_set.png —— RGB（与 CMYK 文档不一致），有效 300ppi
+         ❌ photo_bg.jpg —— CMYK, 有效 72ppi（过度放大）
            → 请替换为实际尺寸下 300dpi 以上的图像
 ```
 
@@ -296,25 +325,25 @@ Claude:  → check_contrast (auto_detect: true)
 | `get_document_structure` | 完整树形：一次调用返回图层 → 组 → 对象 |
 | `list_text_frames` | 文本框列表（字体、字号、样式名） |
 | `get_text_frame_detail` | 指定文本框的全部属性（字距、段落设置等） |
-| `get_colors` | 使用中的颜色信息（色板、渐变、专色）。`include_diagnostics` 可用于印刷分析 |
+| `get_colors` | 使用中的颜色信息（色板、渐变、专色；每种使用中的颜色只列出一次并附使用次数）。`include_diagnostics` 可用于印刷分析 |
 | `get_path_items` | 路径/形状数据（填充、描边、锚点） |
 | `get_groups` | 群组、剪切蒙版和复合路径结构 |
 | `get_effects` | 效果和外观信息（不透明度、混合模式） |
-| `get_images` | 嵌入/链接图像信息（分辨率、链接断开检测）。`include_print_info` 可检测色彩空间不匹配和缩放系数 |
+| `get_images` | 嵌入/链接图像信息（分辨率、链接断开检测）。`include_print_info` 可查看各轴向的有效分辨率和色彩空间不匹配 |
 | `get_symbols` | 符号定义与实例 |
 | `get_guidelines` | 参考线信息 |
-| `get_overprint_info` | 叠印设置 + K100/富黑检测与意图分类 |
-| `get_separation_info` | 分色信息（CMYK 印刷版 + 专色版及其使用次数） |
+| `get_overprint_info` | 路径、文本和栅格图像的叠印设置 + K100/富黑检测，并附仅根据颜色值推断的启发式标签（无法判断设计意图） |
+| `get_separation_info` | 分色信息（实际使用的印刷版和专色版及其使用次数；未检测到使用的油墨单独列出） |
 | `get_selection` | 当前选中对象的详细信息 |
 | `find_objects` | 按条件搜索（名称、类型、颜色、字体等） |
 | `check_contrast` | WCAG 色彩对比度检查（手动或自动检测重叠对） |
-| `extract_design_tokens` | 将设计令牌导出为 CSS 自定义属性、JSON 或 Tailwind 配置 |
+| `extract_design_tokens` | 将设计令牌导出为 CSS 自定义属性、JSON 或 Tailwind 配置（写入文件时，未设置 `overwrite: true` 不会覆盖已有文件） |
 | `list_fonts` | 列出 Illustrator 中可用的字体（无需文档） |
 | `convert_coordinate` | 在画板与文档坐标系之间转换点坐标 |
 
 </details>
 
-### 修改类工具 (38)
+### 修改类工具 (40)
 
 <details>
 <summary>点击展开</summary>
@@ -324,27 +353,28 @@ Claude:  → check_contrast (auto_detect: true)
 | `create_rectangle` | 创建矩形（支持圆角） |
 | `create_ellipse` | 创建椭圆 |
 | `create_line` | 创建直线 |
-| `create_text_frame` | 创建文本框（点文字或区域文字） |
+| `create_text_frame` | 创建文本框（点文字或区域文字），可指定字距（tracking）、行距和段落对齐。`font_name` 必须与 `list_fonts` 中的名称完全一致——找不到字体时会报错，而不会悄悄改用默认字体 |
 | `create_path` | 创建自定义路径（支持贝塞尔控制柄） |
-| `place_image` | 以链接或嵌入方式置入图像文件 |
-| `modify_object` | 修改现有对象的属性 |
+| `place_image` | 以链接或嵌入方式置入栅格/PDF 图像文件（不接受 SVG——请使用 `import_svg_as_editable`） |
+| `import_svg_as_editable` | 将 SVG 文件作为可编辑的 Illustrator 路径/文本/编组导入（而非链接图像） |
+| `modify_object` | 修改现有对象的属性（包括文本的字距、行距和对齐）。对编组或复合路径设置填色/描边时，会应用到其中的所有路径和文本 |
 | `convert_to_outlines` | 将文本轮廓化 |
 | `assign_color_profile` | 指定（标记）色彩配置文件（不会转换颜色值） |
 | `create_document` | 新建文档（尺寸、色彩模式） |
-| `close_document` | 关闭当前文档 |
+| `close_document` | 关闭当前文档（存在未保存的更改时，未指定 `save` 则不会关闭） |
 | `resize_for_variation` | 基于源画板创建尺寸变体（等比缩放） |
 | `align_objects` | 对齐与分布多个对象 |
 | `replace_color` | 在文档中查找并替换颜色（支持容差） |
 | `manage_layers` | 添加、重命名、显示/隐藏、锁定/解锁、重新排序或删除图层 |
 | `place_color_chips` | 提取唯一颜色并将色卡摆放在画板外 |
-| `save_document` | 保存或另存为当前文档 |
+| `save_document` | 保存或另存为当前文档（另存为时，未设置 `overwrite: true` 不会覆盖已有文件） |
 | `open_document` | 根据文件路径打开文档 |
 | `group_objects` | 将对象编组（支持剪切蒙版） |
 | `ungroup_objects` | 解组，释放子对象 |
 | `duplicate_objects` | 复制对象（可选偏移量） |
 | `set_z_order` | 更改层叠顺序（前/后） |
 | `move_to_layer` | 将对象移动到其他图层 |
-| `delete_objects` | 按 UUID 删除对象（锁定对象需要 `force_unlock`；可用 `undo` 撤销） |
+| `delete_objects` | 按 UUID 删除对象（锁定对象需要 `force_unlock`；可以尝试用 `undo` 撤销，但撤销步骤对应 Illustrator 的历史记录，而非 MCP 调用） |
 | `manage_artboards` | 添加、删除、调整大小、重命名、重新排列画板 |
 | `manage_swatches` | 添加、更新或删除色板 |
 | `manage_linked_images` | 重新链接或嵌入置入的图像 |
@@ -354,11 +384,11 @@ Claude:  → check_contrast (auto_detect: true)
 | `apply_text_style` | 对文本应用字符样式或段落样式 |
 | `list_text_styles` | 列出所有字符样式和段落样式 |
 | `create_gradient` | 创建渐变并应用到对象 |
-| `create_path_text` | 创建沿路径排列的文本 |
+| `create_path_text` | 创建沿路径排列的文本（可指定字距和对齐；`font_name` 与 `create_text_frame` 一样须完全一致） |
 | `place_symbol` | 置入或替换符号实例 |
 | `select_objects` | 按 UUID 选中对象（支持多选） |
 | `create_crop_marks` | 创建裁切标记（根据区域自动检测样式：日式双线 / 西式单线） |
-| `place_style_guide` | 在画板外放置可视化样式指南（颜色、字体、间距、边距、参考线间距） |
+| `place_style_guide` | 在画板外的非打印图层上放置可视化样式指南（颜色、字体、间距、边距、参考线间距）。仅在指定 `annotate_artboard` 时才会在画板上绘制测量标注 |
 | `undo` | 撤销/重做操作（支持多步） |
 
 </details>
@@ -370,21 +400,22 @@ Claude:  → check_contrast (auto_detect: true)
 
 | 工具 | 说明 |
 |---|---|
-| `export` | SVG / PNG / JPG 导出（按画板、选区或 UUID） |
+| `export` | SVG / PNG / JPG 导出（按画板、选区或 UUID；按选区/UUID 导出时仅导出该对象；未设置 `overwrite: true` 不会覆盖已有文件） |
 | `export_pdf` | 印刷就绪的 PDF 导出（裁切标记、出血、选择性降采样、输出意图） |
 
 </details>
 
-### 实用工具 (3)
+### 实用工具 (4)
 
 <details>
 <summary>点击展开</summary>
 
 | 工具 | 说明 |
 |---|---|
-| `preflight_check` | 印前预检（RGB 混用、链接断开、低分辨率、白色叠印、透明与叠印的相互影响、PDF/X 合规性等） |
+| `preflight_check` | 印前预检（RGB 混用、链接断开、低分辨率、白色叠印、透明与叠印的相互影响、PDF/X 合规性等）。通过 `coverage` 报告各项检查是完整完成还是仅部分完成 |
 | `check_text_consistency` | 文本一致性检查（占位符检测、写法不一致模式识别、提供完整文本列表供 LLM 分析） |
 | `set_workflow` | 设置工作流模式（web/print），覆盖自动检测的坐标系 |
+| `set_illustrator_version` | 安装了多个版本时，指定要使用的 Illustrator 版本 |
 
 </details>
 
@@ -403,6 +434,7 @@ Claude:  → check_contrast (auto_detect: true)
 - **RGB 文档**使用 Web 风格坐标系，更便于 AI 操作
 - 如果需要，可用 `set_workflow` 覆盖自动检测的坐标系
 - 所有工具响应都会包含 `coordinateSystem` 字段，指示当前生效的坐标系
+- 如果自动检测失败，工具会返回错误而不是自行猜测——请显式指定 `coordinate_system` 或使用 `set_workflow`
 
 ---
 
@@ -488,9 +520,11 @@ Color Bars
 | 色彩配置文件 | 仅支持色彩配置文件的指定 —— 不支持完整转换 |
 | 出血设置 | 无法读取出血设置（Illustrator API 限制） |
 | WebP 导出 | 不支持 —— 请改用 PNG 或 SVG |
-| 日式裁切标记 | PDF 导出会自动采用 TrimMark 命令方案：作为文档路径生成标记、导出后通过撤销移除 |
+| 日式裁切标记 | PDF 导出时通过 TrimMark 命令在文档中临时生成标记，导出后再移除。仅支持单画板文档——多画板文档会返回错误 |
 | 字体嵌入 | 无法直接控制嵌入模式（完整/子集）—— 请使用 PDF 预设 |
 | 尺寸变体 | 仅支持等比缩放 —— 文本可能需要事后手动调整 |
+| SVG 文本的字形回退 | Illustrator 不会在 `font-family` 列表中按字形逐个回退。如果列表中的第一个字体已安装但缺少某个字形，`import_svg_as_editable` 会静默丢弃该字符，并且仍然报告成功。请为每个文本元素只指定一个 `font-family`，并选择确实包含所需字形的字体。*未安装*的字体会被 Illustrator 替换，不受此问题影响；那种情况由 `preflight_check` 检测 |
+| 对象备注 | 工具通过写入每个对象备注（「属性」面板）中的 UUID 来识别对象。您自己写的备注会被保留，UUID 会添加在其前面 |
 
 ---
 
@@ -554,9 +588,13 @@ E2E 测试会创建全新文档（RGB + CMYK），置入测试对象，运行跨
 
 ## 特别感谢
 
-感谢以下人士提供的反馈，帮助完善了本项目：
+感谢以下人士提供的反馈和贡献，帮助完善了本项目：
 
 - [OKI Yoshiya (@448jp)](https://github.com/448jp)
+- [shadow (@shadowcz007)](https://github.com/shadowcz007)
+- [Jiaming Gu (@GJCav)](https://github.com/GJCav)
+- [Pattana Soranasataporn (@pattanakim)](https://github.com/pattanakim)
+- [Gyu Min Lee (@gyuminlee-repo)](https://github.com/gyuminlee-repo)
 
 ---
 
