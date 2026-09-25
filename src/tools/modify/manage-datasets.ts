@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { WRITE_ANNOTATIONS } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 /**
  * manage_datasets — 変数・データセットの一覧・適用・作成・インポート/エクスポート
@@ -15,7 +15,7 @@ import { WRITE_ANNOTATIONS } from './shared.js';
  *   Document.dataSets → Datasets コレクション
  *   Dataset.display() → void  (データセットを表示)
  *   Datasets.add() → Dataset
- *   Document.importVariables(fileSpec: File) → void
+ *   Document.importVariables(fileSpec: File) → void  (既存の変数・データセットを全置換する)
  *   Document.exportVariables(fileSpec: File) → void
  */
 const jsxCode = `
@@ -47,6 +47,32 @@ function parseCsvLine(line) {
   }
   result.push(current);
   return result;
+}
+// アートボード矩形に掛かる（visibleBounds が交差する）トップレベルのアイテムを z 順の下から集める。
+// Layer.pageItems はレイヤー直下のみを返すため、グループの子を二重に拾わない。サブレイヤーは再帰する
+function collectTemplateItems(container, abRect, out) {
+  var layers = container.layers;
+  for (var li = layers.length - 1; li >= 0; li--) {
+    var layer = layers[li];
+    for (var pi = layer.pageItems.length - 1; pi >= 0; pi--) {
+      var it = layer.pageItems[pi];
+      var vb = it.visibleBounds; // [left, top, right, bottom]
+      if (vb[2] >= abRect[0] && vb[0] <= abRect[2] && vb[3] <= abRect[1] && vb[1] >= abRect[3]) {
+        out.push(it);
+      }
+    }
+    collectTemplateItems(layer, abRect, out);
+  }
+}
+// アイテム自身と、グループ・複合パス内の子孫を配列で返す
+function collectWithDescendants(item) {
+  var list = [item];
+  if (item.typename === "GroupItem") {
+    iterateAllItems(item, function(child) { list.push(child); });
+  } else if (item.typename === "CompoundPathItem") {
+    for (var cp = 0; cp < item.pathItems.length; cp++) list.push(item.pathItems[cp]);
+  }
+  return list;
 }
 var preflight = preflightChecks();
 if (preflight) {
@@ -101,7 +127,7 @@ if (preflight) {
         try { if (doc.pageItems[cb].visibilityVariable) hasBound = true; } catch(_e2) {}
       }
       if (!hasBound) {
-        writeResultFile(RESULT_PATH, { error: true, message: "Cannot create dataset: no variables are bound to objects. Use bind_variable or import_csv first." });
+        writeResultFile(RESULT_PATH, { error: true, message: "Cannot create dataset: no variables are bound to objects. Use bind_variable or import (XML) first." });
       } else {
         var newDs = doc.dataSets.add();
         if (params.dataset_name) newDs.name = params.dataset_name;
@@ -183,46 +209,54 @@ if (preflight) {
               headers[hi] = headers[hi].replace(/^\\s+|\\s+$/g, "");
             }
 
-            // Duplicate artboards for each CSV row
+            // テンプレート（アートボード 0）は変更せず、CSV の各行ごとに新しいアートボードへ複製する
             var abRect = doc.artboards[0].artboardRect;
             var abWidth = abRect[2] - abRect[0];
+            var abHeight = abRect[1] - abRect[3]; // top - bottom (document coords)
 
-            // Collect references to original items (iterate in reverse for z-order)
+            // アートボード 0 に掛かるトップレベルのアイテムだけを複製元にする
+            // （doc.pageItems 全件だと他アートボードの中身まで複製される）
             var origItems = [];
+            collectTemplateItems(doc, abRect, origItems);
+            if (origItems.length === 0) {
+              throw new Error("No objects found on artboard 0 (the import_csv template)");
+            }
+
+            // Calculate how far items extend beyond artboard edges
+            // geometricBounds: [left, top, right, bottom]
             var rightOverhang = 0;
             var leftOverhang = 0;
-            for (var oi = doc.pageItems.length - 1; oi >= 0; oi--) {
-              var item = doc.pageItems[oi];
-              origItems.push(item);
-              // Calculate how far items extend beyond artboard edges
-              // geometricBounds: [left, top, right, bottom]
-              var gb = item.geometricBounds;
-              var rOver = gb[2] - abRect[2];
-              var lOver = abRect[0] - gb[0];
-              if (rOver > rightOverhang) rightOverhang = rOver;
-              if (lOver > leftOverhang) leftOverhang = lOver;
-            }
-            // Spacing = overhang on both sides + 20pt gap
-            var hSpacing = rightOverhang + leftOverhang + 20;
-            // Vertical overhang
             var topOverhang = 0;
             var bottomOverhang = 0;
-            var abHeight = abRect[1] - abRect[3]; // top - bottom (document coords)
-            for (var oi2 = 0; oi2 < origItems.length; oi2++) {
-              var gb2 = origItems[oi2].geometricBounds;
-              var tOver = gb2[1] - abRect[1];
-              var bOver = abRect[3] - gb2[3];
+            for (var oi = 0; oi < origItems.length; oi++) {
+              var gb = origItems[oi].geometricBounds;
+              var rOver = gb[2] - abRect[2];
+              var lOver = abRect[0] - gb[0];
+              var tOver = gb[1] - abRect[1];
+              var bOver = abRect[3] - gb[3];
+              if (rOver > rightOverhang) rightOverhang = rOver;
+              if (lOver > leftOverhang) leftOverhang = lOver;
               if (tOver > topOverhang) topOverhang = tOver;
               if (bOver > bottomOverhang) bottomOverhang = bOver;
             }
+            // Spacing = overhang on both sides + 20pt gap
+            var hSpacing = rightOverhang + leftOverhang + 20;
             var vSpacing = topOverhang + bottomOverhang + 20;
+
+            // 既存アートボードと重ならないよう、全アートボードの右端より右にグリッドを置く
+            var maxRight = abRect[2];
+            for (var ai = 0; ai < doc.artboards.length; ai++) {
+              var r = doc.artboards[ai].artboardRect;
+              if (r[2] > maxRight) maxRight = r[2];
+            }
+            var gridOffsetX = maxRight + hSpacing - abRect[0];
 
             // Grid layout: max 4 columns per row
             var maxCols = 4;
             var totalRows = lines.length - 1;
             if (totalRows <= maxCols) maxCols = totalRows;
 
-            var artboardNames = [];
+            var createdIndices = [];
             for (var ri = 1; ri < lines.length; ri++) {
               var values = parseCsvLine(lines[ri]);
               var rowName = params.dataset_name_prefix
@@ -231,54 +265,49 @@ if (preflight) {
               var gridIndex = ri - 1;
               var col = gridIndex % maxCols;
               var row = Math.floor(gridIndex / maxCols);
-              var xOffset = col * (abWidth + hSpacing);
+              var xOffset = gridOffsetX + col * (abWidth + hSpacing);
               var yOffset = row * (abHeight + vSpacing);
 
-              if (ri === 1) {
-                // First row: set text on original artboard
-                doc.artboards[0].name = rowName;
-                for (var ci2 = 0; ci2 < headers.length && ci2 < values.length; ci2++) {
-                  if (headers[ci2] === "") continue;
-                  for (var pi = 0; pi < origItems.length; pi++) {
-                    if (origItems[pi].name === headers[ci2] && origItems[pi].typename === "TextFrame") {
-                      origItems[pi].contents = values[ci2];
-                      break;
-                    }
-                  }
-                }
-              } else {
-                // Subsequent rows: add artboard and duplicate items
-                // Document coords: y increases upward, so subtract yOffset
-                var newRect = [abRect[0] + xOffset, abRect[1] - yOffset, abRect[2] + xOffset, abRect[3] - yOffset];
-                var newAb = doc.artboards.add(newRect);
-                newAb.name = rowName;
-                invalidateArtboardCache();
+              // Document coords: y increases upward, so subtract yOffset
+              var newRect = [abRect[0] + xOffset, abRect[1] - yOffset, abRect[2] + xOffset, abRect[3] - yOffset];
+              var newAb = doc.artboards.add(newRect);
+              newAb.name = rowName;
+              invalidateArtboardCache();
+              createdIndices.push(doc.artboards.length - 1);
 
-                for (var di = 0; di < origItems.length; di++) {
-                  var dup = origItems[di].duplicate();
-                  dup.translate(xOffset, -yOffset);
-                  if (dup.typename === "TextFrame") {
+              for (var di = 0; di < origItems.length; di++) {
+                var dup = origItems[di].duplicate();
+                dup.translate(xOffset, -yOffset);
+                // 複製はグループ内の子まで含めて走査する（UUID 再採番とテキスト差し込み）
+                var dupItems = collectWithDescendants(dup);
+                for (var dj = 0; dj < dupItems.length; dj++) {
+                  var d = dupItems[dj];
+                  // duplicate() は note（UUID）を継承するため、複製側の UUID を振り直す
+                  var dNote = "";
+                  try { dNote = d.note || ""; } catch(_eN) {}
+                  if (extractUUIDFromNote(dNote)) reassignUUID(d);
+                  if (d.typename === "TextFrame") {
                     for (var ci3 = 0; ci3 < headers.length && ci3 < values.length; ci3++) {
-                      if (dup.name === headers[ci3]) {
-                        dup.contents = values[ci3];
+                      if (headers[ci3] !== "" && d.name === headers[ci3]) {
+                        d.contents = values[ci3];
                         break;
                       }
                     }
                   }
                 }
               }
-              artboardNames.push(rowName);
             }
 
-            // Verify each artboard using common helper
+            // Verify each created artboard using common helper
             var verification = [];
-            for (var vai = 0; vai < doc.artboards.length; vai++) {
-              verification.push(verifyArtboardContents(vai));
+            for (var vai = 0; vai < createdIndices.length; vai++) {
+              verification.push(verifyArtboardContents(createdIndices[vai]));
             }
 
             writeResultFile(RESULT_PATH, {
               success: true,
               action: "import_csv",
+              templateArtboard: 0,
               columns: headers,
               artboards: verification
             });
@@ -308,7 +337,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Variables & Datasets',
       description:
-        'List variables/datasets, apply or create datasets, bind variables to objects, import CSV/XML. CSV headers are auto-bound to objects with matching names. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header. Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         action: z
           .enum([
@@ -343,7 +372,9 @@ export function register(server: McpServer): void {
           .optional()
           .describe('File path (XML for import/export, CSV for import_csv)'),
       },
-      annotations: WRITE_ANNOTATIONS,
+      // import は既存の変数・データセットを全置換する（Document.importVariables の仕様）ため、
+      // 最も破壊的なアクションに合わせて destructive とする
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });

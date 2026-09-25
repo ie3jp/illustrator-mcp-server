@@ -11,13 +11,38 @@ import { WRITE_ANNOTATIONS } from './shared.js';
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — selectObjectsOnActiveArtboard()
  */
 const jsxCode = `
+// 複製直後のアイテムと、グループ・複合パス内の子孫が継承した UUID を振り直す
+// （duplicate() は note を継承するため、放置すると UUID が重複する）
+function reassignDuplicatedUUIDs(dup) {
+  var list = [dup];
+  if (dup.typename === "GroupItem") {
+    iterateAllItems(dup, function(child) { list.push(child); });
+  } else if (dup.typename === "CompoundPathItem") {
+    for (var cp = 0; cp < dup.pathItems.length; cp++) list.push(dup.pathItems[cp]);
+  }
+  for (var li = 0; li < list.length; li++) {
+    var n = "";
+    try { n = list[li].note || ""; } catch(e) {}
+    if (extractUUIDFromNote(n)) reassignUUID(list[li]);
+  }
+}
 var preflight = preflightChecks();
 if (preflight) {
   writeResultFile(RESULT_PATH, preflight);
 } else {
+  var doc = null;
+  var savedActiveAbIdx = -1;
+  var savedSelection = null;
   try {
     var params = readParamsFile(PARAMS_PATH);
-    var doc = app.activeDocument;
+    doc = app.activeDocument;
+    // 作業中にアクティブアートボードと選択を書き換えるため、元の状態を控えて finally で戻す
+    savedActiveAbIdx = doc.artboards.getActiveArtboardIndex();
+    savedSelection = [];
+    var curSel = doc.selection;
+    if (curSel && curSel.length) {
+      for (var si = 0; si < curSel.length; si++) savedSelection.push(curSel[si]);
+    }
     var srcIdx = params.source_artboard_index;
     var targetSizes = params.target_sizes;
     var scaleMode = params.scale_mode || "proportional";
@@ -36,9 +61,14 @@ if (preflight) {
       // Collect all items on source artboard
       doc.artboards.setActiveArtboardIndex(srcIdx);
       doc.selectObjectsOnActiveArtboard();
-      var srcItems = doc.selection;
+      // 複製元を配列に控える（以降の複製で選択が変わっても参照が残る）
+      var srcItems = [];
+      var srcSel = doc.selection;
+      if (srcSel && srcSel.length) {
+        for (var ssi = 0; ssi < srcSel.length; ssi++) srcItems.push(srcSel[ssi]);
+      }
 
-      if (!srcItems || srcItems.length === 0) {
+      if (srcItems.length === 0) {
         writeResultFile(RESULT_PATH, {
           error: true,
           message: "No objects found on source artboard " + srcIdx
@@ -52,11 +82,15 @@ if (preflight) {
           var tgtWidthPt = target.width;
           var tgtHeightPt = target.height;
 
-          // Calculate new artboard position (place to the right of existing artboards)
-          var lastAb = doc.artboards[doc.artboards.length - 1];
-          var lastRect = lastAb.artboardRect;
-          var offsetX = lastRect[2] + 50; // 50pt gap
-          var newRect = [offsetX, lastRect[1], offsetX + tgtWidthPt, lastRect[1] - tgtHeightPt];
+          // 新規アートボードは全アートボードの右端より右に置く
+          // （コレクション末尾が空間的な右端とは限らないため、末尾基準だと既存と重なる）
+          var maxRight = srcRect[2];
+          for (var ai = 0; ai < doc.artboards.length; ai++) {
+            var abR = doc.artboards[ai].artboardRect;
+            if (abR[2] > maxRight) maxRight = abR[2];
+          }
+          var offsetX = maxRight + 50; // 50pt gap
+          var newRect = [offsetX, srcRect[1], offsetX + tgtWidthPt, srcRect[1] - tgtHeightPt];
 
           // Create new artboard
           var newAb = doc.artboards.add(newRect);
@@ -78,16 +112,11 @@ if (preflight) {
             scale = scaleY;
           }
 
-          // Re-select source items (selection may have been lost)
-          doc.artboards.setActiveArtboardIndex(srcIdx);
-          doc.selectObjectsOnActiveArtboard();
-          var itemsToCopy = doc.selection;
-
           // Duplicate and transform each item
           var duplicatedItems = [];
-          for (var ii = 0; ii < itemsToCopy.length; ii++) {
-            var srcItem = itemsToCopy[ii];
-            var dup = srcItem.duplicate();
+          for (var ii = 0; ii < srcItems.length; ii++) {
+            var dup = srcItems[ii].duplicate();
+            reassignDuplicatedUUIDs(dup);
             duplicatedItems.push(dup);
           }
 
@@ -120,9 +149,6 @@ if (preflight) {
           });
         }
 
-        // Deselect
-        doc.selection = null;
-
         // Verify created artboards
         var verifiedArtboards = [];
         for (var vai = 0; vai < createdArtboards.length; vai++) {
@@ -141,6 +167,11 @@ if (preflight) {
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Resize for variation failed: " + e.message, line: e.line });
+  } finally {
+    if (doc) {
+      try { if (savedActiveAbIdx >= 0) doc.artboards.setActiveArtboardIndex(savedActiveAbIdx); } catch(eAb) {}
+      try { doc.selection = (savedSelection && savedSelection.length > 0) ? savedSelection : null; } catch(eSel) {}
+    }
   }
 }
 `;
@@ -151,7 +182,7 @@ export function register(server: McpServer): void {
     {
       title: 'Resize for Variation',
       description:
-        'Create size variations from a source artboard. Duplicates all objects and scales/repositions them proportionally to fit target sizes. Limitations: no text reflow, effects/strokes scale with objects but may need manual adjustment, proportional placement only (not smart layout).',
+        'Create size variations from a source artboard. Duplicates all objects and scales/repositions them proportionally to fit target sizes. New artboards are placed to the right of all existing artboards; copies get new UUIDs. Limitations: no text reflow, effects/strokes scale with objects but may need manual adjustment, proportional placement only (not smart layout).',
       inputSchema: {
         source_artboard_index: z
           .number()
