@@ -84,11 +84,18 @@ function readParamsFile(filePath) {
 function writeResultFile(filePath, result) {
   // 未検証バージョンの警告を結果に添える（checkIllustratorVersion() が設定）。
   // 配列を返すツールには付与できないため、オブジェクトの場合のみ。
-  if (_versionWarning && result && typeof result === "object" && !(result instanceof Array)) {
-    if (result.warnings instanceof Array) {
-      result.warnings.push(_versionWarning);
-    } else {
-      result.warnings = [_versionWarning];
+  if (result && typeof result === "object" && !(result instanceof Array)) {
+    var extraWarnings = [];
+    if (_versionWarning) extraWarnings.push(_versionWarning);
+    // findItemByUUID() が重複 UUID を解決した場合の警告
+    for (var wi = 0; wi < _uuidAmbiguityWarnings.length; wi++) {
+      extraWarnings.push(_uuidAmbiguityWarnings[wi]);
+    }
+    if (extraWarnings.length > 0) {
+      if (!(result.warnings instanceof Array)) result.warnings = [];
+      for (var wj = 0; wj < extraWarnings.length; wj++) {
+        result.warnings.push(extraWarnings[wj]);
+      }
     }
   }
 
@@ -124,8 +131,26 @@ function generateUUID() {
   return parts.join("-");
 }
 
-// note フォーマット: "UUID" または "UUID::key=value::key=value"
-// UUID 部分は先頭36文字で固定
+// --- note フォーマット ---
+//
+// PageItem.note に UUID とメタデータを格納する（note は保存・再オープン後も残る。
+// native PageItem.uuid は保存をまたぐと変わるため永続 ID には使えない）。
+//
+//   "<UUID>"                                  … UUID のみ
+//   "<UUID>::ai-mcp:key=value::ai-mcp:k2=v2"  … UUID + メタデータ
+//   "<UUID> <ユーザーのメモ>"                   … 既存メモがあった場合（メモは温存）
+//   "<UUID> <ユーザーのメモ>::ai-mcp:key=value"
+//
+// - UUID は常に先頭36文字。extractUUIDFromNote() は先頭36文字だけを見る
+//   （duplicate_objects は substring(36) で UUID 部分だけ差し替えている）
+// - 既存メモがある場合は UUID の後ろに NOTE_UUID_SEPARATOR を挟んで元の文字列を残す
+// - メタデータのキーは "ai-mcp:" 名前空間付き。ユーザーが "::rot=" と書いていても壊さない
+// - 旧フォーマット（"<UUID>::key=value"、名前空間なし）も読み取る。書き込み時に名前空間付きへ移行する
+//   旧フォーマットのメタデータは UUID 直後の "::" 連鎖にしか存在しないため、
+//   名前空間なしキーは note が "<UUID>::" で始まる場合のみ探す
+
+var NOTE_UUID_SEPARATOR = " ";
+var NOTE_META_NAMESPACE = "ai-mcp:";
 
 function extractUUIDFromNote(note) {
   if (!note || note.length < 36) return "";
@@ -136,12 +161,25 @@ function extractUUIDFromNote(note) {
   return "";
 }
 
-function getNoteMeta(note, key) {
+// メタデータタグの位置を返す（名前空間付き優先、なければ旧フォーマット）。見つからなければ null
+function _findNoteMetaTag(note, key) {
   if (!note) return null;
-  var tag = "::" + key + "=";
-  var idx = note.indexOf(tag);
-  if (idx < 0) return null;
-  var start = idx + tag.length;
+  var nsTag = "::" + NOTE_META_NAMESPACE + key + "=";
+  var idx = note.indexOf(nsTag);
+  if (idx >= 0) return { index: idx, tag: nsTag };
+  // 旧フォーマット: "<UUID>::key=value::..."
+  if (extractUUIDFromNote(note) && note.substring(36, 38) === "::") {
+    var legacyTag = "::" + key + "=";
+    var lidx = note.indexOf(legacyTag, 36);
+    if (lidx >= 0) return { index: lidx, tag: legacyTag };
+  }
+  return null;
+}
+
+function getNoteMeta(note, key) {
+  var found = _findNoteMetaTag(note, key);
+  if (!found) return null;
+  var start = found.index + found.tag.length;
   var end = note.indexOf("::", start);
   return end < 0 ? note.substring(start) : note.substring(start, end);
 }
@@ -149,21 +187,22 @@ function getNoteMeta(note, key) {
 function setNoteMeta(item, key, value) {
   var note = "";
   try { note = item.note || ""; } catch(e) { return; }
-  var tag = "::" + key + "=";
-  var idx = note.indexOf(tag);
-  if (idx >= 0) {
-    // 既存のキーを置換
-    var start = idx + tag.length;
+  var nsTag = "::" + NOTE_META_NAMESPACE + key + "=";
+  var found = _findNoteMetaTag(note, key);
+  if (found) {
+    // 既存のキーを置換（旧フォーマットのキーはこの場で名前空間付きに移行）
+    var start = found.index + found.tag.length;
     var end = note.indexOf("::", start);
-    note = note.substring(0, idx) + tag + value + (end >= 0 ? note.substring(end) : "");
+    note = note.substring(0, found.index) + nsTag + value + (end >= 0 ? note.substring(end) : "");
   } else {
-    note = note + tag + value;
+    note = note + nsTag + value;
   }
   try { item.note = note; } catch(e) {}
 }
 
 function ensureUUID(pageItem) {
-  // note プロパティに UUID がなければ遅延割り当て
+  // note プロパティに UUID がなければ遅延割り当て。
+  // 既存の note（ユーザーのメモ等）は消さず、先頭に UUID を付加する。
   var note = "";
   try { note = pageItem.note || ""; } catch(e) { /* note がないオブジェクトもある */ }
 
@@ -172,10 +211,26 @@ function ensureUUID(pageItem) {
 
   uuid = generateUUID();
   try {
-    pageItem.note = uuid;
+    pageItem.note = note.length > 0 ? (uuid + NOTE_UUID_SEPARATOR + note) : uuid;
   } catch(e) {
     // ロックされたオブジェクト等で書き込み不可の場合はそのまま返す
   }
+  return uuid;
+}
+
+// UUID を新しい値に差し替える（duplicate() は note を継承するため複製側に使う）。
+// ユーザーのメモとメタデータは温存する。新しい UUID を返す
+function reassignUUID(pageItem) {
+  var note = "";
+  try { note = pageItem.note || ""; } catch(e) {}
+  var uuid = generateUUID();
+  var newNote;
+  if (extractUUIDFromNote(note)) {
+    newNote = uuid + note.substring(36);
+  } else {
+    newNote = note.length > 0 ? (uuid + NOTE_UUID_SEPARATOR + note) : uuid;
+  }
+  try { pageItem.note = newNote; } catch(e) {}
   return uuid;
 }
 
@@ -223,6 +278,9 @@ function colorToObject(color) {
   if (tn === "GrayColor") {
     return { type: "gray", value: color.gray };
   }
+  if (tn === "LabColor") {
+    return { type: "lab", l: color.l, a: color.a, b: color.b };
+  }
   if (tn === "NoColor") {
     return { type: "none" };
   }
@@ -245,12 +303,17 @@ function getBoundsWebCoord(item, artboardRect) {
       height: b[1] - b[3]  // top - bottom (Illustrator座標では top > bottom)
     };
   }
-  // アートボードなしの場合はドキュメント座標をWeb向きに変換
+  // アートボードなしの場合はドキュメント座標をWeb向きに変換（Y だけ反転）。
+  // アイテムがどのアートボードにも属さない（getArtboardIndexForItem() が -1）と
+  // artboard-web 指定でもここに来る。アートボード相対ではない第三の座標系になるため、
+  // 無警告で返さず artboardRelative: false と coordinateNote で明示する。
   return {
     x: b[0],
     y: -b[1],
     width: b[2] - b[0],
-    height: b[1] - b[3]
+    height: b[1] - b[3],
+    artboardRelative: false,
+    coordinateNote: "Not artboard-relative (no artboard resolved, e.g. the object's center is outside every artboard): x/y are document coordinates with Y flipped (Y down)."
   };
 }
 
@@ -421,26 +484,26 @@ function getItemType(item) {
 }
 
 // --- zIndex 計算 ---
-// Illustrator の pageItems は前面→背面の順
-// zIndex は 0-based 背面→前面の昇順
+// zIndex は 0-based 背面→前面の昇順（親コンテナ内）。
+// PageItem.itemIndex は実機に存在しない（undefined）ため、PageItem.zOrderPosition
+// （親コンテナ内の重なり順、1 始まり・背面が 1。実機確認済み）を 0 始まりに直して使う。
+// ただし同一 JSX 内で作成した直後のアイテムは再描画前だと zOrderPosition が
+// "No such element" を投げる（実機確認済み）。その場合は親の pageItems（前面→背面の順）
+// から同一参照を探して算出する。
 
 function getZIndex(item) {
   try {
-    var parent = item.parent;
-    var total = 0;
-    if (parent.typename === "Layer") {
-      total = parent.pageItems.length;
-    } else if (parent.typename === "GroupItem") {
-      total = parent.pageItems.length;
-    } else {
-      return 0;
+    var pos = item.zOrderPosition;
+    if (typeof pos === "number" && !isNaN(pos) && pos >= 1) return pos - 1;
+  } catch(e) {}
+  try {
+    var siblings = item.parent.pageItems;
+    var total = siblings.length;
+    for (var i = 0; i < total; i++) {
+      if (siblings[i] == item) return total - 1 - i;
     }
-    var idx = total - item.itemIndex;
-    if (isNaN(idx)) return 0;
-    return idx;
-  } catch(e) {
-    return 0;
-  }
+  } catch(e2) {}
+  return 0;
 }
 
 // --- UUID 検索（インデックス付き） ---
@@ -448,28 +511,56 @@ function getZIndex(item) {
 // 同一 JSX 実行内で UUID→item マップを遅延構築し、2回目以降は O(1) で引く
 var _uuidIndex = null;
 
-function _buildUUIDIndex() {
+// UUID 重複の記録（uuid → 出現数。2 以上のものだけ入る）。
+// duplicate() やコピー&ペーストは note を継承するため、同じ UUID を持つオブジェクトが
+// 実際に複数存在しうる。インデックスは先勝ち（上のレイヤー・前面側が先）のまま、
+// 重複は getUUIDDuplicates() で取得できるようにする。
+var _uuidDuplicates = null;
+
+// findItemByUUID() が重複 UUID を解決したときの警告。writeResultFile() が結果に付与する
+var _uuidAmbiguityWarnings = [];
+
+function _resetUUIDIndex() {
   _uuidIndex = {};
+  _uuidDuplicates = {};
+}
+
+function _buildUUIDIndex() {
+  _resetUUIDIndex();
   var doc = app.activeDocument;
   for (var li = 0; li < doc.layers.length; li++) {
     _indexContainer(doc.layers[li]);
   }
 }
 
+function _indexItem(item) {
+  try {
+    if (item.note && item.note.length > 0) {
+      var uid = extractUUIDFromNote(item.note);
+      if (uid) {
+        if (!_uuidIndex[uid]) {
+          _uuidIndex[uid] = item;
+        } else {
+          _uuidDuplicates[uid] = (_uuidDuplicates[uid] || 1) + 1;
+        }
+      }
+    }
+  } catch(e) {}
+}
+
 function _indexContainer(container) {
   for (var i = 0; i < container.pageItems.length; i++) {
     var item = container.pageItems[i];
-    try {
-      if (item.note && item.note.length > 0) {
-        var uid = extractUUIDFromNote(item.note);
-        if (uid && !_uuidIndex[uid]) {
-          _uuidIndex[uid] = item;
-        }
-      }
-    } catch(e) {}
+    _indexItem(item);
     try {
       if (item.typename === "GroupItem") {
         _indexContainer(item);
+      } else if (item.typename === "CompoundPathItem") {
+        // Layer.pageItems / GroupItem.pageItems は複合パス内部の PathItem を含まない
+        // （実機確認済み）。get_groups 等が内部パスに発行した UUID を解決できるよう明示的に辿る
+        for (var pi = 0; pi < item.pathItems.length; pi++) {
+          _indexItem(item.pathItems[pi]);
+        }
       }
     } catch(e) {}
   }
@@ -490,7 +581,31 @@ function _indexContainer(container) {
 
 function findItemByUUID(uuid) {
   if (!_uuidIndex) _buildUUIDIndex();
-  return _uuidIndex[uuid] || null;
+  var item = _uuidIndex[uuid] || null;
+  if (item && _uuidDuplicates && _uuidDuplicates[uuid]) {
+    var msg = "UUID " + uuid + " is shared by " + _uuidDuplicates[uuid] +
+      " objects (duplicate/copy-paste copies the note that stores the UUID). " +
+      "The first match in layer order (top layer, frontmost first) was used; it may not be the object you meant.";
+    var seen = false;
+    for (var i = 0; i < _uuidAmbiguityWarnings.length; i++) {
+      if (_uuidAmbiguityWarnings[i] === msg) { seen = true; break; }
+    }
+    if (!seen) _uuidAmbiguityWarnings.push(msg);
+  }
+  return item;
+}
+
+// 重複している UUID の一覧を返す: [{ uuid: string, count: number }]
+function getUUIDDuplicates() {
+  if (!_uuidIndex) _buildUUIDIndex();
+  var list = [];
+  if (!_uuidDuplicates) return list;
+  for (var uid in _uuidDuplicates) {
+    if (_uuidDuplicates.hasOwnProperty(uid)) {
+      list.push({ uuid: uid, count: _uuidDuplicates[uid] });
+    }
+  }
+  return list;
 }
 
 // --- レイヤー解決 ---
@@ -539,12 +654,27 @@ function getTextKind(tf) {
 
 // --- 再帰的アイテム走査 ---
 
+// container（Layer / GroupItem）配下の全 PageItem に callback を呼ぶ。
+// GroupItem・複合パス内部の PathItem・サブレイヤー（Layer.layers）も辿る。
+// 複合パスは本体（CompoundPathItem）→ 内部 PathItem の順に呼ばれる。
 function iterateAllItems(container, callback) {
   for (var i = 0; i < container.pageItems.length; i++) {
     var item = container.pageItems[i];
     callback(item);
     if (item.typename === "GroupItem") {
       iterateAllItems(item, callback);
+    } else if (item.typename === "CompoundPathItem") {
+      // Layer.pageItems は複合パス内部を含まないため明示的に辿る
+      for (var pi = 0; pi < item.pathItems.length; pi++) {
+        callback(item.pathItems[pi]);
+      }
+    }
+  }
+  var subLayers = null;
+  try { subLayers = container.layers; } catch(e) {}
+  if (subLayers && subLayers.length > 0) {
+    for (var sl = 0; sl < subLayers.length; sl++) {
+      iterateAllItems(subLayers[sl], callback);
     }
   }
 }
@@ -562,7 +692,11 @@ function iterateAllItems(container, callback) {
  */
 function checkArtboardBounds(item, artboardRect) {
   if (!artboardRect) return null;
-  var gb = item.geometricBounds; // [left, top, right, bottom]
+  // ストローク幅を含む visibleBounds で判定する（geometricBounds だと太いストロークで
+  // 実際には見えているのに「completely outside」と誤報する）。取れなければ geometricBounds
+  var gb = null; // [left, top, right, bottom]
+  try { gb = item.visibleBounds; } catch(e) {}
+  if (!gb || gb.length !== 4) gb = item.geometricBounds;
   var abL = artboardRect[0], abT = artboardRect[1], abR = artboardRect[2], abB = artboardRect[3];
   var itemL = gb[0], itemT = gb[1], itemR = gb[2], itemB = gb[3];
   // fully inside
@@ -573,6 +707,28 @@ function checkArtboardBounds(item, artboardRect) {
   }
   // partially outside
   return "WARNING: This object extends beyond the artboard edges. Parts of it may be clipped in the final output.";
+}
+
+// 対象自身の hidden に加え、親 GroupItem 等の hidden と Layer.visible を
+// Document まで遡って判定する（非表示レイヤー上のオブジェクトは見えていない）
+function isItemEffectivelyVisible(item) {
+  try { if (item.hidden === true) return false; } catch(e) {}
+  var obj = null;
+  try { obj = item.parent; } catch(e) {}
+  var depth = 0;
+  while (obj && depth < 100) {
+    var tn = "";
+    try { tn = obj.typename; } catch(e) { break; }
+    if (tn === "Document") break;
+    if (tn === "Layer") {
+      try { if (obj.visible === false) return false; } catch(e) {}
+    } else {
+      try { if (obj.hidden === true) return false; } catch(e) {}
+    }
+    try { obj = obj.parent; } catch(e) { break; }
+    depth++;
+  }
+  return true;
 }
 
 function verifyItem(item, coordSystem, artboardRect) {
@@ -590,16 +746,25 @@ function verifyItem(item, coordSystem, artboardRect) {
       var ca = item.textRange.characterAttributes;
       try { snap.fontSize = ca.size; } catch (eSize) {}
       try { snap.tracking = ca.tracking; } catch (eTrack) {}
+      // TextFrame 自体は塗りを持たないため、文字の塗り色を fill として報告する。
+      // 範囲全体で取れない（混在等）場合は先頭文字の色を使う
+      try {
+        var tfFill = ca.fillColor;
+        if (tfFill === void 0 || tfFill === null) {
+          try { tfFill = item.characters[0].characterAttributes.fillColor; } catch (eFirst) {}
+        }
+        snap.fill = colorToObject(tfFill);
+      } catch (eFill) {}
     } catch (eAttr) {}
+  } else {
+    try {
+      if (item.filled) {
+        snap.fill = colorToObject(item.fillColor);
+      } else {
+        snap.fill = { type: "none" };
+      }
+    } catch(e) {}
   }
-
-  try {
-    if (item.filled) {
-      snap.fill = colorToObject(item.fillColor);
-    } else {
-      snap.fill = { type: "none" };
-    }
-  } catch(e) {}
 
   try {
     if (item.stroked) {
@@ -608,7 +773,7 @@ function verifyItem(item, coordSystem, artboardRect) {
   } catch(e) {}
 
   snap.layer = getParentLayerName(item);
-  snap.visible = item.hidden !== true;
+  snap.visible = isItemEffectivelyVisible(item);
 
   var boundsWarning = checkArtboardBounds(item, artboardRect);
   if (boundsWarning) snap.warning = boundsWarning;
