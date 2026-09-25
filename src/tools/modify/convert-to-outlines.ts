@@ -25,6 +25,8 @@ if (preflight) {
     // アウトライン化は不可逆。失敗（ロック・非表示など）を握りつぶさず、対象と理由を返す
     function convertFrame(tf) {
       try {
+        // createOutline() はロック中でも例外なしで変換してしまう（実機確認）ため、ロックを尊重して除外する
+        if (isItemEffectivelyLocked(tf)) throw new Error("locked (unlock the object or its layer first)");
         tf.createOutline();
         count++;
       } catch (convErr) {

@@ -900,6 +900,21 @@ function isItemEffectivelyVisible(item) {
   return true;
 }
 
+// 対象自身・親グループ・レイヤーのいずれかがロックされていれば true
+function isItemEffectivelyLocked(item) {
+  var obj = item;
+  var depth = 0;
+  while (obj && depth < 100) {
+    var tn = "";
+    try { tn = obj.typename; } catch(e) { break; }
+    if (tn === "Document") break;
+    try { if (obj.locked === true) return true; } catch(e) {}
+    try { obj = obj.parent; } catch(e) { break; }
+    depth++;
+  }
+  return false;
+}
+
 function verifyItem(item, coordSystem, artboardRect) {
   var snap = {
     name: item.name || "",

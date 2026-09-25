@@ -95,6 +95,12 @@ function runJsx(code: string, params: Record<string, unknown>, globals: Globals)
     ensureUUID: () => 'group-uuid',
     extractUUIDFromNote: (note: string) => (note && note.length >= 36 ? note.substring(0, 36) : ''),
     getParentLayerName: () => 'Layer 1',
+    isItemEffectivelyLocked: (item: { locked?: boolean; parent?: unknown }) => {
+      for (let o = item as { locked?: boolean; parent?: unknown; typename?: string } | undefined; o && o.typename !== 'Document'; o = o.parent as typeof o) {
+        if (o.locked === true) return true;
+      }
+      return false;
+    },
     getItemType: () => 'path',
     getActiveArtboardRect: () => null,
     getArtboardRectByIndex: () => [0, 0, 100, -100],
@@ -194,6 +200,19 @@ describe('convert_to_outlines: 失敗を隠さない', () => {
     expect(result.failed).toEqual([
       { uuid: UUID_B, name: 'locked text', layer: 'Layer 1', reason: 'Target layer cannot be modified' },
     ]);
+  });
+
+  it('ロックされたテキスト（レイヤーのロックを含む）は createOutline が成功しうるので変換しない', async () => {
+    const { code, params } = await captureJsx(registerConvertToOutlines, 'convert_to_outlines', { target: 'all' });
+    const lockedLayer = { typename: 'Layer', name: 'L', locked: true, parent: { typename: 'Document' } };
+    const self = { typename: 'TextFrame', name: 'self', note: UUID_A, locked: true, createOutline: vi.fn() };
+    const inLocked = { typename: 'TextFrame', name: 'inLocked', note: UUID_B, parent: lockedLayer, createOutline: vi.fn() };
+    const app = { activeDocument: { textFrames: [self, inLocked] } };
+    const result = runJsx(code, params, { app });
+    expect(self.createOutline).not.toHaveBeenCalled();
+    expect(inLocked.createOutline).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.failedCount).toBe(2);
   });
 
   it('同名レイヤーを target にすると最上位のテキストだけを変換し、警告を返す', async () => {
