@@ -7,10 +7,16 @@ on:
     branches: [main]
   release:
     types: [published]
+  # 公開途中で失敗したリリースのやり直し用（npm に公開済みならスキップして後続だけ実行する）
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to (re)publish, e.g. v1.9.0'
+        required: true
 
 jobs:
   build-and-test:
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
     permissions:
       contents: read
     strategy:
@@ -29,7 +35,7 @@ jobs:
       - run: npm test
 
   release:
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     environment: npm
     permissions:
@@ -38,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
           node-version: 24
@@ -46,7 +52,7 @@ jobs:
 
       - name: Verify package version matches tag
         env:
-          RAW_TAG: ${{ github.event.release.tag_name }}
+          RAW_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           TAG_VERSION="${RAW_TAG#v}"
           if ! [[ "$TAG_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -62,7 +68,7 @@ jobs:
       # Update version in metadata files from release tag
       - name: Update server.json and manifest.json version
         env:
-          RAW_TAG: ${{ github.event.release.tag_name }}
+          RAW_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: |
           VERSION="${RAW_TAG#v}"
           if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -77,7 +83,13 @@ jobs:
       - run: npm run build
       - run: npm test
       - name: Publish to npm
-        run: npm publish --provenance --access public
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "illustrator-mcp-server@$VERSION" version >/dev/null 2>&1; then
+            echo "illustrator-mcp-server@$VERSION is already on npm; skipping publish"
+          else
+            npm publish --provenance --access public
+          fi
 
       # Attach .mcpb to the published GitHub Release
       - run: npm ci --omit=dev
@@ -85,7 +97,7 @@ jobs:
       - name: Upload release asset
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda # v3.0.0
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ github.event.release.tag_name || inputs.tag }}
           files: '*.mcpb'
 
       # MCP Registry publish
@@ -98,6 +110,16 @@ jobs:
           echo "${MCP_PUBLISHER_SHA256}  mcp-publisher_linux_amd64.tar.gz" | sha256sum -c -
           tar xzf mcp-publisher_linux_amd64.tar.gz mcp-publisher
           sudo mv mcp-publisher /usr/local/bin/
+      # npm は公開直後に数分「処理中」で見えないことがあり、Registry の検証が 404 で落ちる（v1.9.0 で発生）
+      - name: Wait for the npm version to become visible
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          for i in $(seq 1 40); do
+            if npm view "illustrator-mcp-server@$VERSION" version --prefer-online >/dev/null 2>&1; then exit 0; fi
+            echo "waiting for illustrator-mcp-server@$VERSION on npm ($i/40)..."; sleep 15
+          done
+          echo "::error::illustrator-mcp-server@$VERSION did not appear on npm within 10 minutes" >&2
+          exit 1
       - name: Publish to MCP Registry
         run: |
           mcp-publisher login github-oidc
