@@ -1,6 +1,6 @@
 {
   "name": "illustrator-mcp-server",
-  "version": "1.10.0",
+  "version": "1.10.1",
   "mcpName": "io.github.ie3jp/illustrator-mcp-server",
   "description": "MCP server for Adobe Illustrator with 67 tools — read, create, and export design data. Everything the official Illustrator MCP (beta) can do and more, on stable Illustrator.",
   "type": "module",
