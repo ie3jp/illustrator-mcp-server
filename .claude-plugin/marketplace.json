@@ -1,0 +1,17 @@
+{
+  "name": "ie3jp-illustrator",
+  "owner": {
+    "name": "ie3jp",
+    "url": "https://github.com/ie3jp"
+  },
+  "description": "Adobe Illustrator tools for Claude: the illustrator-mcp-server MCP server and a preflight skill.",
+  "plugins": [
+    {
+      "name": "illustrator",
+      "source": "./plugins/illustrator",
+      "description": "Read, edit and export Adobe Illustrator documents via illustrator-mcp-server, with a pre-press preflight skill.",
+      "category": "design",
+      "tags": ["illustrator", "adobe", "design", "print", "preflight"]
+    }
+  ]
+}

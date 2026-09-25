@@ -4,7 +4,7 @@
 - 手順: バージョンbump → コミット → タグ作成・push → GitHub Releaseを作成 → release CIが npm publish・mcpbのリリース添付・MCP Registry公開まで自動実行
 - mcpbの手動アップロードは不要（CIの Upload release asset ステップが自動添付する）
 - server.json の description は **MCP Registry の100文字制限** あり。超えると release CI の Registry publish が422で失敗する（npm publishは成功してしまうので注意）
-- server.json / manifest.json のversionはCIがタグから自動更新するため、ローカルでは package.json のみbumpすればよい
+- server.json / manifest.json のversionはCIがタグから自動更新する。ローカルでは package.json と `plugins/illustrator/.claude-plugin/plugin.json` をbumpする（プラグインは git の main から直接配られるためCIでは書き換えられない。ずれると `test/unit/plugin-manifest.test.ts` が落ちる）
 - `npm publish` をローカルで実行しない
 - GitHub Releaseのノートは以下のフォーマットで日英併記する:
   - セクション: `### 新機能 / New Features`、`### 改善 / Improvements`、`### バグ修正 / Bug Fixes`、`### ドキュメント / Docs`、`### その他 / Other`（該当があるもののみ）
