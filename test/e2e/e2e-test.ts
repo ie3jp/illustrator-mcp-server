@@ -5,7 +5,8 @@
  *
  * 使い方: npx tsx test/e2e/e2e-test.ts
  */
-import { unlinkSync, mkdirSync, rmSync, existsSync } from 'fs';
+import { unlinkSync, mkdirSync, rmSync, existsSync, readFileSync } from 'fs';
+import { readImageDimensions } from '../../src/utils/image-header.js';
 import {
   createClient,
   callTool,
@@ -1094,35 +1095,109 @@ async function main(): Promise<void> {
     assert(rm.success === true, 'cleanup remove should succeed');
   });
 
-  // UUID 指定の isolated export — macOS /tmp symlink 対応
-  await test('export PNG by UUID (isolated export)', async () => {
+  // UUID / selection の isolated export — 対象だけが書き出されることを寸法で確認する。
+  // rectUuid は Phase 2 で回転・リサイズ済みのため、寸法が既知の専用矩形を使う
+  const EXPORT_RECT_W = 50;
+  const EXPORT_RECT_H = 30;
+  let exportRectUuid = '';
+  await test('create_rectangle for isolated export', async () => {
+    const r = await callTool(client, 'create_rectangle', {
+      x: 20, y: 20, width: EXPORT_RECT_W, height: EXPORT_RECT_H,
+      fill: { type: 'rgb', r: 0, g: 128, b: 0 },
+      stroke: { color: { type: 'none' } },
+      name: '__e2e_export_rect',
+    }) as any;
+    assert(typeof r.uuid === 'string', 'should return uuid: ' + JSON.stringify(r));
+    exportRectUuid = r.uuid;
+  });
+
+  // macOS /tmp symlink 対応も兼ねる
+  await test('export PNG by UUID (isolated export, target only)', async () => {
     const outPath = `${TMP_DIR}/e2e-uuid-export.png`;
     const result = await callTool(client, 'export', {
-      target: rectUuid,
+      target: exportRectUuid,
       format: 'png',
       output_path: outPath,
       raster_options: { background: 'transparent' },
     }) as any;
-    assert(result.success === true, 'UUID PNG export should succeed');
+    assert(result.success === true, 'UUID PNG export should succeed: ' + JSON.stringify(result));
     assert(result.output_path?.endsWith('e2e-uuid-export.png'), 'output_path should end with e2e-uuid-export.png');
+    const dims = readImageDimensions(result.output_path);
+    assert(dims !== null, 'should read PNG dimensions');
+    assertClose(dims!.width, EXPORT_RECT_W, 'PNG width should match the target only');
+    assertClose(dims!.height, EXPORT_RECT_H, 'PNG height should match the target only');
   });
 
-  await test('export JPG by UUID (isolated export)', async () => {
+  await test('export JPG by UUID (isolated export, target only)', async () => {
     const result = await callTool(client, 'export', {
-      target: rectUuid,
+      target: exportRectUuid,
       format: 'jpg',
       output_path: `${TMP_DIR}/e2e-uuid-export.jpg`,
     }) as any;
-    assert(result.success === true, 'UUID JPG export should succeed');
+    assert(result.success === true, 'UUID JPG export should succeed: ' + JSON.stringify(result));
+    const dims = readImageDimensions(result.output_path);
+    assert(dims !== null, 'should read JPG dimensions');
+    assertClose(dims!.width, EXPORT_RECT_W, 'JPG width should match the target only');
+    assertClose(dims!.height, EXPORT_RECT_H, 'JPG height should match the target only');
   });
 
-  await test('export SVG by UUID', async () => {
+  await test('export SVG by UUID (target only)', async () => {
     const result = await callTool(client, 'export', {
-      target: rectUuid,
+      target: exportRectUuid,
       format: 'svg',
       output_path: `${TMP_DIR}/e2e-uuid-export.svg`,
     }) as any;
-    assert(result.success === true, 'UUID SVG export should succeed');
+    assert(result.success === true, 'UUID SVG export should succeed: ' + JSON.stringify(result));
+    const svg = readFileSync(result.output_path, 'utf8');
+    const vb = svg.match(/viewBox="([^"]+)"/);
+    assert(vb !== null, 'SVG should have a viewBox');
+    const [, , vbW, vbH] = vb![1].trim().split(/[\s,]+/).map(Number);
+    assertClose(vbW, EXPORT_RECT_W, 'SVG viewBox width should match the target only');
+    assertClose(vbH, EXPORT_RECT_H, 'SVG viewBox height should match the target only');
+  });
+
+  await test('export PNG by selection (target only, selection kept)', async () => {
+    const sel = await callTool(client, 'select_objects', { uuids: [exportRectUuid] }) as any;
+    assert(sel.success === true, 'select should succeed');
+    const result = await callTool(client, 'export', {
+      target: 'selection',
+      format: 'png',
+      output_path: `${TMP_DIR}/e2e-selection-export.png`,
+    }) as any;
+    assert(result.success === true, 'selection PNG export should succeed: ' + JSON.stringify(result));
+    const dims = readImageDimensions(result.output_path);
+    assert(dims !== null, 'should read PNG dimensions');
+    assertClose(dims!.width, EXPORT_RECT_W, 'selection PNG width should match the selection only');
+    assertClose(dims!.height, EXPORT_RECT_H, 'selection PNG height should match the selection only');
+    const after = await callTool(client, 'get_selection') as any;
+    assert(JSON.stringify(after).includes(exportRectUuid), 'selection should be kept after export: ' + JSON.stringify(after));
+    await callTool(client, 'select_objects', { uuids: [] });
+  });
+
+  await test('cleanup isolated export rect', async () => {
+    const r = await callTool(client, 'delete_objects', { uuids: [exportRectUuid] }) as any;
+    assert(!r.error, 'delete should succeed: ' + JSON.stringify(r));
+  });
+
+  // 明示パスの既存ファイル保護
+  await test('export to existing explicit path without overwrite (should error)', async () => {
+    const result = await callTool(client, 'export', {
+      target: 'artboard:0',
+      format: 'png',
+      output_path: `${TMP_DIR}/e2e-export.png`,
+    }) as any;
+    assert(result.error === true, 'should refuse to overwrite: ' + JSON.stringify(result));
+    assert(Array.isArray(result.existing_files) && result.existing_files.length === 1, 'should list the existing file');
+  });
+
+  await test('export to existing explicit path with overwrite: true', async () => {
+    const result = await callTool(client, 'export', {
+      target: 'artboard:0',
+      format: 'png',
+      output_path: `${TMP_DIR}/e2e-export.png`,
+      overwrite: true,
+    }) as any;
+    assert(result.success === true, 'overwrite export should succeed: ' + JSON.stringify(result));
   });
 
   // エラーケース

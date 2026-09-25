@@ -138,21 +138,23 @@ describe('export tool activation', () => {
     mockExecuteJsxHeavy.mockResolvedValue({ success: false });
   });
 
+  // UUID / selection は duplicate() で一時ドキュメントへ複製する（copy/paste メニューコマンド不使用）
+  // ため、どの対象・形式でも前面化しない
   it.each([
-    [{ target: '00000000-0000-0000-0000-000000000000', format: 'png' }, true],
-    [{ target: '00000000-0000-0000-0000-000000000000', format: 'jpg' }, true],
-    [{ target: '00000000-0000-0000-0000-000000000000', format: 'svg' }, false],
-    [{ target: 'selection', format: 'png' }, false],
-    [{ target: 'artboard:0', format: 'png' }, false],
-    [{ target: 'artboard:all', format: 'jpg' }, false],
-  ])('export は対象と形式 %o に応じて activate=%s を渡す', async (params, activate) => {
+    [{ target: '00000000-0000-0000-0000-000000000000', format: 'png' }],
+    [{ target: '00000000-0000-0000-0000-000000000000', format: 'jpg' }],
+    [{ target: '00000000-0000-0000-0000-000000000000', format: 'svg' }],
+    [{ target: 'selection', format: 'png' }],
+    [{ target: 'artboard:0', format: 'png' }],
+    [{ target: 'artboard:all', format: 'jpg' }],
+  ])('export は %o で Illustrator を前面化しない', async (params) => {
     await exportTool(params);
 
-    expect(mockExecuteJsxHeavy).toHaveBeenCalledWith(
-      expect.any(String),
-      params,
-      { activate },
-    );
+    expect(mockExecuteJsxHeavy).toHaveBeenCalledTimes(1);
+    const [code, passed, options] = mockExecuteJsxHeavy.mock.calls[0];
+    expect(typeof code).toBe('string');
+    expect(passed).toEqual(params);
+    expect((options as { activate?: boolean } | undefined)?.activate ?? false).toBe(false);
   });
 
   it.each([
