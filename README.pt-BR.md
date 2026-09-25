@@ -579,10 +579,14 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 npm test
 
 # Smoke test E2E (requer Illustrator em execução)
-npx tsx test/e2e/smoke-test.ts
+npm run build   # E2E runs dist/index.js
+npx tsx test/e2e/e2e-test.ts        # every tool (193 cases)
+npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (92 cases)
+npx tsx test/e2e/e2e-cmyk-only.ts
+npx tsx test/e2e/svg-import-test.ts
 ```
 
-O teste E2E cria documentos novos (RGB + CMYK), insere objetos de teste, executa 182 casos de teste em 10 fases que cobrem todas as ferramentas registradas e a detecção automática do sistema de coordenadas, e faz a limpeza automaticamente.
+As suítes E2E criam seus próprios documentos, não mexem em outros documentos abertos e os fecham sem salvar. `e2e-test.ts` executa todas as ferramentas registradas (RGB + CMYK, detecção automática do sistema de coordenadas); `e2e-behaviors.ts` verifica comportamentos que precisam valer no app real: notas são preservadas, falhas parciais são informadas, arquivos não são sobrescritos e marcas de corte e exportação em PDF não alteram sua arte.
 
 ---
 

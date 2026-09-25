@@ -579,10 +579,14 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 npm test
 
 # 端到端冒烟测试（需要 Illustrator 正在运行）
-npx tsx test/e2e/smoke-test.ts
+npm run build   # E2E runs dist/index.js
+npx tsx test/e2e/e2e-test.ts        # every tool (193 cases)
+npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (92 cases)
+npx tsx test/e2e/e2e-cmyk-only.ts
+npx tsx test/e2e/svg-import-test.ts
 ```
 
-E2E 测试会创建全新文档（RGB + CMYK），置入测试对象，运行跨 10 个阶段的 182 个测试用例，覆盖所有已注册的工具和坐标系自动检测，并在结束后自动清理。
+E2E 测试套件各自创建专用文档，不会触碰其他已打开的文档，并在结束时不保存直接关闭。`e2e-test.ts` 运行所有已注册的工具（RGB + CMYK，包括坐标系自动检测）；`e2e-behaviors.ts` 验证在真实应用中必须成立的行为：备注不会丢失、部分失败会被报告、文件不会被覆盖、裁切标记和 PDF 导出不会破坏你的作品。
 
 ---
 

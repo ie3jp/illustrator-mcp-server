@@ -579,10 +579,14 @@ npx @modelcontextprotocol/inspector npx illustrator-mcp-server
 npm test
 
 # E2E 스모크 테스트 (Illustrator 실행 필요)
-npx tsx test/e2e/smoke-test.ts
+npm run build   # E2E runs dist/index.js
+npx tsx test/e2e/e2e-test.ts        # every tool (193 cases)
+npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (92 cases)
+npx tsx test/e2e/e2e-cmyk-only.ts
+npx tsx test/e2e/svg-import-test.ts
 ```
 
-E2E 테스트는 새 문서(RGB + CMYK)를 생성하고, 테스트 객체를 배치하며, 등록된 모든 도구와 좌표계 자동 감지를 아우르는 10단계에 걸친 182개의 테스트 케이스를 실행한 후, 자동으로 정리합니다.
+E2E 스위트는 각자 전용 문서를 만들고, 열려 있는 다른 문서는 건드리지 않으며, 끝나면 저장하지 않고 닫습니다. `e2e-test.ts`는 등록된 모든 도구를 (RGB + CMYK, 좌표계 자동 감지 포함) 실행하고, `e2e-behaviors.ts`는 메모가 지워지지 않는지, 부분 실패를 보고하는지, 파일을 덮어쓰지 않는지, 재단선과 PDF 내보내기가 아트워크를 망가뜨리지 않는지 등 실제 앱에서 지켜져야 할 동작을 확인합니다.
 
 ---
 
