@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 import { CROP_MARKS_JSX } from '../crop-marks-shared.js';
 import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-path.js';
 
@@ -331,7 +331,8 @@ export function register(server: McpServer): void {
           .optional()
           .describe('PDF export options'),
       },
-      annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
+      // 明示した output_path の既存ファイルは確認なしで置き換わる。省略時は毎回別名で新規作成するため冪等でもない
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const resolvedParams = { ...params };

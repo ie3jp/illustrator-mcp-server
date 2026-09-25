@@ -15,6 +15,18 @@ export const coerceBoolean = z.preprocess(
 );
 
 // --- 共通 annotations 定数 ---
+//
+// 判定基準（MCP の ToolAnnotations。destructiveHint は "If false, the tool performs only additive updates"）:
+// - DESTRUCTIVE: オブジェクト・定義・ファイルを消す、または既存の値（色・スタイル・文字・
+//   アートボード寸法・ディスク上の既存ファイルなど）を上書きしうるもの。オプション次第で
+//   上書きするもの（overwrite: true、apply_to_uuids、replace など）も含める（hint は "may" の意味）。
+// - WRITE: 新しいものを足すだけのもの、または既存オブジェクトの中身を変えずに配置
+//   （位置・重ね順・所属レイヤー）だけを変えるもの。選択やセッション設定の変更もここ。
+// - READ: 読み取りのみ。ただし読み取り系は ensureUUID() で、UUID を持たないオブジェクトの
+//   note 先頭に UUID を書き込む（ドキュメントは「変更あり」になる）。T1 以降この書き込みは
+//   既存の note を消さず、画面にも出力にも現れない識別用タグなので、ユーザーの内容を変える
+//   操作とはみなさず readOnlyHint: true のままにする。2 回目以降は付与済みの UUID を読むだけなので冪等。
+//   ファイルを書き出すもの（extract_design_tokens の output_path）は READ にしない。
 
 export const READ_ANNOTATIONS = {
   readOnlyHint: true,

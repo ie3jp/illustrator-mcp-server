@@ -4,7 +4,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-path.js';
 
 /** dpi × scale の上限。エージェントの数値ミスで巨大画像を生成しないためのガード */
@@ -539,7 +539,8 @@ export function register(server: McpServer): void {
            .optional()
            .describe('Raster export options'),
        },
-       annotations: WRITE_IDEMPOTENT_ANNOTATIONS,
+       // overwrite: true は既存ファイルを置き換える。output_path 省略時は毎回別名で新規作成するため冪等でもない
+       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const validationError = validateExportParams(params);

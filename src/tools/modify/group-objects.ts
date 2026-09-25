@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { WRITE_ANNOTATIONS, coerceBoolean } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
 /**
  * group_objects — 複数オブジェクトをグループ化
@@ -89,7 +89,8 @@ export function register(server: McpServer): void {
           .default(false)
           .describe('Create as clipping group. The last UUID becomes the clip path (topmost). Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
       },
-      annotations: WRITE_ANNOTATIONS,
+      // clipped: true ではクリップパスになるパスの塗り/線が失われる（UI のクリッピングマスクと同じ）
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(jsxCode, params, { activate: true });

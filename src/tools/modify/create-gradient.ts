@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
 import { coordinateSystemSchema } from '../session.js';
-import { WRITE_ANNOTATIONS, COLOR_HELPERS_JSX, cmykColorSchema, rgbColorSchema, grayColorSchema } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS, COLOR_HELPERS_JSX, cmykColorSchema, rgbColorSchema, grayColorSchema } from './shared.js';
 
 /**
  * create_gradient — グラデーション作成・オブジェクトへの適用
@@ -127,7 +127,8 @@ export function register(server: McpServer): void {
         angle: z.number().optional().default(0).describe('Gradient angle (for linear). Note: may not take effect due to a long-standing Illustrator bug (since 2008).'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: WRITE_ANNOTATIONS,
+      // apply_to_uuids を指定すると既存の塗りを上書きする
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });

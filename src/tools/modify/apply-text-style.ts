@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { READ_ANNOTATIONS, WRITE_ANNOTATIONS, coerceBoolean } from './shared.js';
+import { READ_ANNOTATIONS, DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
 /**
  * apply_text_style / list_text_styles
@@ -108,7 +108,8 @@ export function register(server: McpServer): void {
           .default(false)
           .describe('Clear existing formatting overrides before applying'),
       },
-      annotations: WRITE_ANNOTATIONS,
+      // 既存の文字/段落書式を置き換える。clear_overrides: true は手動で付けた書式も消す
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(applyJsxCode, params, { activate: true });

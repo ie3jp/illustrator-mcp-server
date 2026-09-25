@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
-import { WRITE_ANNOTATIONS } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 import { resolveCoordinateSystem } from '../session.js';
 import { CROP_MARKS_JSX } from '../crop-marks-shared.js';
 
@@ -247,7 +247,8 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Target artboard index (0-based). Defaults to the currently active artboard. Ignored when use_selection is true.'),
       },
-      annotations: WRITE_ANNOTATIONS,
+      // 既定ではアートボードをトンボの外周まで広げる（既存のアートボード寸法を書き換える）
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       // original_artboard_rect を find_objects と同じ座標系で返すため、先に座標系を解決して JSX に渡す

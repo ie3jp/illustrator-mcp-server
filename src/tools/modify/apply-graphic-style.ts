@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { READ_ANNOTATIONS, WRITE_ANNOTATIONS, coerceBoolean } from './shared.js';
+import { READ_ANNOTATIONS, DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
 
 /**
  * apply_graphic_style / list_graphic_styles
@@ -106,7 +106,8 @@ export function register(server: McpServer): void {
           .default(false)
           .describe('true = merge with existing appearance, false = replace'),
       },
-      annotations: WRITE_ANNOTATIONS,
+      // 既存のアピアランス（塗り・線・効果）を置き換える（merge: true でも上書きされる属性がある）
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = await executeJsx(applyJsxCode, params, { activate: true });

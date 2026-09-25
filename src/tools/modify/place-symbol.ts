@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeToolJsx } from '../tool-executor.js';
 import { coordinateSystemSchema } from '../session.js';
-import { WRITE_ANNOTATIONS } from './shared.js';
+import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 /**
  * place_symbol — シンボルインスタンスの配置・シンボル定義の差し替え
@@ -92,7 +92,8 @@ export function register(server: McpServer): void {
           .describe('UUID of existing symbol item (for replace action)'),
         coordinate_system: coordinateSystemSchema,
       },
-      annotations: WRITE_ANNOTATIONS,
+      // action: replace は既存インスタンスのシンボル参照を差し替える
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
