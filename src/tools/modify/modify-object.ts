@@ -361,8 +361,9 @@ if (preflight) {
         } catch(eVL) {}
         try {
           var vj = item.textRange.paragraphAttributes.justification;
-          verifiedState.justification = (vj === Justification.LEFT) ? "left" : (vj === Justification.CENTER) ? "center" :
-            (vj === Justification.RIGHT) ? "right" : String(vj);
+          // ExtendScript は括弧なしの三項演算子の連鎖を誤評価するため必ず括弧で囲む
+          verifiedState.justification = (vj === Justification.LEFT) ? "left" : ((vj === Justification.CENTER) ? "center" :
+            ((vj === Justification.RIGHT) ? "right" : String(vj)));
         } catch(eVJ) {}
       }
 

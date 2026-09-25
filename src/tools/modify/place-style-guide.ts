@@ -306,8 +306,8 @@ if (preflight) {
           // --- Horizontal gap ---
           var yOvlp = Math.min(a.top, b.top) - Math.max(a.bottom, b.bottom);
           if (yOvlp > 0) {
-            var leftObj = (a.right <= b.left) ? a : (b.right <= a.left) ? b : null;
-            var rightObj = (leftObj === a) ? b : (leftObj === b) ? a : null;
+            var leftObj = (a.right <= b.left) ? a : ((b.right <= a.left) ? b : null);
+            var rightObj = (leftObj === a) ? b : ((leftObj === b) ? a : null);
             if (leftObj && rightObj) {
               var hDist = Math.round(rightObj.left - leftObj.right);
               if (hDist > 2 && hDist < 300) {
