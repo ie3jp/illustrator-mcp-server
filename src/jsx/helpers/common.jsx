@@ -473,6 +473,19 @@ function _indexContainer(container) {
       }
     } catch(e) {}
   }
+  // container.pageItems only returns items placed directly in this container.
+  // Sublayers (nested Layer objects, e.g. Layer > sublayer > pageItem) are a
+  // separate collection (container.layers) and were previously never walked,
+  // so any item living inside a named sublayer was invisible to findItemByUUID
+  // even though read-only scans (list_text_frames/get_images/get_document_structure)
+  // recurse into sublayers and find it fine. Recurse into sublayers here too.
+  try {
+    if (container.layers && container.layers.length > 0) {
+      for (var sl = 0; sl < container.layers.length; sl++) {
+        _indexContainer(container.layers[sl]);
+      }
+    }
+  } catch(e) {}
 }
 
 function findItemByUUID(uuid) {
