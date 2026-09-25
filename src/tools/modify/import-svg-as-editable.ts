@@ -210,7 +210,7 @@ export function register(server: McpServer): void {
     {
       title: 'Import SVG as Editable',
       description:
-        'Import an SVG file into the active document as editable Illustrator paths/text/groups (NOT as a linked image). Internally opens the SVG as a temporary document, duplicates its contents into the target document, then closes the source. Use this instead of place_image for SVG. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Import an SVG file into the active document as editable Illustrator paths/text/groups (NOT as a linked image). Internally opens the SVG as a temporary document, duplicates its contents into the target document, then closes the source. Use this instead of place_image for SVG. Note: Illustrator will be activated (brought to foreground) during execution. Font caveat: Illustrator does not fall back per glyph across a font-family list. If the FIRST family in the list is installed but lacks a glyph, that character is dropped silently and the import still reports success. Specify a single font-family per text element, and pick one that actually contains the glyphs you use (symbols such as U+2713 are the common failure case). An uninstalled family is substituted by Illustrator and is NOT affected by this.',
       inputSchema: {
         file_path: z.string().describe('Absolute path to the .svg or .svgz file'),
         x: z

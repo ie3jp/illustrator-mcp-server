@@ -494,6 +494,7 @@ An abstract geometric landscape artwork — created entirely by Claude, with no 
 | Japanese crop marks | PDF export automatically uses the TrimMark command approach: generates marks as document paths, exports, then removes via undo |
 | Font embedding | Embedding mode (full/subset) cannot be controlled directly — use PDF presets |
 | Size variations | Proportional scaling only — text may need manual adjustment afterward |
+| SVG text glyph fallback | Illustrator does not fall back per glyph across a `font-family` list. If the first family is installed but lacks a glyph, `import_svg_as_editable` drops that character silently and still reports success. Use one font-family per text element and choose one that contains the glyphs you need. An *uninstalled* family is substituted instead and is unaffected; `preflight_check` covers that separate case |
 
 ---
 
