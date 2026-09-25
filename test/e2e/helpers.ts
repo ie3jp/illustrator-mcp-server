@@ -152,6 +152,12 @@ export async function test(name: string, fn: () => Promise<void>, retries = 1): 
   console.log(`       ${c.red}${c.dim}\u2514 ${message}${c.reset}`);
 }
 
+/** 実機で再現できない検証を、理由つきで skip として記録する */
+export function skip(name: string, reason: string): void {
+  results.push({ name, status: 'skip', message: reason });
+  console.log(`     ${c.yellow}- ${name}${c.reset}  ${c.gray}(skipped: ${reason})${c.reset}`);
+}
+
 // ── アサーション ──
 
 export function assert(condition: boolean, message: string): void {
