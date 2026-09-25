@@ -37,7 +37,7 @@ const tokensTool = captureTool(registerExtractDesignTokens);
 const tokens = tokensTool.handler;
 
 const parse = (r: ToolResponse) => JSON.parse(r.content[0].text ?? '') as Record<string, unknown>;
-const textOf = (r: ToolResponse) => r.content[0].text ?? '';
+const textOf = (r: ToolResponse) => r.content.map((c) => c.text ?? '').join('\n\n');
 
 const emptyTokens = { fillColors: [], strokeColors: [], fontEntries: [], objectBounds: [] };
 

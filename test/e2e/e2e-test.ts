@@ -692,9 +692,9 @@ async function main(): Promise<void> {
       uuid: textUuid,
       properties: { font_name: 'ZzNonExistentFont999' },
     }) as any;
-    assert(r.success === false, 'should fail with success=false');
-    assert(Array.isArray(r.errors), 'should have errors array');
-    assert(r.errors.some((e: string) => e.includes('not found')), 'errors should mention "not found"');
+    // フォントが見つからなければ他のプロパティも含めて何も変更しない
+    assert(r.error === true, 'should return error for unknown font');
+    assert(r.message.includes('not found'), `message should mention "not found", got "${r.message}"`);
     assert(Array.isArray(r.font_candidates), 'should have font_candidates');
   });
 
@@ -2088,7 +2088,7 @@ create visually appealing and effective compositions.
       fill: { type: 'rgb', r: 0, g: 0, b: 0 },
       name: '__e2e_close_guard',
     }) as any;
-    assert(rect.success === true, 'create_rectangle should succeed: ' + JSON.stringify(rect));
+    assert(typeof rect.uuid === 'string', 'create_rectangle should succeed: ' + JSON.stringify(rect));
     const result = await callTool(client, 'close_document') as any;
     assert(result.error === true, 'close_document without save should be refused: ' + JSON.stringify(result));
     assert(result.unsavedChanges === true, 'should report unsavedChanges');

@@ -306,6 +306,18 @@ async function executeViaPowerShell(
   }
 }
 
+/**
+ * JSX がエラー結果（error: true）を返したときの例外。
+ * message は人間向けの要約、result は JSX が返した結果全体（font_candidates 等の追加情報を含む）。
+ * ツール応答では result をそのまま返す（server.ts）。
+ */
+export class JsxToolError extends Error {
+  constructor(message: string, readonly result: JsxResult) {
+    super(message);
+    this.name = 'JsxToolError';
+  }
+}
+
 async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
   let result: JsxResult;
   try {
@@ -322,7 +334,7 @@ async function readAndValidateResult(resultPath: string): Promise<JsxResult> {
     if (result.warnings instanceof Array && result.warnings.length > 0) {
       parts.push(`Warnings: ${result.warnings.map((warning) => String(warning)).join(' | ')}`);
     }
-    throw new Error(parts.length > 0 ? parts.join(' ') : 'An unknown error occurred during JSX execution');
+    throw new JsxToolError(parts.length > 0 ? parts.join(' ') : 'An unknown error occurred during JSX execution', result);
   }
   return result;
 }

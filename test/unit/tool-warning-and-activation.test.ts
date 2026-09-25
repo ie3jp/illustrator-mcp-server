@@ -106,7 +106,7 @@ describe('post-processed tool warning propagation', () => {
     });
 
     const result = await extractDesignTokens({ format: 'css' });
-    const text = result.content[0].text ?? '';
+    const text = result.content.map((c) => c.text ?? '').join('\n\n');
 
     expect(text).toContain('Warnings:\n- first warning\n- second warning');
   });

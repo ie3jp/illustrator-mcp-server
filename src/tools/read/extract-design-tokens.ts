@@ -324,10 +324,15 @@ export function register(server: McpServer): void {
       if (skippedColors.length > 0) {
         notes.push(`Skipped colors with no sRGB equivalent: ${skippedColors.join(', ')}`);
       }
-      const responseOutput = appendWarnings(
-        notes.length > 0 ? `${output}\n\nNotes:\n${notes.map((n) => `- ${n}`).join('\n')}` : output,
-        result.warnings,
-      );
+      // 出力本体は単独の content にする（json 形式をそのままパースできるように、注記は別 content に分ける）
+      const extras: string[] = [];
+      if (notes.length > 0) extras.push(`Notes:\n${notes.map((n) => `- ${n}`).join('\n')}`);
+      if (result.warnings && result.warnings.length > 0) {
+        extras.push(`Warnings:\n${result.warnings.map((warning) => `- ${String(warning)}`).join('\n')}`);
+      }
+      const respond = (saved?: string) => ({
+        content: [output, ...extras, ...(saved ? [`Saved to: ${saved}`] : [])].map((text) => ({ type: 'text' as const, text })),
+      });
 
       if (params.output_path) {
         const fail = (message: string) => ({
@@ -348,14 +353,10 @@ export function register(server: McpServer): void {
           const msg = err instanceof Error ? err.message : String(err);
           return fail(`Failed to write file: ${msg}`);
         }
-        return {
-          content: [{ type: 'text', text: responseOutput + `\n\nSaved to: ${params.output_path}` }],
-        };
+        return respond(params.output_path);
       }
 
-      return {
-        content: [{ type: 'text', text: responseOutput }],
-      };
+      return respond();
     },
   );
 }
