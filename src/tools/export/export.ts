@@ -281,6 +281,13 @@ if (preflight) {
           if (typeof svgOpts.decimal_places === "number") {
             opts.coordinatePrecision = svgOpts.decimal_places;
           }
+          if (svgOpts.encoding === "ascii") {
+            opts.documentEncoding = SVGDocumentEncoding.ASCII;
+          } else if (svgOpts.encoding === "utf16") {
+            opts.documentEncoding = SVGDocumentEncoding.UTF16;
+          } else {
+            opts.documentEncoding = SVGDocumentEncoding.UTF8;
+          }
           if (abIdx >= 0) {
             srcDoc.artboards.setActiveArtboardIndex(abIdx);
             opts.artBoardClipping = true;
@@ -515,6 +522,10 @@ export function register(server: McpServer): void {
                .optional()
                .describe('ID naming scheme'),
              decimal_places: z.number().optional().describe('Decimal places'),
+             encoding: z
+               .enum(['utf8', 'ascii', 'utf16'])
+               .optional()
+               .describe('SVG document encoding (default: "utf8"). "ascii" is the Illustrator default and writes every non-ASCII character as a numeric character reference, declaring iso-8859-1.'),
            })
            .optional()
            .describe('SVG export options'),
