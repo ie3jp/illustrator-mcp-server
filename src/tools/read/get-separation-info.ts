@@ -5,7 +5,12 @@ import { READ_ANNOTATIONS } from '../modify/shared.js';
 /**
  * get_separation_info — 色分解情報の取得
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Ink/ — Ink, InkInfo
- * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Spot/ — colorType (ColorModel)
+ * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace, inkList
+ *
+ * separations は「走査したアートワークで実際に使われている版」だけを載せる。
+ * 使用が見つからなかったインクは unusedInks に分け、走査範囲（scope）を併記する
+ * （テキストだけに使った特色が usageCount: 0 と出て「不要」と判断される事故を防ぐ）。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -15,25 +20,47 @@ if (preflight) {
   try {
     var doc = app.activeDocument;
     var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
-    var separations = [];
+    var PROCESS_NAMES = ["Cyan", "Magenta", "Yellow", "Black"];
 
-    // Process colors (CMYK)
+    // 版の候補: name → { name, type, usageCount, hiddenUsageCount, ... }
+    var plates = {};
+    var plateOrder = [];
+    function addPlate(info) {
+      info.usageCount = 0;
+      info.hiddenUsageCount = 0;
+      plates[info.name] = info;
+      plateOrder.push(info.name);
+    }
+    // 特色名が "toString" 等でも Object.prototype を拾わないよう hasOwnProperty で引く
+    function getPlate(name) {
+      return plates.hasOwnProperty(name) ? plates[name] : null;
+    }
     if (isCMYKDoc) {
-      separations.push({ name: "Cyan", type: "process", usageCount: 0 });
-      separations.push({ name: "Magenta", type: "process", usageCount: 0 });
-      separations.push({ name: "Yellow", type: "process", usageCount: 0 });
-      separations.push({ name: "Black", type: "process", usageCount: 0 });
+      for (var pn = 0; pn < PROCESS_NAMES.length; pn++) {
+        addPlate({ name: PROCESS_NAMES[pn], type: "process" });
+      }
     }
 
-    // Spot colors (spots[0] is registration, skip it)
-    for (var si = 1; si < doc.spots.length; si++) {
+    function spotModel(spot) {
+      var ct = null;
+      try { ct = spot.colorType; } catch(e) {}
+      if (ct === ColorModel.REGISTRATION) return "registration";
+      if (ct === ColorModel.PROCESS) return "process";
+      // 読めない場合は特色として扱う（取りこぼしより過検出を選ぶ）
+      return "spot";
+    }
+
+    // 特色スウォッチ（spots[0] 固定ではなく colorType で登録色・グローバルプロセスを除外する）
+    var globalProcessColors = [];
+    for (var si = 0; si < doc.spots.length; si++) {
       var spot = doc.spots[si];
-      var spotInfo = {
-        name: spot.name,
-        type: "spot",
-        usageCount: 0,
-        color: null
-      };
+      var model = spotModel(spot);
+      if (model === "registration") continue;
+      if (model === "process") {
+        globalProcessColors.push(spot.name);
+        continue;
+      }
+      var spotInfo = { name: spot.name, type: "spot", color: null };
       try { spotInfo.color = colorToObject(spot.color); } catch(e) {}
       try {
         var sk = spot.spotKind;
@@ -42,38 +69,164 @@ if (preflight) {
         else if (sk === SpotColorKind.SpotLAB) spotInfo.spotKind = "LAB";
         else spotInfo.spotKind = sk.toString();
       } catch(e) { spotInfo.spotKind = "unknown"; }
-      separations.push(spotInfo);
+      // 同名のプロセス版と衝突させない
+      if (!getPlate(spotInfo.name)) addPlate(spotInfo);
     }
 
-    // スポットカラー名→インデックスのマップを構築（O(1)ルックアップ）
-    var spotIndex = {};
-    for (var si2 = 0; si2 < separations.length; si2++) {
-      spotIndex[separations[si2].name] = si2;
-    }
+    var registrationUsageCount = 0;
+    var patternFillCount = 0;
 
-    function countColorUsage(color) {
-      if (color.typename === "CMYKColor" && isCMYKDoc) {
-        if (color.cyan > 0) separations[0].usageCount++;
-        if (color.magenta > 0) separations[1].usageCount++;
-        if (color.yellow > 0) separations[2].usageCount++;
-        if (color.black > 0) separations[3].usageCount++;
-      } else if (color.typename === "SpotColor") {
-        var idx = spotIndex[color.spot.name];
-        if (idx !== undefined) separations[idx].usageCount++;
+    // 色が載る版名を hit に集める（1 オブジェクト内の重複は 1 回と数える）
+    function collectPlates(color, hit) {
+      if (!color) return;
+      var tn = "";
+      try { tn = color.typename; } catch(e) { return; }
+      if (tn === "CMYKColor") {
+        if (!isCMYKDoc) return;
+        if (color.cyan > 0) hit.Cyan = true;
+        if (color.magenta > 0) hit.Magenta = true;
+        if (color.yellow > 0) hit.Yellow = true;
+        if (color.black > 0) hit.Black = true;
+      } else if (tn === "GrayColor") {
+        if (isCMYKDoc && color.gray > 0) hit.Black = true;
+      } else if (tn === "SpotColor") {
+        var sp = color.spot;
+        var m = spotModel(sp);
+        if (m === "registration") {
+          hit.__registration = true;
+        } else if (m === "process") {
+          var tint = 100;
+          try { tint = color.tint; } catch(e) {}
+          if (tint > 0) collectPlates(sp.color, hit);
+        } else if (getPlate(sp.name) && getPlate(sp.name).type === "spot") {
+          hit[sp.name] = true;
+        }
+      } else if (tn === "GradientColor") {
+        var stops = color.gradient.gradientStops;
+        for (var gi = 0; gi < stops.length; gi++) {
+          collectPlates(stops[gi].color, hit);
+        }
+      } else if (tn === "PatternColor") {
+        hit.__pattern = true;
       }
     }
 
-    // Count usage by iterating pathItems
-    for (var pi = 0; pi < doc.pathItems.length; pi++) {
-      var item = doc.pathItems[pi];
-      try { if (item.filled) countColorUsage(item.fillColor); } catch(e) {}
-      try { if (item.stroked) countColorUsage(item.strokeColor); } catch(e) {}
+    // ラスタは画素値を見ないため、カラースペースから版を推定する（近似）
+    function collectRasterPlates(item, hit) {
+      var cs = null;
+      try { cs = item.imageColorSpace; } catch(e) {}
+      var colorants = [];
+      try { colorants = item.colorants || []; } catch(e) {}
+      for (var ci = 0; ci < colorants.length; ci++) {
+        if (getPlate(colorants[ci])) hit[colorants[ci]] = true;
+      }
+      if (!isCMYKDoc) return;
+      if (cs === ImageColorSpace.Grayscale) {
+        hit.Black = true;
+      } else if (cs === ImageColorSpace.DeviceN || cs === ImageColorSpace.Separation) {
+        // colorants で判定済み
+      } else {
+        // CMYK / RGB / LAB / Indexed は出力時にプロセス 4 版へ載りうる
+        for (var pi = 0; pi < PROCESS_NAMES.length; pi++) hit[PROCESS_NAMES[pi]] = true;
+      }
     }
+
+    function recordUsage(item, hit) {
+      var hidden = !isItemEffectivelyVisible(item);
+      for (var name in hit) {
+        if (name === "__registration") { registrationUsageCount++; continue; }
+        if (name === "__pattern") { patternFillCount++; continue; }
+        var p = getPlate(name);
+        if (!p) continue;
+        p.usageCount++;
+        if (hidden) p.hiddenUsageCount++;
+      }
+    }
+
+    var scanned = { pathItems: 0, textFrames: 0, rasterItems: 0 };
+    var skippedItems = {};
+
+    for (var li = 0; li < doc.layers.length; li++) {
+      // iterateAllItems はグループ・複合パス内部・サブレイヤーまで辿る（非表示も含む）
+      iterateAllItems(doc.layers[li], function(item) {
+        var tn = "";
+        try { tn = item.typename; } catch(e) { return; }
+        var hit = {};
+        try {
+          if (tn === "PathItem") {
+            scanned.pathItems++;
+            try { if (item.filled) collectPlates(item.fillColor, hit); } catch(e) {}
+            try { if (item.stroked) collectPlates(item.strokeColor, hit); } catch(e) {}
+          } else if (tn === "TextFrame") {
+            scanned.textFrames++;
+            var ranges = item.textRanges;
+            for (var ri = 0; ri < ranges.length; ri++) {
+              var ca = null;
+              try { ca = ranges[ri].characterAttributes; } catch(e) { continue; }
+              try { collectPlates(ca.fillColor, hit); } catch(e) {}
+              try { collectPlates(ca.strokeColor, hit); } catch(e) {}
+            }
+          } else if (tn === "RasterItem") {
+            scanned.rasterItems++;
+            collectRasterPlates(item, hit);
+          } else if (tn !== "GroupItem" && tn !== "CompoundPathItem") {
+            skippedItems[tn] = (skippedItems[tn] || 0) + 1;
+          }
+        } catch(e) {}
+        recordUsage(item, hit);
+      });
+    }
+
+    var separations = [];
+    var unusedInks = [];
+    for (var oi = 0; oi < plateOrder.length; oi++) {
+      var plate = plates[plateOrder[oi]];
+      if (plate.usageCount > 0) separations.push(plate);
+      else unusedInks.push({ name: plate.name, type: plate.type });
+    }
+
+    // Illustrator 自身のインク一覧（出力設定: 印刷する/しない/プロセスに変換）
+    var documentInks = null;
+    try {
+      var inkList = doc.inkList;
+      documentInks = [];
+      for (var ii = 0; ii < inkList.length; ii++) {
+        var ink = inkList[ii];
+        var inkInfo = { name: ink.name };
+        try {
+          var kd = ink.inkInfo.kind;
+          if (kd === InkType.CYANINK) inkInfo.kind = "cyan";
+          else if (kd === InkType.MAGENTAINK) inkInfo.kind = "magenta";
+          else if (kd === InkType.YELLOWINK) inkInfo.kind = "yellow";
+          else if (kd === InkType.BLACKINK) inkInfo.kind = "black";
+          else if (kd === InkType.CUSTOMINK) inkInfo.kind = "custom";
+          else inkInfo.kind = String(kd);
+        } catch(e) {}
+        try {
+          var ps = ink.inkInfo.printingStatus;
+          if (ps === InkPrintStatus.ENABLEINK) inkInfo.printingStatus = "enabled";
+          else if (ps === InkPrintStatus.DISABLEINK) inkInfo.printingStatus = "disabled";
+          else if (ps === InkPrintStatus.CONVERTINK) inkInfo.printingStatus = "convert_to_process";
+          else inkInfo.printingStatus = String(ps);
+        } catch(e) {}
+        documentInks.push(inkInfo);
+      }
+    } catch(e) { documentInks = null; }
 
     writeResultFile(RESULT_PATH, {
       documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
       separationCount: separations.length,
-      separations: separations
+      separations: separations,
+      unusedInks: unusedInks,
+      globalProcessColors: globalProcessColors,
+      registrationUsageCount: registrationUsageCount,
+      documentInks: documentInks,
+      scope: {
+        scanned: scanned,
+        skippedItems: skippedItems,
+        patternFillCount: patternFillCount,
+        note: "usageCount = number of objects using the plate: path fills/strokes (incl. compound paths, gradient stops, global process colors), text character colors, and raster images (estimated from color space, approximate). Hidden items are included (hiddenUsageCount). NOT inspected: pattern contents, placed/linked files, symbols, meshes, plugin items (skippedItems) and Appearance-panel extra fills/strokes — an ink in unusedInks may still be used there." + (isCMYKDoc ? "" : " RGB document: process plates depend on output conversion and are not listed.")
+      }
     });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
@@ -87,7 +240,7 @@ export function register(server: McpServer): void {
     {
       title: 'Get Separation Info',
       description:
-        'Get color separation information: CMYK process plates and spot color plates with usage counts',
+        'Get color separation info: process and spot plates actually used by the artwork (paths, gradients, text, rasters) with usage counts, inks with no detected usage, global process colors, and Illustrator\'s document ink list. The result includes the scan scope; placed files, patterns and symbols are not inspected.',
       inputSchema: {},
       annotations: READ_ANNOTATIONS,
     },
