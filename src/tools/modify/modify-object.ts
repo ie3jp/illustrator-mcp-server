@@ -10,8 +10,8 @@ import { colorSchema, strokeSchema, COLOR_HELPERS_JSX, FONT_HELPERS_JSX, DESTRUC
  *
  * rotation の累積角度は note メタデータ (::ai-mcp:rot=N) に記録するため、UI で直接回転するとずれる。
  *
- * GroupItem・CompoundPathItem の fillColor への代入は子に伝わらず、読み返すと代入値が見えるだけの
- * 偽成功になる。UI と同様に配下の PathItem / TextFrame へ再帰適用し、子を読み返して検証する。
+ * グループ・複合パスの fill/stroke は UI と同様に配下の末端へ適用し、末端を読み返して検証する
+ * （common.jsx の collectPaintLeaves / verifyPaintContainer）。
  */
 const jsxCode = `
 var preflight = preflightChecks();
@@ -24,36 +24,6 @@ if (preflight) {
     var coordSystem = params.coordinate_system || "artboard-web";
     ${COLOR_HELPERS_JSX}
     ${FONT_HELPERS_JSX}
-
-    function isPaintContainer(it) {
-      return it.typename === "GroupItem" || it.typename === "CompoundPathItem";
-    }
-
-    // 塗り/線を実際に持つ末端（PathItem / TextFrame）を集める。
-    // クリッピングパスとガイドは見た目が変わってしまうため対象外（skipped に記録）
-    function collectPaintTargets(container, targets, skipped) {
-      var children = (container.typename === "CompoundPathItem") ? container.pathItems : container.pageItems;
-      for (var ci = 0; ci < children.length; ci++) {
-        var child = children[ci];
-        var tn = child.typename;
-        if (isPaintContainer(child)) {
-          collectPaintTargets(child, targets, skipped);
-        } else if (tn === "PathItem") {
-          var reason = null;
-          try { if (child.guides) reason = "guide"; } catch(eG) {}
-          try { if (!reason && child.clipping) reason = "clipping path"; } catch(eC) {}
-          if (reason) {
-            skipped[reason] = (skipped[reason] || 0) + 1;
-          } else {
-            targets.push(child);
-          }
-        } else if (tn === "TextFrame") {
-          targets.push(child);
-        } else {
-          skipped[tn] = (skipped[tn] || 0) + 1;
-        }
-      }
-    }
 
     function applyFillToTarget(t, colorObj) {
       if (t.typename === "TextFrame") {
@@ -71,19 +41,6 @@ if (preflight) {
       } else {
         applyStroke(t, strokeObj, t.stroked);
       }
-    }
-
-    function readTargetFill(t) {
-      if (t.typename === "TextFrame") return colorToObject(t.textRange.characterAttributes.fillColor);
-      return t.filled ? colorToObject(t.fillColor) : { type: "none" };
-    }
-
-    function readTargetStroke(t) {
-      if (t.typename === "TextFrame") {
-        var rca = t.textRange.characterAttributes;
-        return { color: colorToObject(rca.strokeColor), width: rca.strokeWeight };
-      }
-      return { color: t.stroked ? colorToObject(t.strokeColor) : { type: "none" }, width: t.strokeWidth };
     }
 
     // 読み返した色が指定色と一致するか。true / false、色空間が違う場合は null
@@ -158,12 +115,9 @@ if (preflight) {
       if (converted > 0) {
         warnings.push(kind + ": " + converted + " objects read back in a different color space (converted to the document color mode)");
       }
-      var skippedParts = [];
-      for (var sk in skipped) {
-        if (skipped.hasOwnProperty(sk)) skippedParts.push(skipped[sk] + " " + sk);
-      }
-      if (skippedParts.length > 0) {
-        warnings.push(kind + ": skipped " + skippedParts.join(", ") + " (cannot take or should not receive a " + kind + ")");
+      var skippedText = describeSkippedPaint(skipped);
+      if (skippedText) {
+        warnings.push(kind + ": skipped " + skippedText + " (cannot take or should not receive a " + kind + ")");
       }
       return report;
     }
@@ -218,14 +172,7 @@ if (preflight) {
       var paintSkipped = {};
       var paintReport = {};
       if (typeof props.fill !== "undefined" || props.stroke) {
-        paintTargets = [];
-        if (isContainer) {
-          collectPaintTargets(item, paintTargets, paintSkipped);
-        } else if (item.typename === "PathItem" || item.typename === "TextFrame") {
-          paintTargets.push(item);
-        } else {
-          paintSkipped[item.typename] = 1;
-        }
+        paintTargets = collectPaintLeaves(item, paintSkipped);
       }
 
       if (typeof props.fill !== "undefined") {
@@ -330,26 +277,7 @@ if (preflight) {
       }
 
       var verifiedState = verifyItem(item, coordSystem, abRect);
-      if (isContainer) {
-        // グループ・複合パス自体の fill/stroke は存在しない値なので報告しない。
-        // 代わりに配下の末端が実際に持っている色を集計する
-        delete verifiedState.fill;
-        delete verifiedState.stroke;
-        var vTargets = [];
-        collectPaintTargets(item, vTargets, {});
-        var vFills = [];
-        var vStrokes = [];
-        for (var vi = 0; vi < vTargets.length; vi++) {
-          try { vFills.push(readTargetFill(vTargets[vi])); } catch(eVF) {}
-          try {
-            var vs = readTargetStroke(vTargets[vi]);
-            if (vs.color.type !== "none") vStrokes.push(vs.color);
-          } catch(eVS) {}
-        }
-        verifiedState.descendantCount = vTargets.length;
-        verifiedState.descendantFills = summarizeColors(vFills);
-        verifiedState.descendantStrokes = summarizeColors(vStrokes);
-      }
+      if (isContainer) verifyPaintContainer(verifiedState, item);
       if (item.typename === "TextFrame" && (typeof props.leading !== "undefined" || props.justification)) {
         try {
           var vca = item.textRange.characterAttributes;

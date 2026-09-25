@@ -75,7 +75,7 @@ type Globals = Record<string, unknown>;
 const COMMON_JSX = readFileSync(resolve(__dirname, '../../src/jsx/helpers/common.jsx'), 'utf-8');
 // eslint-disable-next-line no-new-func -- test-only: evaluating repo-local ES3 helpers in Node.js
 const commonLayerHelpers = new Function(
-  `${COMMON_JSX}\nreturn { findTopLevelLayerIndices: findTopLevelLayerIndices, resolveTopLevelLayer: resolveTopLevelLayer };`,
+  `${COMMON_JSX}\nreturn { findTopLevelLayerIndices: findTopLevelLayerIndices, resolveTopLevelLayer: resolveTopLevelLayer, collectAllItems: collectAllItems };`,
 )() as Globals; // NOSONAR
 
 /** JSX コードをフェイクグローバルの上で実行し、writeResultFile に渡された結果を返す */
@@ -198,11 +198,11 @@ describe('convert_to_outlines: 失敗を隠さない', () => {
 
   it('同名レイヤーを target にすると最上位のテキストだけを変換し、警告を返す', async () => {
     const { code, params } = await captureJsx(registerConvertToOutlines, 'convert_to_outlines', { target: 'T' });
-    const topTf = { note: '', createOutline: vi.fn() };
-    const lowerTf = { note: '', createOutline: vi.fn() };
+    const topTf = { typename: 'TextFrame', note: '', createOutline: vi.fn() };
+    const lowerTf = { typename: 'TextFrame', note: '', createOutline: vi.fn() };
     const layers = [
-      { name: 'T', textFrames: [topTf] },
-      { name: 'T', textFrames: [lowerTf] },
+      { name: 'T', pageItems: [topTf], layers: [] },
+      { name: 'T', pageItems: [lowerTf], layers: [] },
     ];
     const result = runJsx(code, params, { app: { activeDocument: { layers } } });
     expect(topTf.createOutline).toHaveBeenCalled();

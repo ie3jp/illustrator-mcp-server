@@ -46,7 +46,9 @@ if (preflight) {
         }
       }
     } else if (target === "all") {
-      var frames = doc.textFrames;
+      // 変換でコレクションが変わるため先に配列へ固定する
+      var frames = [];
+      for (var fi = 0; fi < doc.textFrames.length; fi++) frames.push(doc.textFrames[fi]);
       for (var i = frames.length - 1; i >= 0; i--) {
         convertFrame(frames[i]);
       }
@@ -59,9 +61,10 @@ if (preflight) {
         writeResultFile(RESULT_PATH, { error: true, message: "Layer not found: " + target });
       }
       if (layer) {
-        frames = layer.textFrames;
-        for (var i = frames.length - 1; i >= 0; i--) {
-          convertFrame(frames[i]);
+        // Layer.textFrames はグループ内・サブレイヤー内を含まないため全アイテムから集める（変換前に固定）
+        var layerItems = collectAllItems(layer);
+        for (var i = layerItems.length - 1; i >= 0; i--) {
+          if (layerItems[i].typename === "TextFrame") convertFrame(layerItems[i]);
         }
       }
     }
@@ -94,7 +97,7 @@ export function register(server: McpServer): void {
       inputSchema: {
         target: z
           .string()
-          .describe('Target: "selection" (selected), "all" (all text), or a top-level layer name (if several layers share the name, the topmost one is used and a warning is returned)'),
+          .describe('Target: "selection" (selected), "all" (all text), or a top-level layer name (includes text inside groups and sublayers; if several layers share the name, the topmost one is used and a warning is returned)'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },

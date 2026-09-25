@@ -21,7 +21,15 @@ export function runToolJsx(
   globals: Record<string, unknown>,
   params: Record<string, unknown> = {},
 ): Record<string, unknown> {
-  const jsx = extractJsxCode(toolFile);
+  return runJsxCode(extractJsxCode(toolFile), globals, params);
+}
+
+/** 展開済みの JSX（ハンドラが executeJsx に渡したもの等）を同じ条件で実行する */
+export function runJsxCode(
+  jsx: string,
+  globals: Record<string, unknown>,
+  params: Record<string, unknown> = {},
+): Record<string, unknown> {
   const names = Object.keys(globals);
   const body = `
     ${COMMON_JSX}

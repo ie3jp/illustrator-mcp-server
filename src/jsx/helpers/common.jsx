@@ -752,6 +752,113 @@ function iterateAllItems(container, callback) {
   }
 }
 
+// container 配下の全 PageItem を配列で返す。変換・削除で構造が変わっても取りこぼさないよう先に固定する
+function collectAllItems(container) {
+  var list = [];
+  iterateAllItems(container, function(item) { list.push(item); });
+  return list;
+}
+
+// --- 塗り（fill / stroke）の読み書き対象 ---
+// GroupItem・CompoundPathItem の fillColor への代入は子に伝わらず、読み返すと代入値が見えるだけの
+// 偽成功になる（実機確認済み）。塗りは末端の PathItem と TextFrame（文字属性）で読み書きする
+
+function isPaintContainer(it) {
+  return it.typename === "GroupItem" || it.typename === "CompoundPathItem";
+}
+
+// 塗り/線を実際に持つ末端（PathItem / TextFrame）を targets に集める（Layer ならサブレイヤーも）。
+// クリッピングパスとガイドは見た目が変わってしまうため対象外。skipped には理由・typename ごとの件数を積む
+function collectPaintTargets(container, targets, skipped) {
+  if (!skipped) skipped = {};
+  var children = (container.typename === "CompoundPathItem") ? container.pathItems : container.pageItems;
+  for (var ci = 0; ci < children.length; ci++) {
+    var child = children[ci];
+    var tn = child.typename;
+    if (isPaintContainer(child)) {
+      collectPaintTargets(child, targets, skipped);
+    } else if (tn === "PathItem") {
+      var reason = null;
+      try { if (child.guides) reason = "guide"; } catch(eG) {}
+      try { if (!reason && child.clipping) reason = "clipping path"; } catch(eC) {}
+      if (reason) {
+        skipped[reason] = (skipped[reason] || 0) + 1;
+      } else {
+        targets.push(child);
+      }
+    } else if (tn === "TextFrame") {
+      targets.push(child);
+    } else {
+      skipped[tn] = (skipped[tn] || 0) + 1;
+    }
+  }
+  if (container.typename === "Layer") {
+    var subLayers = null;
+    try { subLayers = container.layers; } catch(eL) {}
+    if (subLayers) {
+      for (var sl = 0; sl < subLayers.length; sl++) collectPaintTargets(subLayers[sl], targets, skipped);
+    }
+  }
+}
+
+// item 自身が末端ならそれだけ、コンテナなら配下の末端を返す（どちらでもなければ空で skipped に数える）
+function collectPaintLeaves(item, skipped) {
+  if (!skipped) skipped = {};
+  var targets = [];
+  if (isPaintContainer(item)) {
+    collectPaintTargets(item, targets, skipped);
+  } else if (item.typename === "PathItem" || item.typename === "TextFrame") {
+    targets.push(item);
+  } else {
+    skipped[item.typename] = (skipped[item.typename] || 0) + 1;
+  }
+  return targets;
+}
+
+// 末端の塗り・線を colorToObject() 形式で読む（TextFrame は全体の文字属性）
+function readTargetFill(t) {
+  if (t.typename === "TextFrame") return colorToObject(t.textRange.characterAttributes.fillColor);
+  return t.filled ? colorToObject(t.fillColor) : { type: "none" };
+}
+
+function readTargetStroke(t) {
+  if (t.typename === "TextFrame") {
+    var rca = t.textRange.characterAttributes;
+    return { color: colorToObject(rca.strokeColor), width: rca.strokeWeight };
+  }
+  return { color: t.stroked ? colorToObject(t.strokeColor) : { type: "none" }, width: t.strokeWidth };
+}
+
+// skipped（collectPaintTargets の件数）を "2 clipping path, 1 PlacedItem" の形にする。なければ ""
+function describeSkippedPaint(skipped) {
+  var parts = [];
+  for (var sk in skipped) {
+    if (skipped.hasOwnProperty(sk)) parts.push(skipped[sk] + " " + sk);
+  }
+  return parts.join(", ");
+}
+
+// コンテナの verifyItem() 結果を、自身の（存在しない）塗りではなく配下の末端の実際の色に置き換える
+function verifyPaintContainer(snap, item) {
+  delete snap.fill;
+  delete snap.stroke;
+  var vTargets = [];
+  collectPaintTargets(item, vTargets, {});
+  var vFills = [];
+  var vStrokes = [];
+  for (var vi = 0; vi < vTargets.length; vi++) {
+    try { vFills.push(readTargetFill(vTargets[vi])); } catch(eVF) {}
+    try {
+      var vs = readTargetStroke(vTargets[vi]);
+      if (vs.color.type !== "none") vStrokes.push(vs.color);
+    } catch(eVS) {}
+  }
+  snap.descendantCount = vTargets.length;
+  snap.descendantFills = summarizeColors(vFills);
+  snap.descendantStrokes = summarizeColors(vStrokes);
+  return snap;
+}
+
 // --- 操作結果の検証（Post-Operation Verification） ---
 
 function checkArtboardBounds(item, artboardRect) {

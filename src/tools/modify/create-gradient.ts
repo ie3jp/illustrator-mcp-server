@@ -19,6 +19,8 @@ import { DESTRUCTIVE_ANNOTATIONS, COLOR_HELPERS_JSX, cmykColorSchema, rgbColorSc
  *   GradientStop.midPoint → Number (13-87)
  *   GradientStop.opacity → Number (0-100)
  *   GradientColor — gradient, angle, origin を設定して fillColor に代入
+ *
+ * グループ・複合パスへの適用は配下のパス（複合パス内部を含む）とテキストの文字に塗り、読み返して検証する。
  */
 const jsxCode = `
 ${COLOR_HELPERS_JSX}
@@ -52,38 +54,84 @@ if (preflight) {
 
     // verified の bounds は他ツールと同じく解決済みの座標系で返す
     var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
+    var gradName = grad.name;
     var appliedCount = 0;
     var notFound = [];
+    var errors = [];
+    var warnings = [];
     var verifiedItems = [];
+
+    function newGradientColor() {
+      var gc = new GradientColor();
+      gc.gradient = grad;
+      if (typeof params.angle === "number") gc.angle = params.angle;
+      return gc;
+    }
+
+    // グループ・複合パスは配下の末端に塗り、末端を読み返して確かめる
+    function applyGradientTo(uuid, item) {
+      var skipped = {};
+      var targets = collectPaintLeaves(item, skipped);
+      var changed = 0;
+      var failed = [];
+      var mismatched = 0;
+      for (var ti = 0; ti < targets.length; ti++) {
+        var t = targets[ti];
+        try {
+          if (t.typename === "TextFrame") {
+            t.textRange.characterAttributes.fillColor = newGradientColor();
+          } else {
+            t.filled = true;
+            t.fillColor = newGradientColor();
+          }
+          var after = readTargetFill(t);
+          if (after.type === "gradient" && after.name === gradName) {
+            changed++;
+          } else {
+            mismatched++;
+          }
+        } catch(eT) {
+          failed.push(eT.message);
+        }
+      }
+      var label = uuid + " (" + getItemType(item) + ")";
+      if (targets.length === 0) errors.push(label + ": no path or text object to paint");
+      if (failed.length > 0) {
+        errors.push(label + ": failed on " + failed.length + " of " + targets.length + " objects (e.g. " + failed[0] + ")");
+      }
+      if (mismatched > 0) {
+        errors.push(label + ": " + mismatched + " of " + targets.length + " objects did not take the gradient when read back");
+      }
+      var skippedText = describeSkippedPaint(skipped);
+      if (skippedText) warnings.push(label + ": skipped " + skippedText);
+      if (targets.length > 0 && changed === targets.length) appliedCount++;
+    }
+
     if (params.apply_to_uuids) {
       for (var ai = 0; ai < params.apply_to_uuids.length; ai++) {
         var item = findItemByUUID(params.apply_to_uuids[ai]);
         if (item) {
-          var gc = new GradientColor();
-          gc.gradient = grad;
-          if (typeof params.angle === "number") gc.angle = params.angle;
-          item.filled = true;
-          item.fillColor = gc;
-          appliedCount++;
-          verifiedItems.push(verifyItem(item, coordSystem, abRect));
+          applyGradientTo(params.apply_to_uuids[ai], item);
+          var snap = verifyItem(item, coordSystem, abRect);
+          if (isPaintContainer(item)) verifyPaintContainer(snap, item);
+          verifiedItems.push(snap);
         } else {
           notFound.push(params.apply_to_uuids[ai]);
         }
       }
     }
     var result = {
-      success: true,
-      name: params.name,
+      success: notFound.length === 0 && errors.length === 0,
+      name: gradName,
       type: params.type || "linear",
       stopCount: stops.length,
       appliedCount: appliedCount,
       coordinateSystem: coordSystem,
       verified: verifiedItems
     };
-    if (notFound.length > 0) {
-      result.success = false;
-      result.notFound = notFound;
-    }
+    if (notFound.length > 0) result.notFound = notFound;
+    if (errors.length > 0) result.errors = errors;
+    if (warnings.length > 0) result.warnings = warnings;
     writeResultFile(RESULT_PATH, appendColorSpaceWarnings(result));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "create_gradient failed: " + e.message, line: e.line });
@@ -123,7 +171,7 @@ export function register(server: McpServer): void {
         apply_to_uuids: z
           .array(z.string())
           .optional()
-          .describe('UUIDs of objects to apply this gradient as fill. UUIDs that cannot be found are listed in notFound and make success false (the gradient itself is still created).'),
+          .describe('UUIDs of objects to apply this gradient as fill. For groups/compound paths it is applied to every path and text inside (clipping paths and guides are skipped) and checked by reading back; verified then reports descendantFills. UUIDs that cannot be found are listed in notFound, objects that could not be painted in errors; either makes success false (the gradient itself is still created).'),
         angle: z.number().optional().default(0).describe('Gradient angle (for linear). Note: may not take effect due to a long-standing Illustrator bug (since 2008).'),
         coordinate_system: coordinateSystemSchema,
       },

@@ -41,6 +41,20 @@ if (preflight) {
       return false;
     }
 
+    // 複合パス自身は塗りを持たないため内部パスの色で判定し、複合パスを 1 件として返す
+    function pathPaintMatches(item, kind, expected) {
+      if (item.typename !== "PathItem" && item.typename !== "CompoundPathItem") { return false; }
+      try {
+        var leaves = collectPaintLeaves(item);
+        for (var li = 0; li < leaves.length; li++) {
+          var leaf = leaves[li];
+          if (kind === "fill" && leaf.filled && colorsMatch(leaf.fillColor, expected)) { return true; }
+          if (kind === "stroke" && leaf.stroked && colorsMatch(leaf.strokeColor, expected)) { return true; }
+        }
+      } catch (e) {}
+      return false;
+    }
+
     function matchesFilters(item) {
       // name filter
       if (params.name) {
@@ -67,23 +81,8 @@ if (preflight) {
         if (abIdx !== params.artboard_index) { return false; }
       }
 
-      // fill_color filter
-      if (params.fill_color) {
-        try {
-          if (item.typename !== "PathItem" && item.typename !== "CompoundPathItem") { return false; }
-          if (!item.filled) { return false; }
-          if (!colorsMatch(item.fillColor, params.fill_color)) { return false; }
-        } catch (e) { return false; }
-      }
-
-      // stroke_color filter
-      if (params.stroke_color) {
-        try {
-          if (item.typename !== "PathItem" && item.typename !== "CompoundPathItem") { return false; }
-          if (!item.stroked) { return false; }
-          if (!colorsMatch(item.strokeColor, params.stroke_color)) { return false; }
-        } catch (e) { return false; }
-      }
+      if (params.fill_color && !pathPaintMatches(item, "fill", params.fill_color)) { return false; }
+      if (params.stroke_color && !pathPaintMatches(item, "stroke", params.stroke_color)) { return false; }
 
       // font_name filter
       if (params.font_name) {
@@ -185,8 +184,8 @@ export function register(server: McpServer): void {
           .optional()
           .describe('Object type'),
         layer_name: z.string().optional().describe('Layer name'),
-        fill_color: colorSchema.describe('Search by fill color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
-        stroke_color: colorSchema.describe('Search by stroke color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
+        fill_color: colorSchema.describe('Search paths and compound paths (matched by their inner paths) by fill color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
+        stroke_color: colorSchema.describe('Search paths and compound paths (matched by their inner paths) by stroke color. Tolerance defaults to 5 per channel (0-255 for RGB, 0-100 for CMYK). Set tolerance: 0 for exact match.'),
         font_name: z.string().optional().describe('Font name (partial match)'),
         font_size: z
           .object({
