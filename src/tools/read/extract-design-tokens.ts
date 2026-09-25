@@ -1,9 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import * as fs from 'fs/promises';
+import * as path from 'path';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { READ_ANNOTATIONS } from '../modify/shared.js';
+import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+import { colorToRGB } from './check-contrast.js';
 /**
  * extract_design_tokens — デザイントークン（色・タイポグラフィ・スペーシング）の抽出
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Swatches/ — Swatches
@@ -101,31 +103,31 @@ interface ColorObj {
 function colorKey(c: ColorObj): string {
   if (c.type === 'cmyk') return `cmyk(${c.c},${c.m},${c.y},${c.k})`;
   if (c.type === 'rgb') return `rgb(${c.r},${c.g},${c.b})`;
-  if (c.type === 'spot') return `spot(${c.name})`;
+  if (c.type === 'spot') return `spot(${c.name},${c.tint})`;
   if (c.type === 'gray') return `gray(${c.value})`;
+  if (c.type === 'lab') return `lab(${c.l},${c.a},${c.b})`;
   return `${c.type}`;
 }
 
+/** sRGB の #RRGGBB。変換できない色（Lab・成分欠け等）は null（CSS に不正な値を出さない） */
 function colorToHex(c: ColorObj): string | null {
-  let r: number, g: number, b: number;
-  if (c.type === 'rgb') {
-    r = c.r ?? 0;
-    g = c.g ?? 0;
-    b = c.b ?? 0;
-  } else if (c.type === 'cmyk') {
-    const ck = (c.k ?? 0) / 100;
-    r = Math.round(255 * (1 - (c.c ?? 0) / 100) * (1 - ck));
-    g = Math.round(255 * (1 - (c.m ?? 0) / 100) * (1 - ck));
-    b = Math.round(255 * (1 - (c.y ?? 0) / 100) * (1 - ck));
-  } else if (c.type === 'gray') {
-    const v = Math.round(255 * (1 - ((c.value as number) ?? 0) / 100));
-    r = v;
-    g = v;
-    b = v;
-  } else {
-    return null;
-  }
-  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase()}`;
+  const rgb = colorToRGB(c);
+  if (!rgb) return null;
+  const to2 = (v: number) => Math.min(255, Math.max(0, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${to2(rgb.r)}${to2(rgb.g)}${to2(rgb.b)}`.toUpperCase();
+}
+
+/**
+ * 隣り合う 2 つの矩形の隙間（Illustrator 座標: top > bottom）。
+ * 列挙順に依存しないよう左右・上下どちらの並びでも同じ値を返す。重なっている軸は null
+ */
+function boundsGaps(
+  a: { left: number; top: number; right: number; bottom: number },
+  b: { left: number; top: number; right: number; bottom: number },
+): { horizontal: number | null; vertical: number | null } {
+  const h = Math.max(a.left, b.left) - Math.min(a.right, b.right);
+  const v = Math.max(a.bottom, b.bottom) - Math.min(a.top, b.top);
+  return { horizontal: h > 0 ? h : null, vertical: v > 0 ? v : null };
 }
 
 interface FontEntry {
@@ -208,7 +210,7 @@ export function register(server: McpServer): void {
     {
       title: 'Extract Design Tokens',
       description:
-        'Extract colors, typography, and spacing from the document as design tokens in CSS custom properties, JSON, or Tailwind format',
+        'Extract colors, typography, and spacing from the document as design tokens in CSS custom properties, JSON, or Tailwind format. Optionally writes the result to output_path (never overwrites an existing file unless overwrite: true).',
       inputSchema: {
         format: z
           .enum(['css', 'json', 'tailwind'])
@@ -218,9 +220,14 @@ export function register(server: McpServer): void {
         output_path: z
           .string()
           .optional()
-          .describe('File path to save the output (e.g. "/path/to/tokens.json"). If omitted, returns text only.'),
+          .describe('Absolute file path to save the output (e.g. "/path/to/tokens.json"). If omitted, returns text only.'),
+        overwrite: coerceBoolean
+          .optional()
+          .default(false)
+          .describe('Replace output_path if it already exists. Default false: an existing file is left untouched and an error is returned.'),
       },
-      annotations: READ_ANNOTATIONS,
+      // output_path 指定時はファイルを書き込み、overwrite: true なら既存ファイルを置き換える
+      annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
       const result = (await executeJsx(jsxCode, params)) as {
@@ -250,14 +257,19 @@ export function register(server: McpServer): void {
         }
       }
 
+      // sRGB に変換できない色（Lab 等）はトークンに出さず、応答で知らせる
+      const skippedColors: string[] = [];
       const sortedColors = [...colorCounts.values()]
         .sort((a, b) => b.count - a.count)
-        .slice(0, 12)
-        .map((entry) => ({
-          hex: colorToHex(entry.color) ?? colorKey(entry.color),
-          original: entry.color,
-          count: entry.count,
-        }));
+        .flatMap((entry) => {
+          const hex = colorToHex(entry.color);
+          if (!hex) {
+            skippedColors.push(colorKey(entry.color));
+            return [];
+          }
+          return [{ hex, original: entry.color, count: entry.count }];
+        })
+        .slice(0, 12);
 
       // Deduplicate fonts
       const fontCounts = new Map<string, { entry: FontEntry; count: number }>();
@@ -286,10 +298,9 @@ export function register(server: McpServer): void {
       const bounds = result.objectBounds;
       for (let i = 0; i < bounds.length && i < 100; i++) {
         for (let j = i + 1; j < bounds.length && j < 100; j++) {
-          const hGap = Math.abs(bounds[j].left - bounds[i].right);
-          const vGap = Math.abs(bounds[i].bottom - bounds[j].top);
-          if (hGap > 0 && hGap < 200) gaps.push(Math.round(hGap));
-          if (vGap > 0 && vGap < 200) gaps.push(Math.round(vGap));
+          const { horizontal, vertical } = boundsGaps(bounds[i], bounds[j]);
+          if (horizontal !== null && horizontal < 200) gaps.push(Math.round(horizontal));
+          if (vertical !== null && vertical < 200) gaps.push(Math.round(vertical));
         }
       }
 
@@ -306,19 +317,36 @@ export function register(server: McpServer): void {
         .sort((a, b) => a - b);
 
       const output = formatTokens(params.format ?? 'css', sortedColors, sortedFonts, commonSpacings);
-      const responseOutput = appendWarnings(output, result.warnings);
+      const notes: string[] = [];
+      if (sortedColors.some((c) => c.original.type !== 'rgb')) {
+        notes.push('CMYK / gray / spot colors are converted to hex without an ICC profile (approximate).');
+      }
+      if (skippedColors.length > 0) {
+        notes.push(`Skipped colors with no sRGB equivalent: ${skippedColors.join(', ')}`);
+      }
+      const responseOutput = appendWarnings(
+        notes.length > 0 ? `${output}\n\nNotes:\n${notes.map((n) => `- ${n}`).join('\n')}` : output,
+        result.warnings,
+      );
 
       if (params.output_path) {
+        const fail = (message: string) => ({
+          isError: true,
+          content: [{ type: 'text' as const, text: appendWarnings(message, result.warnings) }],
+        });
+        // 相対パスはサーバープロセスのカレントディレクトリ依存になるため受け付けない
+        if (!path.isAbsolute(params.output_path)) {
+          return fail(`output_path must be an absolute path: ${params.output_path}`);
+        }
         try {
-          await fs.writeFile(params.output_path, output, 'utf-8');
+          // 既定では既存ファイルを上書きしない（'wx' は存在すれば EEXIST で失敗する）
+          await fs.writeFile(params.output_path, output, { encoding: 'utf-8', flag: params.overwrite ? 'w' : 'wx' });
         } catch (err) {
+          if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
+            return fail(`File already exists: ${params.output_path}. Set overwrite: true to replace it.`);
+          }
           const msg = err instanceof Error ? err.message : String(err);
-          return {
-            content: [{
-              type: 'text',
-              text: appendWarnings(`Failed to write file: ${msg}`, result.warnings),
-            }],
-          };
+          return fail(`Failed to write file: ${msg}`);
         }
         return {
           content: [{ type: 'text', text: responseOutput + `\n\nSaved to: ${params.output_path}` }],
