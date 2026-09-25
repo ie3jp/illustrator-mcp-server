@@ -298,6 +298,40 @@ describe('modify_object paragraph controls', () => {
   });
 });
 
+describe('modify_object font_name (exact name only)', () => {
+  const fonts = Object.assign([{ name: 'HelveticaNeue-Bold', family: 'Helvetica Neue' }], {
+    getByName(n: string) {
+      const f = this.find((x: { name: string }) => x.name === n);
+      if (!f) throw new Error('No such element');
+      return f;
+    },
+  });
+
+  it('modifies nothing and returns font_candidates when the font is not an exact name', async () => {
+    const text = makeText(rgb(0, 0, 0));
+    const r = await runTool(
+      registerModifyObject,
+      { uuid: 't', properties: { font_name: 'Helvetica', font_size: 30 }, coordinate_system: 'document' },
+      { findItem: () => text, textFonts: fonts },
+    );
+    expect(r.error).toBe(true);
+    expect(r.message).toContain('Nothing was modified');
+    expect(r.font_candidates).toEqual([{ name: 'HelveticaNeue-Bold', family: 'Helvetica Neue' }]);
+    expect(text.textRange.characterAttributes.size).toBe(12);
+  });
+
+  it('applies an exact font name', async () => {
+    const text = makeText(rgb(0, 0, 0));
+    const r = await runTool(
+      registerModifyObject,
+      { uuid: 't', properties: { font_name: 'HelveticaNeue-Bold' }, coordinate_system: 'document' },
+      { findItem: () => text, textFonts: fonts },
+    );
+    expect(r.success).toBe(true);
+    expect((text.textRange.characterAttributes.textFont as { name: string }).name).toBe('HelveticaNeue-Bold');
+  });
+});
+
 describe('color-mode mismatch warnings on modify tools', () => {
   it('modify_object warns when an RGB fill is given in a CMYK document', async () => {
     const p = makePath(cmyk(0, 0, 0, 100));

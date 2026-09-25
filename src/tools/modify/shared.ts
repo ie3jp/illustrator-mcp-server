@@ -95,13 +95,16 @@ function findFontCandidates(fontName) {
   return candidates;
 }
 
-// 作成系ツールでフォントが見つからないときのエラー結果。
+// フォントが見つからないときのエラー結果（作成系と modify_object 共用）。
 // デフォルトフォントで作成して警告を添えるだけだと、LLM が警告を読み飛ばして
-// 別フォントで組まれた版が残るため、何も作らずにエラーを返す
-function fontNotFoundResult(fontName) {
+// 別フォントで組まれた版が残るため、何も作らず・変えずにエラーを返す。
+// forModify: modify_object から呼ぶとき true（文言を「何も変更していない」にする）
+function fontNotFoundResult(fontName, forModify) {
+  var outcome = forModify ? "Nothing was modified." : "Nothing was created.";
+  var omit = forModify ? "omit font_name to keep the current font" : "omit font_name to use the default font";
   return {
     error: true,
-    message: "Font '" + fontName + "' not found. Nothing was created. font_name must be an exact font name as listed by list_fonts (the 'name' field, e.g. PostScript name 'HelveticaNeue-Bold'). Retry with one of font_candidates, or omit font_name to use the default font.",
+    message: "Font '" + fontName + "' not found. " + outcome + " font_name must be an exact font name as listed by list_fonts (the 'name' field, e.g. PostScript name 'HelveticaNeue-Bold'). Retry with one of font_candidates, or " + omit + ".",
     font_candidates: findFontCandidates(fontName)
   };
 }

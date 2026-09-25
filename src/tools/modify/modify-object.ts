@@ -171,8 +171,16 @@ if (preflight) {
     }
 
     var item = findItemByUUID(params.uuid);
+    // フォントは作成系と同じく完全一致のみ。見つからなければ他のプロパティも含めて何も変更しない
+    // （別フォントのまま他の変更だけ入った半端な状態を残さない）
+    var resolvedFont = null;
+    if (params.properties.font_name) {
+      try { resolvedFont = app.textFonts.getByName(params.properties.font_name); } catch(eFont) { resolvedFont = null; }
+    }
     if (!item) {
       writeResultFile(RESULT_PATH, { error: true, message: "No object found matching UUID: " + params.uuid });
+    } else if (params.properties.font_name && !resolvedFont) {
+      writeResultFile(RESULT_PATH, fontNotFoundResult(params.properties.font_name, true));
     } else {
       var props = params.properties;
       var errors = [];
@@ -273,17 +281,12 @@ if (preflight) {
         catch(e) { errors.push("contents: " + e.message); }
       }
 
-      var fontCandidates = null;
-      if (props.font_name) {
+      if (resolvedFont) {
         try {
-          var resolvedFont = app.textFonts.getByName(props.font_name);
           for (var ri = 0; ri < item.textRanges.length; ri++) {
             item.textRanges[ri].characterAttributes.textFont = resolvedFont;
           }
-        } catch(e) {
-          errors.push("font_name: Font '" + props.font_name + "' not found.");
-          fontCandidates = findFontCandidates(props.font_name);
-        }
+        } catch(e) { errors.push("font_name: " + e.message); }
       }
 
       if (typeof props.font_size === "number") {
@@ -367,7 +370,6 @@ if (preflight) {
       if (errors.length > 0) result.errors = errors;
       if (warnings.length > 0) result.warnings = warnings;
       if (paintReport.fill || paintReport.stroke) result.painted = paintReport;
-      if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
       result.verified = verifiedState;
       writeResultFile(RESULT_PATH, appendColorSpaceWarnings(result));
     }
@@ -411,7 +413,7 @@ export function register(server: McpServer): void {
             hidden: z.boolean().optional().describe('Hide (true) or show (false) the object without deleting it'),
             locked: z.boolean().optional().describe('Lock (true) or unlock (false) the object. Unlock is applied before other changes, lock after them'),
             contents: z.string().optional().describe('Text contents (for text frames)'),
-            font_name: z.string().optional().describe('Font name for text frames (partial match supported)'),
+            font_name: z.string().optional().describe('Exact font name for text frames, as listed by list_fonts (the \'name\' field, e.g. PostScript name \'HelveticaNeue-Bold\'). If not found, nothing is modified and an error with font_candidates is returned'),
             font_size: z.number().optional().describe('Font size (for text frames)'),
             tracking: z
               .number()
