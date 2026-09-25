@@ -1,11 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import { realpathSync, existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
-import { dirname, basename, join, isAbsolute } from 'node:path';
+import { basename } from 'node:path';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
 import { WRITE_IDEMPOTENT_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
+import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-path.js';
 
 /** dpi × scale の上限。エージェントの数値ミスで巨大画像を生成しないためのガード */
 export const MAX_EFFECTIVE_DPI = 2400;
@@ -22,10 +22,8 @@ export function validateExportParams(params: {
   raster_options?: { dpi?: number };
 }): string | null {
   if (params.output_path !== undefined) {
-    // 相対パスは Illustrator 側のカレントフォルダ基準で解釈され、書き出し先が予測できない
-    if (!isAbsolute(params.output_path)) {
-      return `output_path must be an absolute path: ${params.output_path}`;
-    }
+    const pathError = checkAbsoluteOutputPath(params.output_path, 'output_path');
+    if (pathError) return pathError;
     // SVG は非 ASCII ファイル名で警告ダイアログが出て失敗する（自動生成パス・batch ラベルと同じ理由）
     if (params.format === 'svg' && /[^\x00-\x7F]/.test(basename(params.output_path))) {
       return `SVG export cannot use a non-ASCII file name (Illustrator shows a warning dialog and the export fails). Use an ASCII file name: ${params.output_path}`;
@@ -549,18 +547,10 @@ export function register(server: McpServer): void {
         return formatToolResult({ error: true, message: validationError });
       }
 
-      // macOS の /tmp は /private/tmp へのシンボリックリンク。
-      // Illustrator の exportFile() はシンボリックリンク経由のパスに書き込めない場合があるため、
-      // Node.js 側で実パスに解決してから渡す。
+      // シンボリックリンク経由のディレクトリ（macOS の /tmp 等）は Node.js 側で実パスに解決してから渡す
       const resolvedParams = { ...params };
       if (resolvedParams.output_path) {
-        const dir = dirname(resolvedParams.output_path);
-        if (existsSync(dir)) {
-          try {
-            const realDir = realpathSync(dir);
-            resolvedParams.output_path = join(realDir, basename(resolvedParams.output_path));
-          } catch (_) { /* 解決できなければ元のパスをそのまま使う */ }
-        }
+        resolvedParams.output_path = resolveOutputPath(resolvedParams.output_path);
       }
       const result = await executeJsxHeavy(exportPathHelpersJsx + jsxCode, resolvedParams);
 

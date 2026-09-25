@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
 import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
+import { checkAbsoluteOutputPath, resolveOutputPath } from '../../utils/output-path.js';
 
 /**
  * save_document — ドキュメントの上書き保存・別名保存
@@ -89,7 +90,7 @@ export function register(server: McpServer): void {
         path: z
           .string()
           .optional()
-          .describe('File path for save_as mode. If omitted, auto-generates a new non-conflicting name (<name>_2.ai, ...) in the same directory as the document (or ~/Desktop for unsaved documents)'),
+          .describe('Absolute file path for save_as mode. If omitted, auto-generates a new non-conflicting name (<name>_2.ai, ...) in the same directory as the document (or ~/Desktop for unsaved documents)'),
         overwrite: coerceBoolean
           .optional()
           .default(false)
@@ -99,7 +100,14 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const resolvedParams = { ...params };
+      if (resolvedParams.mode === 'save_as' && resolvedParams.path !== undefined) {
+        const pathError = checkAbsoluteOutputPath(resolvedParams.path, 'path');
+        if (pathError) return formatToolResult({ error: true, message: pathError });
+        // シンボリックリンク経由のディレクトリ（macOS の /tmp 等）は実パスに解決してから渡す
+        resolvedParams.path = resolveOutputPath(resolvedParams.path);
+      }
+      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
       return formatToolResult(result);
     },
   );

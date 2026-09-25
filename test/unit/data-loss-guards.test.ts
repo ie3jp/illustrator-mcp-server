@@ -466,11 +466,11 @@ describe('save_document', () => {
   it('save_as の明示パスに既存ファイルがあれば保存せずエラー', async () => {
     const { code, params } = await captureJsx(registerSaveDocument, 'save_document', {
       mode: 'save_as',
-      path: '/tmp/existing.ai',
+      path: '/no-such-dir-for-test/existing.ai',
     });
     const saveAs = vi.fn();
     const app = { activeDocument: { saveAs } };
-    const result = runJsx(code, params, { app, File: makeFile(['/tmp/existing.ai']) });
+    const result = runJsx(code, params, { app, File: makeFile(['/no-such-dir-for-test/existing.ai']) });
     expect(result.error).toBe(true);
     expect(result.fileExists).toBe(true);
     expect(saveAs).not.toHaveBeenCalled();
@@ -479,15 +479,24 @@ describe('save_document', () => {
   it('overwrite: true なら既存ファイルに保存する', async () => {
     const { code, params } = await captureJsx(registerSaveDocument, 'save_document', {
       mode: 'save_as',
-      path: '/tmp/existing.ai',
+      path: '/no-such-dir-for-test/existing.ai',
       overwrite: true,
     });
     const saveAs = vi.fn();
     const app = { activeDocument: { saveAs } };
-    const result = runJsx(code, params, { app, File: makeFile(['/tmp/existing.ai']) });
+    const result = runJsx(code, params, { app, File: makeFile(['/no-such-dir-for-test/existing.ai']) });
     expect(saveAs).toHaveBeenCalled();
     expect(result.success).toBe(true);
     expect(result.overwritten).toBe(true);
+  });
+
+  it('save_as の相対パスは Illustrator を呼ばずにエラー', async () => {
+    const tool = captureTool(registerSaveDocument, 'save_document');
+    const res = (await tool.handler(tool.schema.parse({ mode: 'save_as', path: 'out.ai' }))) as {
+      content: Array<{ text: string }>;
+    };
+    expect(res.content[0].text).toContain('path must be an absolute path');
+    expect(mockExecuteJsx).not.toHaveBeenCalled();
   });
 });
 
