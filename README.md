@@ -122,6 +122,32 @@ If you have multiple versions of Illustrator installed, you can tell Claude whic
 > [!NOTE]
 > If Illustrator is already running, the server connects to the running instance regardless of the version setting. The version is only used to launch the correct version when Illustrator is not yet running.
 
+### Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Timeout in milliseconds for normal tools |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Timeout in milliseconds for heavy tools (import, export, structure dumps) |
+
+Raise these when a single call needs longer than the default: importing a large SVG with `import_svg_as_editable` (100+ objects), or running `get_document_structure` / `export_pdf` on a big document.
+
+Values must be positive integers in milliseconds. Anything else (`0`, a negative number, a non-numeric string, or a value above 2147483647) falls back to the default. They are read once at server startup.
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
+        "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## 🎬 What You Can Do

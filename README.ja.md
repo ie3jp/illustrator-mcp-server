@@ -118,6 +118,32 @@ Illustrator が複数インストールされている場合、会話で使用�
 > [!NOTE]
 > すでに Illustrator が起動している場合は、バージョン設定に関わらず起動中のインスタンスに接続します。バージョン指定は、Illustrator が未起動の場合に起動するバージョンを決定するためのものです。
 
+### 環境変数
+
+| 変数 | 既定値 | 説明 |
+|---|---|---|
+| `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | 通常ツールのタイムアウト（ミリ秒） |
+| `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 重いツール（取り込み・書き出し・構造取得）のタイムアウト（ミリ秒） |
+
+1 回の呼び出しが既定値では足りない場合に延ばしてください。`import_svg_as_editable` で 100 個以上のオブジェクトを含む SVG を取り込む場合や、巨大なドキュメントで `get_document_structure` / `export_pdf` を実行する場合などです。
+
+値はミリ秒の正の整数です。それ以外（`0`・負数・数値でない文字列・2147483647 を超える値）は既定値に戻ります。値はサーバ起動時に一度だけ読み込まれます。
+
+```json
+{
+  "mcpServers": {
+    "illustrator": {
+      "command": "npx",
+      "args": ["illustrator-mcp-server"],
+      "env": {
+        "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
+        "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## 🎬 こんなことができます

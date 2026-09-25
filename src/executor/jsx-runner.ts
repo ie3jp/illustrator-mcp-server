@@ -128,9 +128,37 @@ async function getHelpers(): Promise<string> {
   return _helpersCache;
 }
 
-// タイムアウト設定（ms）
-const TIMEOUT_NORMAL = 30_000;
-const TIMEOUT_HEAVY = 60_000;
+// ─── タイムアウト設定（ms）─────────────────────────────────────────────────────
+//
+//  ILLUSTRATOR_MCP_TIMEOUT_NORMAL → 通常ツールのタイムアウト（既定 30000）
+//  ILLUSTRATOR_MCP_TIMEOUT_HEAVY  → 重い処理のタイムアウト（既定 60000）
+//
+//  重いドキュメント（例: import_svg_as_editable で 100 個超のオブジェクトを取り込む、
+//  巨大ドキュメントの get_document_structure / export_pdf）では既定値で足りないため、
+//  環境変数で上書きできるようにする。既定値そのものは変更しない。
+//
+//  ILLUSTRATOR_MCP_TRANSPORT と同じく、値はサーバ起動時に一度だけ読む。
+//
+
+// setTimeout（execFile の timeout が使う）は 2^31-1 ms を超えると 1ms に丸められ
+// TimeoutOverflowWarning を出す。つまり過大な値は「即タイムアウト」になり既定値より悪い。
+const TIMEOUT_MAX = 2_147_483_647;
+
+/**
+ * 環境変数のタイムアウト値を解決する。
+ * 正の 10 進整数（ms）のみ採用し、それ以外（未設定・0・負数・非数値・過大値）は既定値。
+ */
+export function resolveTimeout(envVar: string | undefined, defaultMs: number): number {
+  if (envVar === undefined) return defaultMs;
+  const trimmed = envVar.trim();
+  if (!/^\d+$/.test(trimmed)) return defaultMs;
+  const parsed = Number(trimmed);
+  if (parsed <= 0 || parsed > TIMEOUT_MAX) return defaultMs;
+  return parsed;
+}
+
+export const TIMEOUT_NORMAL = resolveTimeout(process.env['ILLUSTRATOR_MCP_TIMEOUT_NORMAL'], 30_000);
+export const TIMEOUT_HEAVY = resolveTimeout(process.env['ILLUSTRATOR_MCP_TIMEOUT_HEAVY'], 60_000);
 
 export interface JsxResult {
   error?: boolean;

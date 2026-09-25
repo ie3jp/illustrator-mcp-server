@@ -8,9 +8,9 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';
 import type { ExecFileException } from 'child_process';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage, getAppPath, setAppVersion, getAppVersion, resolveVersionToPath, resolveTransport } from '../../src/executor/jsx-runner.js';
+import { getExecFailureMessage, getAppPath, setAppVersion, getAppVersion, resolveVersionToPath, resolveTransport, resolveTimeout } from '../../src/executor/jsx-runner.js';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
 
@@ -33,6 +33,69 @@ describe('resolveTransport', () => {
 
   it('ILLUSTRATOR_MCP_TRANSPORT=powershell は darwin でも powershell を返す', () => {
     expect(resolveTransport('darwin', 'powershell')).toBe('powershell');
+  });
+});
+
+// ─── resolveTimeout ─────────────────────────────────────────────────────────
+
+// 入力と期待値のコーパス（既定値は 30000 固定で検査）
+const TIMEOUT_CORPUS: Array<{ label: string; input: string | undefined; expected: number }> = [
+  { label: '未設定 → 既定値', input: undefined, expected: 30_000 },
+  { label: '有効な整数 → その値', input: '120000', expected: 120_000 },
+  { label: '前後の空白は無視して採用', input: '  45000  ', expected: 45_000 },
+  { label: '0 → 既定値', input: '0', expected: 30_000 },
+  { label: '負数 → 既定値', input: '-1000', expected: 30_000 },
+  { label: '数値でない文字列 → 既定値', input: 'abc', expected: 30_000 },
+  { label: '空文字 → 既定値', input: '', expected: 30_000 },
+  { label: '小数 → 既定値', input: '1500.5', expected: 30_000 },
+  { label: '指数表記 → 既定値', input: '1e4', expected: 30_000 },
+  { label: '2^31-1 は採用', input: '2147483647', expected: 2_147_483_647 },
+  { label: '2^31-1 超は既定値（setTimeout が 1ms に丸めるため）', input: '2147483648', expected: 30_000 },
+];
+
+describe('resolveTimeout', () => {
+  for (const { label, input, expected } of TIMEOUT_CORPUS) {
+    it(label, () => {
+      expect(resolveTimeout(input, 30_000)).toBe(expected);
+    });
+  }
+
+  it('既定値は呼び出し側から渡される（heavy は 60000）', () => {
+    expect(resolveTimeout(undefined, 60_000)).toBe(60_000);
+  });
+});
+
+// ─── TIMEOUT_NORMAL / TIMEOUT_HEAVY の環境変数配線 ──────────────────────────
+
+describe('タイムアウト定数の環境変数配線', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.resetModules();
+  });
+
+  it('未設定なら既定値（30000 / 60000）', async () => {
+    vi.resetModules();
+    const mod = await import('../../src/executor/jsx-runner.js');
+    expect(mod.TIMEOUT_NORMAL).toBe(30_000);
+    expect(mod.TIMEOUT_HEAVY).toBe(60_000);
+  });
+
+  it('設定すると上書きされる', async () => {
+    vi.stubEnv('ILLUSTRATOR_MCP_TIMEOUT_NORMAL', '90000');
+    vi.stubEnv('ILLUSTRATOR_MCP_TIMEOUT_HEAVY', '180000');
+    vi.resetModules();
+    const mod = await import('../../src/executor/jsx-runner.js');
+    expect(mod.TIMEOUT_NORMAL).toBe(90_000);
+    expect(mod.TIMEOUT_HEAVY).toBe(180_000);
+  });
+
+  it('不正値なら既定値に落ちる', async () => {
+    vi.stubEnv('ILLUSTRATOR_MCP_TIMEOUT_NORMAL', 'not-a-number');
+    vi.stubEnv('ILLUSTRATOR_MCP_TIMEOUT_HEAVY', '-1');
+    vi.resetModules();
+    const mod = await import('../../src/executor/jsx-runner.js');
+    expect(mod.TIMEOUT_NORMAL).toBe(30_000);
+    expect(mod.TIMEOUT_HEAVY).toBe(60_000);
   });
 });
 
