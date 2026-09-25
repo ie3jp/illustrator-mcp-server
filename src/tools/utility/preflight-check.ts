@@ -244,19 +244,20 @@ if (preflight) {
             var sY = Math.sqrt(m.mValueC * m.mValueC + m.mValueD * m.mValueD);
             if (sX > 0 && sY > 0) {
               measured = true;
-              var pxW = Math.round(widthPt / sX);
-              var pxH = Math.round(heightPt / sY);
-              var ppiH = Math.round(pxW / (widthPt / 72));
-              var ppiV = Math.round(pxH / (heightPt / 72));
+              // 実効解像度 = 72 / (1px あたりの pt)。回転していても基底ベクトルの長さで求まる
+              var ppiH = Math.round(72 / sX);
+              var ppiV = Math.round(72 / sY);
               var effectivePPI = Math.min(ppiH, ppiV);
               if (effectivePPI < minDPI) {
                 var uuid4 = ensureUUID(raster);
+                // ピクセル数は外接矩形を割るだけだと回転時に誤るため、get_images と同じ解法を使う（解けなければ null）
+                var px = pixelSizeFromMatrix(m, widthPt, heightPt);
                 results.push({
                   level: "error",
                   category: "low_resolution",
                   message: "Embedded image resolution " + effectivePPI + " DPI is below minimum " + minDPI + " DPI",
                   uuid: uuid4,
-                  details: { name: raster.name || "", effectivePPI: effectivePPI, minDPI: minDPI, pixelWidth: pxW, pixelHeight: pxH }
+                  details: { name: raster.name || "", effectivePPI: effectivePPI, minDPI: minDPI, pixelWidth: px ? px.width : null, pixelHeight: px ? px.height : null }
                 });
               }
             }

@@ -197,6 +197,27 @@ describe('preflight_check JSX: text scan', () => {
   });
 });
 
+describe('preflight_check JSX: low resolution', () => {
+  it('reports the real pixel size of a rotated embedded image (not the bounding box divided by scale)', () => {
+    // 1000x500px を 0.36pt/px（200ppi）で配置し 30° 回転。外接矩形は回転で膨らむ
+    const s = 0.36;
+    const t = Math.PI / 6;
+    const [W, H] = [1000, 500];
+    const aabbW = W * s * Math.cos(t) + H * s * Math.sin(t);
+    const aabbH = W * s * Math.sin(t) + H * s * Math.cos(t);
+    const raster = base('RasterItem', {
+      imageColorSpace: 2, transparent: false,
+      geometricBounds: [0, aabbH, aabbW, 0],
+      matrix: { mValueA: s * Math.cos(t), mValueB: s * Math.sin(t), mValueC: -s * Math.sin(t), mValueD: s * Math.cos(t) },
+    });
+    const r = runPreflightJsx(makeDoc([raster]), { min_dpi: 300 });
+    const [low] = byCategory(r, 'low_resolution');
+    expect(low.details.effectivePPI).toBe(200);
+    expect(low.details.pixelWidth).toBe(1000);
+    expect(low.details.pixelHeight).toBe(500);
+  });
+});
+
 function raw(results: PreflightEntry[], extra: Partial<PreflightRawResult> = {}): PreflightRawResult {
   return {
     checkCount: results.length,
