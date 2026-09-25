@@ -441,3 +441,23 @@ describe('export_pdf preset handling', () => {
     expect(env.doc.saveAs).not.toHaveBeenCalled();
   });
 });
+
+describe('export_pdf overwrite guard', () => {
+  it('既存ファイルは overwrite: true のときだけ置き換え、それ以外は文書に触れずエラーを返す', async () => {
+    const { mkdtempSync, writeFileSync, realpathSync } = await import('fs');
+    const { tmpdir } = await import('os');
+    const { join } = await import('path');
+    const dir = realpathSync(mkdtempSync(join(tmpdir(), 'export-pdf-')));
+    const existing = join(dir, 'out.pdf');
+    writeFileSync(existing, 'old');
+
+    vi.mocked(executeJsxHeavy).mockClear();
+    const refused = (await exportPdf({ output_path: existing })) as { content: Array<{ text: string }>; isError?: boolean };
+    expect(refused.isError).toBe(true);
+    expect(JSON.parse(refused.content[0].text)).toMatchObject({ error: true, existing_files: [existing] });
+    expect(executeJsxHeavy).not.toHaveBeenCalled();
+
+    const { params } = await exportPdfScript({ output_path: existing, overwrite: true });
+    expect((params as { output_path: string }).output_path).toBe(existing);
+  });
+});

@@ -112,7 +112,7 @@ Claude Desktop 메뉴 바에서:
 > 대부분의 수정 도구는 실행 중에 Illustrator를 전면으로 가져옵니다. 읽기 도구와 `export`는 앱을 전환하지 않고 실행되며, `export_pdf`는 일본식 재단선을 그릴 때만 Illustrator를 전면으로 가져옵니다.
 
 > [!NOTE]
-> **파일은 기본적으로 보호됩니다.** `close_document`는 명시적으로 지정하지 않는 한(`save: false`) 저장하지 않은 변경 사항을 버리지 않으며, `export`, `save_document`(다른 이름으로 저장), `extract_design_tokens`는 `overwrite: true`를 지정하지 않는 한 기존 파일을 덮어쓰지 않습니다. 그렇게 하고 싶다면 Claude에게 "저장하지 않고 닫아줘" 또는 "파일을 덮어써줘"라고 말하면 됩니다.
+> **파일은 기본적으로 보호됩니다.** `close_document`는 명시적으로 지정하지 않는 한(`save: false`) 저장하지 않은 변경 사항을 버리지 않으며, `export`, `export_pdf`, `save_document`(다른 이름으로 저장), `extract_design_tokens`는 `overwrite: true`를 지정하지 않는 한 기존 파일을 덮어쓰지 않습니다. 그렇게 하고 싶다면 Claude에게 "저장하지 않고 닫아줘" 또는 "파일을 덮어써줘"라고 말하면 됩니다.
 
 ### 여러 Illustrator 버전
 

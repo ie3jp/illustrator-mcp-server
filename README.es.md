@@ -112,7 +112,7 @@ Desde la barra de menú de Claude Desktop:
 > La mayoría de las herramientas de modificación traen Illustrator al primer plano durante su ejecución. Las herramientas de lectura y `export` se ejecutan sin cambiar de aplicación; `export_pdf` solo lo trae al frente cuando dibuja marcas de corte japonesas.
 
 > [!NOTE]
-> **Tus archivos están protegidos por defecto.** `close_document` no descarta cambios sin guardar a menos que lo indiques explícitamente (`save: false`), y `export`, `save_document` (guardar como) y `extract_design_tokens` no reemplazan un archivo existente salvo que se indique `overwrite: true`. Si es lo que quieres, basta con pedirle a Claude que "cierre sin guardar" o que "sobrescriba el archivo".
+> **Tus archivos están protegidos por defecto.** `close_document` no descarta cambios sin guardar a menos que lo indiques explícitamente (`save: false`), y `export`, `export_pdf`, `save_document` (guardar como) y `extract_design_tokens` no reemplazan un archivo existente salvo que se indique `overwrite: true`. Si es lo que quieres, basta con pedirle a Claude que "cierre sin guardar" o que "sobrescriba el archivo".
 
 ### Múltiples Versiones de Illustrator
 

@@ -112,7 +112,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 > 大多数修改类工具在执行时会将 Illustrator 切换到前台。读取类工具和 `export` 不会切换应用；`export_pdf` 仅在绘制日式裁切标记时才会将 Illustrator 切换到前台。
 
 > [!NOTE]
-> **文件默认受到保护。** 除非明确指定（`save: false`），`close_document` 不会丢弃未保存的更改；除非设置 `overwrite: true`，`export`、`save_document`（另存为）和 `extract_design_tokens` 不会覆盖已有文件。如果确实需要，直接告诉 Claude“不保存直接关闭”或“覆盖文件”即可。
+> **文件默认受到保护。** 除非明确指定（`save: false`），`close_document` 不会丢弃未保存的更改；除非设置 `overwrite: true`，`export`、`export_pdf`、`save_document`（另存为）和 `extract_design_tokens` 不会覆盖已有文件。如果确实需要，直接告诉 Claude“不保存直接关闭”或“覆盖文件”即可。
 
 ### 多版本 Illustrator
 

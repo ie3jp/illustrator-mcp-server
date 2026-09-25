@@ -114,7 +114,7 @@ From the Claude Desktop menu bar:
 > Most modify tools bring Illustrator to the foreground during execution. Read tools and `export` run without switching apps; `export_pdf` brings Illustrator forward only when drawing Japanese crop marks.
 
 > [!NOTE]
-> **Your files are protected by default.** `close_document` will not throw away unsaved changes unless you explicitly choose to (`save: false`), and `export`, `save_document` (save as) and `extract_design_tokens` will not replace an existing file unless `overwrite: true` is set. If that is what you want, just tell Claude to "close without saving" or "overwrite the file".
+> **Your files are protected by default.** `close_document` will not throw away unsaved changes unless you explicitly choose to (`save: false`), and `export`, `export_pdf`, `save_document` (save as) and `extract_design_tokens` will not replace an existing file unless `overwrite: true` is set. If that is what you want, just tell Claude to "close without saving" or "overwrite the file".
 
 ### Multiple Illustrator Versions
 

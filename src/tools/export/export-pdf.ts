@@ -1,3 +1,4 @@
+import { existsSync } from 'fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
@@ -304,9 +305,11 @@ export function register(server: McpServer): void {
         'Japanese trim marks (marks_style "japanese" + trim_marks) are drawn temporarily on the document and removed after export; ' +
         'they are only supported for single-artboard documents (multi-artboard documents return an error). ' +
         'When a preset is given, trim mark settings you do not specify are kept from the preset. ' +
+        'An explicit output_path that already exists is not overwritten unless overwrite is true. ' +
         'Note: Illustrator will be activated (brought to foreground) only when generating Japanese trim marks. The exported PDF should be verified by a human before final submission.',
       inputSchema: {
         output_path: z.string().optional().describe('Absolute output file path ending in .pdf (.pdf is added if omitted). If omitted, auto-generates a non-conflicting name in the same directory as the document (or ~/Desktop for unsaved documents)'),
+        overwrite: coerceBoolean.optional().default(false).describe('Replace an existing file at output_path. Default false: returns an error with existing_files and exports nothing'),
         preset: z
           .string()
           .optional()
@@ -329,7 +332,7 @@ export function register(server: McpServer): void {
           .optional()
           .describe('PDF export options'),
       },
-      // 明示した output_path の既存ファイルは確認なしで置き換わる。省略時は毎回別名で新規作成するため冪等でもない
+      // overwrite: true は既存ファイルを置き換える。省略時は毎回別名で新規作成するため冪等でもない
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
@@ -342,6 +345,14 @@ export function register(server: McpServer): void {
         if (normalized.error !== undefined) return formatToolResult({ error: true, message: normalized.error });
         // シンボリックリンク経由のディレクトリ（macOS の /tmp 等）は実パスに解決してから渡す
         resolvedParams.output_path = resolveOutputPath(normalized.path);
+        // 既存ファイルは明示的に許可されたときだけ置き換える（export / save_as と同じ扱い）。文書に触れる前に止める
+        if (existsSync(resolvedParams.output_path) && params.overwrite !== true) {
+          return formatToolResult({
+            error: true,
+            message: `Output file already exists: ${resolvedParams.output_path}. Pass overwrite: true to replace it, or choose another output_path.`,
+            existing_files: [resolvedParams.output_path],
+          });
+        }
       }
       const result = await executeJsxHeavy(CROP_MARKS_JSX + jsxCode, resolvedParams, {
         activate: requiresMenuCommandActivation(params),

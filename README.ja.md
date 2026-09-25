@@ -110,7 +110,7 @@ Claude Desktop のメニューバーから:
 > ほとんどの操作系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。読み取り系ツールと `export` はアプリを切り替えずに実行します（`export_pdf` は日本式トンボを描くときだけ前面に出します）。
 
 > [!NOTE]
-> **ファイルは既定で保護されます。** `close_document` は、明示的に指定しない限り（`save: false`）未保存の変更を破棄しません。`export`・`save_document`（別名保存）・`extract_design_tokens` は、`overwrite: true` を指定しない限り既存ファイルを上書きしません。破棄・上書きしたいときは「保存せずに閉じて」「上書きして」と伝えてください。
+> **ファイルは既定で保護されます。** `close_document` は、明示的に指定しない限り（`save: false`）未保存の変更を破棄しません。`export`・`export_pdf`・`save_document`（別名保存）・`extract_design_tokens` は、`overwrite: true` を指定しない限り既存ファイルを上書きしません。破棄・上書きしたいときは「保存せずに閉じて」「上書きして」と伝えてください。
 
 ### 複数バージョンの Illustrator
 

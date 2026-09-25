@@ -112,7 +112,7 @@ Na barra de menu do Claude Desktop:
 > A maioria das ferramentas de modificação traz o Illustrator para o primeiro plano durante a execução. As ferramentas de leitura e o `export` rodam sem trocar de aplicativo; o `export_pdf` só traz o Illustrator para a frente ao desenhar marcas de corte japonesas.
 
 > [!NOTE]
-> **Seus arquivos são protegidos por padrão.** O `close_document` não descarta alterações não salvas a menos que você peça explicitamente (`save: false`), e `export`, `save_document` (salvar como) e `extract_design_tokens` não substituem um arquivo existente sem `overwrite: true`. Se for isso que você quer, basta pedir ao Claude para "fechar sem salvar" ou "sobrescrever o arquivo".
+> **Seus arquivos são protegidos por padrão.** O `close_document` não descarta alterações não salvas a menos que você peça explicitamente (`save: false`), e `export`, `export_pdf`, `save_document` (salvar como) e `extract_design_tokens` não substituem um arquivo existente sem `overwrite: true`. Se for isso que você quer, basta pedir ao Claude para "fechar sem salvar" ou "sobrescrever o arquivo".
 
 ### Múltiplas versões do Illustrator
 
