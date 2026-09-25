@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { JsxToolError } from './executor/jsx-runner.js';
 import { registerAllTools } from './tools/registry.js';
+import { formatToolResult } from './tools/tool-executor.js';
 import { registerAllPrompts } from './prompts/registry.js';
 
 /**
@@ -27,15 +28,19 @@ export function createServer(): McpServer {
     version: readPackageVersion(),
   });
 
-  returnJsxErrorsAsResults(server);
+  applyToolErrorBoundary(server);
   registerAllTools(server);
   registerAllPrompts(server);
 
   return server;
 }
 
-/** JSX のエラー結果を追加情報ごと isError の結果で返す（例外のまま SDK に渡すと message しか残らない） */
-export function returnJsxErrorsAsResults(server: McpServer): void {
+/**
+ * 失敗をツール応答の isError に揃える境界。JSX の error: true は JsxToolError として投げられるので、
+ * ここで formatToolResult() に通して追加情報ごと返す（例外のまま SDK に渡すと message しか残らない）。
+ * 戻り値の error: true / success: false は formatToolResult() が isError を付ける
+ */
+export function applyToolErrorBoundary(server: McpServer): void {
   const register = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   (server as { registerTool: unknown }).registerTool = (name: string, config: unknown, handler: (...a: unknown[]) => unknown) =>
     register(name, config, async (...args: unknown[]) => {
@@ -43,7 +48,7 @@ export function returnJsxErrorsAsResults(server: McpServer): void {
         return await handler(...args);
       } catch (e) {
         if (!(e instanceof JsxToolError)) throw e;
-        return { content: [{ type: 'text', text: JSON.stringify(e.result, null, 2) }], isError: true };
+        return formatToolResult(e.result);
       }
     });
 }
