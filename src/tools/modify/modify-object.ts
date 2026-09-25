@@ -369,7 +369,7 @@ if (preflight) {
       if (paintReport.fill || paintReport.stroke) result.painted = paintReport;
       if (fontCandidates !== null) { result.font_candidates = fontCandidates; }
       result.verified = verifiedState;
-      writeResultFile(RESULT_PATH, result);
+      writeResultFile(RESULT_PATH, appendColorSpaceWarnings(result));
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to modify object: " + e.message, line: e.line });

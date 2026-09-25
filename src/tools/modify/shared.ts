@@ -145,7 +145,13 @@ function appendColorSpaceWarnings(result) {
   } else {
     msg += ". Specify {type:'rgb'} colors in this document.";
   }
-  msg += " The stored values are shown in verified.fill / verified.stroke.";
+  // 実際に保存された値の在りかを案内する（結果に載っているツールだけ）
+  var v = result.verified;
+  if (v && (v.fill || v.stroke)) {
+    msg += " The stored values are shown in verified.fill / verified.stroke.";
+  } else if (v && v.descendantFills) {
+    msg += " The stored values are shown in verified.descendantFills / verified.descendantStrokes.";
+  }
   result.warnings.push(msg);
   return result;
 }

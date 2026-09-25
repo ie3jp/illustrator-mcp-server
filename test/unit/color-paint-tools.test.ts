@@ -21,6 +21,8 @@ vi.mock('../../src/tools/session.js', async (importOriginal) => {
 
 import { executeJsx } from '../../src/executor/jsx-runner.js';
 import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
+import { register as registerReplaceColor } from '../../src/tools/modify/replace-color.js';
+import { register as registerManageSwatches } from '../../src/tools/modify/manage-swatches.js';
 import { register as registerSelectObjects } from '../../src/tools/modify/select-objects.js';
 import { register as registerGetColors } from '../../src/tools/read/get-colors.js';
 import { captureInputSchema } from './helpers/tool-schema.js';
@@ -47,7 +49,7 @@ function captureHandler(register: (server: McpServer) => void): Handler {
 async function runTool(
   register: (server: McpServer) => void,
   params: Record<string, unknown>,
-  env: { doc?: unknown; findItem?: (uuid: string) => unknown },
+  env: { doc?: unknown; findItem?: (uuid: string) => unknown; textFonts?: unknown },
 ): Promise<Result> {
   mockExecuteJsx.mockClear();
   await captureHandler(register)(params);
@@ -74,6 +76,7 @@ async function runTool(
     readParamsFile = function() { return __params; };
     if (__env.findItem) { findItemByUUID = __env.findItem; }
     app.activeDocument = __env.doc || {};
+    if (__env.textFonts) { app.textFonts = __env.textFonts; }
     ${toolJsx}
     return jsonParse(__written);
   `;
@@ -292,6 +295,100 @@ describe('modify_object paragraph controls', () => {
     expect(ok({ justification: 'justify' })).toBe(false);
     expect(ok({ leading: 0 })).toBe(false);
     expect(ok({ leading: 'tight' })).toBe(false);
+  });
+});
+
+describe('color-mode mismatch warnings on modify tools', () => {
+  it('modify_object warns when an RGB fill is given in a CMYK document', async () => {
+    const p = makePath(cmyk(0, 0, 0, 100));
+    const r = await runTool(
+      registerModifyObject,
+      { uuid: 'p', properties: { fill: { type: 'rgb', r: 0, g: 0, b: 0 } }, coordinate_system: 'document' },
+      { findItem: () => p, doc: { documentColorSpace: 'DCS_CMYK' } },
+    );
+    const w = (r.warnings as string[]).find((x) => x.includes('Color mode mismatch'));
+    expect(w).toContain('rgb(0,0,0)');
+    expect(w).toContain('verified.fill');
+  });
+
+  it('manage_swatches warns on add in a mismatched document', async () => {
+    const doc = {
+      documentColorSpace: 'DCS_CMYK',
+      swatches: Object.assign([] as unknown[], {
+        add() {
+          const sw = { name: '', color: null };
+          (this as unknown[]).push(sw);
+          return sw;
+        },
+      }),
+    };
+    const r = await runTool(
+      registerManageSwatches,
+      { action: 'add', name: 'Brand', color: { type: 'rgb', r: 255, g: 0, b: 0 } },
+      { doc },
+    );
+    expect(r.success).toBe(true);
+    expect(r.warnings[0]).toContain('rgb(255,0,0)');
+    expect(r.warnings[0]).not.toContain('verified.fill');
+  });
+});
+
+describe('replace_color', () => {
+  function textWithRanges(fills: unknown[], strokes: Array<{ color: unknown; weight: number }> = []) {
+    const ranges = fills.map((f, i) => ({
+      characterAttributes: {
+        fillColor: f,
+        strokeColor: strokes[i]?.color ?? { typename: 'NoColor' },
+        strokeWeight: strokes[i]?.weight ?? 0,
+      },
+    }));
+    return { typename: 'TextFrame', textRanges: ranges };
+  }
+
+  it('replaces matching character colors in text, range by range, and counts frames', async () => {
+    const tf = textWithRanges([cmyk(0, 100, 100, 0), cmyk(0, 0, 0, 100)]);
+    const untouched = textWithRanges([cmyk(0, 0, 0, 100)]);
+    const path = makePath(cmyk(0, 100, 100, 0));
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [path], textFrames: [tf, untouched] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 } },
+      { doc },
+    );
+    expect(r.success).toBe(true);
+    expect(r.replacedCount).toBe(1);
+    expect(r.textFramesChanged).toBe(1);
+    expect(tf.textRanges[0].characterAttributes.fillColor).toMatchObject({ typename: 'CMYKColor', black: 50 });
+    expect(tf.textRanges[1].characterAttributes.fillColor).toMatchObject({ black: 100 });
+    expect(r.warnings).toBeUndefined();
+  });
+
+  it('ignores text strokes with zero weight and respects target', async () => {
+    const tf = textWithRanges(
+      [cmyk(0, 100, 100, 0), cmyk(0, 0, 0, 100)],
+      [{ color: cmyk(0, 100, 100, 0), weight: 0 }, { color: cmyk(0, 100, 100, 0), weight: 1 }],
+    );
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [], textFrames: [tf] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 }, target: 'stroke' },
+      { doc },
+    );
+    expect(r.textFramesChanged).toBe(1);
+    expect(tf.textRanges[0].characterAttributes.fillColor).toMatchObject({ magenta: 100 });
+    expect(tf.textRanges[0].characterAttributes.strokeColor).toMatchObject({ magenta: 100 });
+    expect(tf.textRanges[1].characterAttributes.strokeColor).toMatchObject({ black: 50 });
+  });
+
+  it('warns when to_color does not match the document color mode', async () => {
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [makePath(cmyk(0, 100, 100, 0))], textFrames: [] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'rgb', r: 0, g: 0, b: 0 } },
+      { doc },
+    );
+    expect(r.replacedCount).toBe(1);
+    expect(r.warnings[0]).toContain('rgb(0,0,0)');
   });
 });
 
