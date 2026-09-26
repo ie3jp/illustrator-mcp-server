@@ -18,6 +18,16 @@
 
 ## 登録済み
 - Glama (READMEにバッジあり)
+- MCP Registry（CI がリリースごとに自動公開）
+- **Claude Desktop 拡張ディレクトリ**: 2026-09-26 に申請（Google フォーム、v1.10.2 の .mcpb を添付）。結果待ち。掲載名を変えたら「既存の拡張の更新: Yes」で出し直す
+- **Claude プラグインディレクトリ（コミュニティ）**: 2026-09-26 に申請（platform.claude.com/plugins/submit、Claude Code と Cowork の両方で動作確認済み）。結果待ち。掲載されたら anthropics/claude-plugins-community の marketplace.json に載る
+
+## Anthropic のディレクトリでの名前
+- 掲載名は **Design Bridge by IE3**（プラグイン名 `ie3-design-bridge`、マーケットプレイス名 `ie3`、manifest の display_name）
+- 理由: プラグインディレクトリは所有していないブランド名（Adobe / Illustrator）を名前に使うことを禁じている。Adobe 公式の「Illustrator MCP」と紛らわしいのも避けたい
+- Illustrator 用であることは説明文の冒頭（Work with Adobe Illustrator from Claude…）とキーワード（adobe-illustrator 等）で示し、「Not affiliated with Adobe」を添える
+- npm パッケージ名・リポジトリ名 `illustrator-mcp-server` と manifest の内部名（name）は変えない（既存ユーザーの導入が壊れるため）
+- 審査はツールの説明文や結果で Claude の振る舞いを指図することを禁じている（「ユーザーに確認せず実行せよ」等を書かない）
 
 ## MCP公式ディレクトリ
 - modelcontextprotocol/servers のREADMEリストはメンテナンス終了、MCP Registryへ移行中
