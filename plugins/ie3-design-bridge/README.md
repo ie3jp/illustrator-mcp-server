@@ -1,4 +1,4 @@
-# Design Bridge by IE3
+# Design Bridge by IE3 — Adobe Illustrator tools for Claude
 
 Design tools for Adobe Illustrator: read, edit and export Illustrator documents from Claude Code or Claude Cowork. (Not affiliated with Adobe.)
 

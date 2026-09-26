@@ -9,9 +9,16 @@
     {
       "name": "ie3-design-bridge",
       "source": "./plugins/ie3-design-bridge",
-      "description": "Read, edit and export Adobe Illustrator documents via illustrator-mcp-server, with a pre-press preflight skill.",
+      "description": "Work with Adobe Illustrator from Claude — read, edit and export Illustrator documents, plus a pre-press preflight skill. Not affiliated with Adobe.",
       "category": "design",
-      "tags": ["illustrator", "adobe", "design", "print", "preflight"]
+      "tags": [
+        "illustrator",
+        "adobe-illustrator",
+        "graphic-design",
+        "vector",
+        "print",
+        "preflight"
+      ]
     }
   ]
 }

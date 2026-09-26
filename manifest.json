@@ -2,7 +2,9 @@
   "manifest_version": "0.3",
   "name": "Illustrator MCP",
   "version": "1.2.10",
-  "description": "MCP server for Adobe Illustrator with 66 tools — read, create, and export design data. Everything the official Illustrator MCP (beta) can do and more, on stable Illustrator.",
+  "display_name": "Design Bridge by IE3",
+  "description": "Work with Adobe Illustrator from Claude — read, create, edit and export Illustrator documents (SVG, PNG, JPG, PDF) and run pre-press checks. 66 tools. Not affiliated with Adobe.",
+  "long_description": "Design Bridge by IE3 connects Claude to Adobe Illustrator running on your Mac or Windows PC (Illustrator 2020 or later; tested on 2024 and later).\n\n- **Understand documents**: layers, artboards, colors and swatches, text with font details, placed images with effective resolution, overprint and separations.\n- **Create and edit artwork**: shapes, paths, text with tracking, alignment and leading, gradients, symbols and images; align, group, recolor and restyle; size variations and style guides.\n- **Export**: SVG, PNG and JPG by artboard, selection or object, and print-ready PDF with presets and trim marks.\n- **Pre-press checks**: RGB in CMYK, broken links, low-resolution images, white overprint, missing fonts and PDF/X issues.\n\nFiles are never overwritten and unsaved changes are never discarded unless you ask. Everything runs locally with no network access. Not affiliated with or endorsed by Adobe.",
   "author": {
     "name": "cyocun(IE3)",
     "email": "cyocun@gmail.com",
@@ -96,6 +98,11 @@
     { "name": "convert_coordinate", "description": "Convert a point between coordinate systems" }
   ],
   "keywords": [
+    "adobe-illustrator",
+    "graphic-design",
+    "dtp",
+    "svg",
+    "preflight",
     "illustrator",
     "adobe",
     "design",
