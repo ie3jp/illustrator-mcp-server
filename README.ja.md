@@ -55,14 +55,14 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 プラグインとして入れることもできます。MCP サーバーと入稿前チェック（プリフライト）用のスキルがセットになっています（Claude Cowork でも使えます）。
 
 ```
-/plugin install illustrator --marketplace ie3jp/illustrator-mcp-server
+/plugin install ie3-design-bridge --marketplace ie3jp/illustrator-mcp-server
 ```
 
 Claude Code が v2.1.275 より前の場合は、先にマーケットプレイスを追加します。
 
 ```
 /plugin marketplace add ie3jp/illustrator-mcp-server
-/plugin install illustrator@ie3jp-illustrator
+/plugin install ie3-design-bridge@ie3
 ```
 
 `claude mcp add` で登録済みの場合は、二重に起動しないよう先に `claude mcp remove illustrator-mcp` で外してください。

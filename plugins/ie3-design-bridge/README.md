@@ -1,6 +1,6 @@
-# Adobe Illustrator plugin
+# Design Bridge by IE3
 
-Read, edit and export Adobe Illustrator documents from Claude Code or Claude Cowork.
+Design tools for Adobe Illustrator: read, edit and export Illustrator documents from Claude Code or Claude Cowork. (Not affiliated with Adobe.)
 
 This plugin bundles:
 
@@ -16,14 +16,14 @@ This plugin bundles:
 ## Install
 
 ```
-/plugin install illustrator --marketplace ie3jp/illustrator-mcp-server
+/plugin install ie3-design-bridge --marketplace ie3jp/illustrator-mcp-server
 ```
 
 On Claude Code earlier than v2.1.275, add the marketplace first:
 
 ```
 /plugin marketplace add ie3jp/illustrator-mcp-server
-/plugin install illustrator@ie3jp-illustrator
+/plugin install ie3-design-bridge@ie3
 ```
 
 If you already added the server with `claude mcp add`, remove it first so it doesn't run twice.

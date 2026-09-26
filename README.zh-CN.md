@@ -57,14 +57,14 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 也可以作为插件安装，其中包含 MCP 服务器和印前检查（Preflight）技能（也适用于 Claude Cowork）：
 
 ```
-/plugin install illustrator --marketplace ie3jp/illustrator-mcp-server
+/plugin install ie3-design-bridge --marketplace ie3jp/illustrator-mcp-server
 ```
 
 如果 Claude Code 版本早于 v2.1.275，请先添加 marketplace：
 
 ```
 /plugin marketplace add ie3jp/illustrator-mcp-server
-/plugin install illustrator@ie3jp-illustrator
+/plugin install ie3-design-bridge@ie3
 ```
 
 如果已经用 `claude mcp add` 添加过服务器，请先执行 `claude mcp remove illustrator-mcp` 移除，以免重复运行。

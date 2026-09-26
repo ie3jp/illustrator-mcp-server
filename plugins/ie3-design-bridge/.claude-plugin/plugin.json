@@ -1,8 +1,8 @@
 {
-  "name": "illustrator",
-  "displayName": "Adobe Illustrator",
+  "name": "ie3-design-bridge",
+  "displayName": "Design Bridge by IE3",
   "version": "1.10.2",
-  "description": "Read, edit and export Adobe Illustrator documents from Claude via the illustrator-mcp-server MCP server, plus a pre-press preflight skill for print-ready checks.",
+  "description": "Design tools for Adobe Illustrator: read, edit and export Illustrator documents from Claude via the illustrator-mcp-server MCP server, plus a pre-press preflight skill for print-ready checks.",
   "author": {
     "name": "ie3jp",
     "url": "https://github.com/ie3jp"
