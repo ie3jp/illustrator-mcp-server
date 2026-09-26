@@ -2,10 +2,11 @@
   "manifest_version": "0.3",
   "name": "Illustrator MCP",
   "version": "1.2.10",
-  "description": "MCP server for Adobe Illustrator with 67 tools — read, create, and export design data. Everything the official Illustrator MCP (beta) can do and more, on stable Illustrator.",
+  "description": "MCP server for Adobe Illustrator with 66 tools — read, create, and export design data. Everything the official Illustrator MCP (beta) can do and more, on stable Illustrator.",
   "author": {
     "name": "cyocun(IE3)",
-    "email": "cyocun@gmail.com"
+    "email": "cyocun@gmail.com",
+    "url": "https://github.com/ie3jp"
   },
   "icon": "icon.png",
   "support": "https://github.com/ie3jp/illustrator-mcp-server",
