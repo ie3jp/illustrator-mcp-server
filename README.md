@@ -59,6 +59,12 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 Or install it as a plugin, which bundles the MCP server with a pre-press preflight skill (also works in Claude Cowork):
 
 ```
+/plugin install illustrator --marketplace ie3jp/illustrator-mcp-server
+```
+
+On Claude Code earlier than v2.1.275, add the marketplace first:
+
+```
 /plugin marketplace add ie3jp/illustrator-mcp-server
 /plugin install illustrator@ie3jp-illustrator
 ```

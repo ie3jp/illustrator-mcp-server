@@ -57,6 +57,12 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 플러그인으로 설치할 수도 있습니다. MCP 서버와 인쇄 전 점검(프리플라이트) 스킬이 함께 들어 있습니다(Claude Cowork에서도 사용 가능).
 
 ```
+/plugin install illustrator --marketplace ie3jp/illustrator-mcp-server
+```
+
+Claude Code v2.1.275 이전 버전에서는 먼저 마켓플레이스를 추가합니다.
+
+```
 /plugin marketplace add ie3jp/illustrator-mcp-server
 /plugin install illustrator@ie3jp-illustrator
 ```
