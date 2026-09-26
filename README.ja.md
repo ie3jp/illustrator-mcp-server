@@ -15,6 +15,9 @@ Claude などの AI アシスタントから Illustrator を直接操作し、We
 
 Adobe 公式の Illustrator MCP（Beta）にできることは全部できて、さらにその先へ。詳しくは[比較表](#-adobe-公式-illustrator-mcp-との比較)をどうぞ。
 
+> [!NOTE]
+> Claude の拡張機能ディレクトリとプラグインマーケットプレイスでは **「Design Bridge by IE3」** という名前で掲載しています。Anthropic のディレクトリでは他社のブランド名を掲載名に使えないため名前が異なりますが、中身は同じで、npm のパッケージ名も `illustrator-mcp-server` のままです。以前の名前（`illustrator@ie3jp-illustrator`）で Claude Code のプラグインを入れた場合は、[Claude Code](#-クイックスタート) の手順で入れ直してください。
+
 ---
 
 ## 🎨 ギャラリー

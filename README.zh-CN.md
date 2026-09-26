@@ -17,6 +17,9 @@ Adobe 官方 Illustrator MCP（Beta）能做的这里全都能做，而且不止
 
 [![illustrator mcp server MCP server](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server)
 
+> [!NOTE]
+> 在 Claude 的扩展目录和插件市场中，本项目以 **Design Bridge by IE3** 的名称上架。Anthropic 的目录不允许在上架名称中使用其他公司的品牌名，因此名称不同——但这是同一个项目，npm 包名仍为 `illustrator-mcp-server`。如果你之前以旧名称（`illustrator@ie3jp-illustrator`）安装过 Claude Code 插件，请按照 [Claude Code](#-快速开始) 中的步骤重新安装。
+
 ---
 
 ## 🎨 作品展示

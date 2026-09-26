@@ -17,6 +17,9 @@ Todo lo que puede hacer el MCP oficial de Illustrator de Adobe (beta) — y más
 
 [![illustrator mcp server MCP server](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server)
 
+> [!NOTE]
+> En el directorio de extensiones y el marketplace de plugins de Claude, este proyecto aparece como **Design Bridge by IE3**. Los directorios de Anthropic no permiten nombres de marca de otras empresas en el nombre del listado, por eso el nombre es distinto: es el mismo proyecto y el paquete npm sigue siendo `illustrator-mcp-server`. Si instalaste el plugin de Claude Code con su nombre anterior (`illustrator@ie3jp-illustrator`), reinstálalo siguiendo [Claude Code](#-inicio-rápido).
+
 ---
 
 ## 🎨 Galería

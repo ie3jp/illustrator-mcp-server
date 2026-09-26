@@ -17,6 +17,9 @@ Adobe 공식 Illustrator MCP(Beta)가 할 수 있는 것은 전부, 그리고 �
 
 [![illustrator mcp server MCP server](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server/badges/card.svg)](https://glama.ai/mcp/servers/ie3jp/illustrator-mcp-server)
 
+> [!NOTE]
+> Claude의 확장 기능 디렉터리와 플러그인 마켓플레이스에서는 **Design Bridge by IE3**라는 이름으로 등록되어 있습니다. Anthropic 디렉터리에서는 다른 회사의 브랜드명을 등록 이름에 쓸 수 없어 이름이 다르지만, 같은 프로젝트이며 npm 패키지 이름도 그대로 `illustrator-mcp-server`입니다. 이전 이름(`illustrator@ie3jp-illustrator`)으로 Claude Code 플러그인을 설치했다면 [Claude Code](#-빠른-시작) 안내에 따라 다시 설치하세요.
+
 ---
 
 ## 🎨 갤러리
