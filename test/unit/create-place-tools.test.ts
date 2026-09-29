@@ -383,16 +383,57 @@ describe('import_svg_as_editable (T11-2, T11-10, D)', () => {
       makeItem('PathItem', { filled: true, fillColor: rgb(255), stroked: true, strokeColor: rgb(10), geometricBounds: [0, 100, 50, 50] }),
       makeItem('PathItem', { filled: true, fillColor: { typename: 'CMYKColor' }, geometricBounds: [60, 100, 100, 60] }),
     ];
-    for (const s of src) {
-      s.duplicate = (target: Fake) => target.addItem(makeItem(s.typename, {
-        filled: s.filled, fillColor: s.fillColor, stroked: s.stroked, strokeColor: s.strokeColor,
-        geometricBounds: [...s.geometricBounds],
-      }));
-    }
     const app = makeApp(doc);
-    app.open = () => ({ pageItems: src, close: () => {} });
+    app.open = () => makeSvgDoc(src);
     return { doc, layer, app };
   }
+
+  /** SVG を開いた一時ドキュメント。duplicate は浅いコピー（子は同じ参照を持つ） */
+  function makeSvgDoc(src: Fake[]): Fake {
+    const srcLayer = makeLayer('Layer 1');
+    for (const s of src) srcLayer.addItem(s);
+    const srcDoc = makeDoc({ layers: [srcLayer] });
+    srcDoc.close = () => {};
+    // 実機ではどのアイテムも（子も）duplicate できる
+    for (const s of srcDoc.pageItems as Fake[]) {
+      s.duplicate = (target: Fake) => {
+        const copy = makeItem(s.typename, {
+          filled: s.filled, fillColor: s.fillColor, stroked: s.stroked, strokeColor: s.strokeColor,
+          geometricBounds: [...s.geometricBounds],
+        });
+        if (s.pathItems) copy.pathItems = s.pathItems;
+        if (s.typename === 'GroupItem') copy.pageItems = [...s.pageItems];
+        return target.addItem(copy);
+      };
+    }
+    return srcDoc;
+  }
+
+  it('duplicates only top-level items, not compound-path sub-paths or group children (#52)', async () => {
+    const doc = makeDoc({ artboardRect: [0, 1000, 500, 0] });
+    const rgb = { typename: 'RGBColor', red: 230, green: 57, blue: 70 };
+    const outer = makeItem('PathItem', { filled: true, fillColor: rgb, geometricBounds: [10, 110, 110, 10] });
+    const hole = makeItem('PathItem', { filled: true, fillColor: rgb, geometricBounds: [35, 85, 85, 35] });
+    const compound = makeItem('CompoundPathItem', { pathItems: [outer, hole], geometricBounds: [10, 110, 110, 10] });
+    outer.parent = compound;
+    hole.parent = compound;
+    const group = makeGroup([
+      makeItem('PathItem', { geometricBounds: [200, 100, 220, 80] }),
+      makeItem('PathItem', { geometricBounds: [230, 100, 250, 80] }),
+    ]);
+    const app = makeApp(doc);
+    let srcDoc: Fake;
+    app.open = () => (srcDoc = makeSvgDoc([compound, group]));
+
+    const r = await runTool(registerImportSvg, { file_path: '/tmp/holes.svg', group: false }, app);
+
+    // 前提: 一時ドキュメントの doc.pageItems は実機同様に子まで含む
+    expect(srcDoc!.pageItems).toHaveLength(6);
+    expect(r.success).toBe(true);
+    expect(r.importedCount).toBe(2);
+    expect(r.duplicationErrors).toBeFalsy();
+    expect(doc.layers[0].pageItems.map((i: Fake) => i.typename)).toEqual(['CompoundPathItem', 'GroupItem']);
+  });
 
   it('fits to the artboard in document coordinates too', async () => {
     const { layer, app } = setupSvgImport('rgb');
@@ -513,6 +554,48 @@ describe('place_style_guide (T11-1)', () => {
     await runTool(registerPlaceStyleGuide, { annotate_artboard: true }, makeApp(doc));
     const guide = doc.layers.find((l: Fake) => l.name === 'Style Guide');
     expect(annotationBars(guide).length).toBeGreaterThan(0);
+  });
+
+  /** 実機ではグループの子も .layer を持つ（フェイクの addItem は直下にしか付けない） */
+  function setLayerDeep(item: Fake, layer: Fake) {
+    item.layer = layer;
+    for (const c of item.pageItems ?? []) setLayerDeep(c, layer);
+    for (const c of item.pathItems ?? []) setLayerDeep(c, layer);
+  }
+
+  it('measures spacing between top-level items, not between group children (#52)', async () => {
+    const art = makeLayer('Art');
+    const doc = makeDoc({ layers: [art], artboardRect: [0, 1000, 500, 0] });
+    // 幅 20 のカード（グループ）を 20pt 間隔で 3 つ。カード内部は 8pt 幅の子 2 つが 4pt 間隔
+    for (const left of [100, 140, 180]) {
+      const card = makeGroup([
+        makeItem('PathItem', { geometricBounds: [left, 500, left + 8, 490] }),
+        makeItem('PathItem', { geometricBounds: [left + 12, 500, left + 20, 490] }),
+      ]);
+      art.addItem(card);
+      setLayerDeep(card, art);
+    }
+    expect(doc.pageItems).toHaveLength(9);
+    const r = await runTool(registerPlaceStyleGuide, {}, makeApp(doc));
+    expect(r.success).toBe(true);
+    // 20pt の 1 種類だけ（内部の 4pt や子どうしの 24pt・36pt 等は数えない）
+    expect(r.sections.horizontalSpacings).toBe(1);
+  });
+
+  it('does not let group descendants crowd top-level items out of the 150-item scan (#52)', async () => {
+    const art = makeLayer('Art');
+    const doc = makeDoc({ layers: [art], artboardRect: [0, 1000, 500, 0] });
+    // 先頭に子を 200 個持つグループ（他のどれとも軸が重ならない位置）
+    const children = Array.from({ length: 200 }, () => makeItem('PathItem', { geometricBounds: [0, 900, 10, 890] }));
+    const big = makeGroup(children);
+    art.addItem(big);
+    setLayerDeep(big, art);
+    for (const left of [100, 120, 140]) {
+      art.addItem(makeItem('PathItem', { geometricBounds: [left, 500, left + 10, 490] }));
+    }
+    const r = await runTool(registerPlaceStyleGuide, {}, makeApp(doc));
+    expect(r.success).toBe(true);
+    expect(r.sections.horizontalSpacings).toBe(1);
   });
 
   it('keeps an existing printable layer as is and warns', async () => {

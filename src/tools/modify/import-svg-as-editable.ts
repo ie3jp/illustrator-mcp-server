@@ -12,7 +12,7 @@ import { WRITE_ANNOTATIONS } from './shared.js';
  *
  * 内部フロー:
  *   1. SVG を一時ドキュメントとして app.open() で開く
- *   2. その全 pageItems を、元の対象ドキュメントの指定レイヤーに duplicate
+ *   2. そのレイヤー直下の全アイテムを、元の対象ドキュメントの指定レイヤーに duplicate
  *      （PageItem.duplicate は relativeObject 引数で別ドキュメントへの複製が可能）
  *   3. 一時ドキュメントを保存せずに閉じ、アクティブを元のドキュメントに復元
  *   4. 必要なら複製群をグループ化 / 指定位置に移動 / アートボードへフィット
@@ -54,11 +54,10 @@ if (preflight) {
         }
 
         if (srcDoc) {
-          // 複製中にコレクションが変動するため事前にスナップショット
-          var sourceItems = [];
-          for (var i = 0; i < srcDoc.pageItems.length; i++) {
-            sourceItems.push(srcDoc.pageItems[i]);
-          }
+          // 複製中にコレクションが変動するため事前にスナップショット。
+          // レイヤー直下だけを複製する（子は親と一緒に複製される。doc.pageItems は複合パス内部・
+          // グループの子まで含むため、全件だと穴が塗りつぶされ子が二重になる: issue #52）
+          var sourceItems = collectTopLevelPageItems(srcDoc);
 
           if (sourceItems.length === 0) {
             try { srcDoc.close(SaveOptions.DONOTSAVECHANGES); } catch (e) {}

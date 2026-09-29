@@ -1053,6 +1053,45 @@ async function runPhases(): Promise<void> {
         assert((await onBoard('__t11_sg_annot')) > 0, 'annotate_artboard should draw on the artboard');
       });
     });
+
+    // issue #52: Document.pageItems は再帰的（グループの子・複合パス内部を含む）
+    await withDoc('T11c', { color_mode: 'rgb' }, async () => {
+      await t('import_svg_as_editable keeps compound-path holes (no loose sub-path copies) (#52)', async () => {
+        const svg = `${TMP}/t11-holes.svg`;
+        writeFileSync(svg, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120">
+  <path fill="#E63946" fill-rule="evenodd" d="M60,10 A50,50 0 1,1 59.99,10 Z M60,35 A25,25 0 1,1 59.99,35 Z"/>
+  <path fill="#2A9D8F" fill-rule="evenodd" d="M240,10 H310 V110 H240 Z M255,25 V95 H295 V25 Z"/>
+</svg>
+`, 'utf-8');
+        const r = await call('import_svg_as_editable', { file_path: svg, group: false });
+        assert(r.success === true, `import failed: ${brief(r)}`);
+        assert(r.importedCount === 2, `expected 2 top-level items, got ${r.importedCount}: ${brief(r.items)}`);
+        assert((r.items as Any[]).every((i) => i.type === 'CompoundPathItem'), `expected CompoundPathItems: ${brief(r.items)}`);
+        // フェイク（test/unit/helpers/fake-illustrator.ts）の前提: Document.pageItems は複合パス内部まで含む
+        const counts = fixtureJsx(`return { all: doc.pageItems.length, top: collectTopLevelPageItems(doc).length, layerDirect: doc.layers[0].pageItems.length };`);
+        assert(counts.top === 2 && counts.layerDirect === 2, `top-level items: ${brief(counts)}`);
+        assert(counts.all === 6, `Document.pageItems should include the 4 sub-paths (fake assumes this): ${brief(counts)}`);
+        const del = await call('delete_objects', { uuids: (r.items as Any[]).map((i) => i.uuid) });
+        assert(del.success === true, 'cleanup delete failed');
+      });
+
+      await t('spacing tokens / style guide measure gaps between groups, not their children (#52)', async () => {
+        // 幅 20 のカード（グループ）を 20pt 間隔で 3 つ。カード内部は幅 8 の矩形 2 つが 4pt 間隔
+        for (const left of [100, 140, 180]) {
+          const a = await rect({ x: left, y: 300, width: 8, height: 10 });
+          const b = await rect({ x: left + 12, y: 300, width: 8, height: 10 });
+          const g = await call('group_objects', { uuids: [a, b] });
+          assert(g.success === true, `group failed: ${brief(g)}`);
+        }
+        const tokens = await call('extract_design_tokens', { format: 'json' });
+        const spacing = tokens.spacing as string[];
+        assert(spacing.includes('20pt'), `20pt card gap missing: ${brief(spacing)}`);
+        assert(!spacing.includes('4pt'), `4pt gap inside groups should not be counted: ${brief(spacing)}`);
+        const sg = await call('place_style_guide', {});
+        assert(sg.success === true, `place_style_guide: ${brief(sg)}`);
+        assert(sg.sections.horizontalSpacings === 1, `expected only the 20pt spacing: ${brief(sg.sections)}`);
+      });
+    });
   }
 
   // ═══════════════════════════════════════════════════════════
