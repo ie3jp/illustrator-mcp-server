@@ -120,6 +120,16 @@ Aus der Claude-Desktop-Menüleiste:
 
 </details>
 
+### 🤖 Codex CLI
+
+Erfordert [Node.js 20+](https://nodejs.org/).
+
+```bash
+codex mcp add illustrator -- npx -y illustrator-mcp-server
+```
+
+Damit wird der Server in `~/.codex/config.toml` eingetragen. Falls der erste Start abbricht, während npx das Paket herunterlädt, ergänzen Sie `startup_timeout_sec = 60` im Abschnitt `[mcp_servers.illustrator]`.
+
 > [!CAUTION]
 > KI kann Fehler machen. Verlasse Dich nicht zu sehr auf die Ausgabe — **die finale Kontrolle der Abgabedaten muss immer ein Mensch durchführen**. Die Nutzerin oder der Nutzer trägt die Verantwortung für die Ergebnisse.
 
@@ -598,7 +608,7 @@ npm test
 # E2E-Smoketest (Illustrator muss laufen)
 npm run build   # E2E runs dist/index.js
 npx tsx test/e2e/e2e-test.ts        # every tool (192 cases)
-npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (91 cases)
+npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (93 cases)
 npx tsx test/e2e/e2e-cmyk-only.ts
 npx tsx test/e2e/svg-import-test.ts
 ```

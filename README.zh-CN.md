@@ -120,6 +120,16 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 
 </details>
 
+### 🤖 Codex CLI
+
+需要 [Node.js 20+](https://nodejs.org/)。
+
+```bash
+codex mcp add illustrator -- npx -y illustrator-mcp-server
+```
+
+服务器会被添加到 `~/.codex/config.toml`。如果首次启动时 npx 下载包导致超时，请在 `[mcp_servers.illustrator]` 中添加 `startup_timeout_sec = 60`。
+
 > [!CAUTION]
 > AI 可能会出错。不要过度依赖其输出 —— **送印数据必须始终由人工进行最终检查**。使用者需自行为结果负责。
 
@@ -598,7 +608,7 @@ npm test
 # 端到端冒烟测试（需要 Illustrator 正在运行）
 npm run build   # E2E runs dist/index.js
 npx tsx test/e2e/e2e-test.ts        # every tool (192 cases)
-npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (91 cases)
+npx tsx test/e2e/e2e-behaviors.ts   # behavior & regression checks (93 cases)
 npx tsx test/e2e/e2e-cmyk-only.ts
 npx tsx test/e2e/svg-import-test.ts
 ```
