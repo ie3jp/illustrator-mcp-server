@@ -82,9 +82,11 @@ if (preflight) {
       // Scan all existing items to find the farthest edge (avoid overlap)
       var maxRight = abRect[2];  // artboard right edge
       var maxBottom = abRect[3]; // artboard bottom edge (lower Y in document coords)
-      for (var si = 0; si < doc.pageItems.length; si++) {
+      // 子の bounds は親に含まれるのでレイヤー直下だけで足りる
+      var scanItems = collectTopLevelPageItems(doc);
+      for (var si = 0; si < scanItems.length; si++) {
         try {
-          var scanItem = doc.pageItems[si];
+          var scanItem = scanItems[si];
           if (scanItem.layer.name === layerName) continue;
           var sb = scanItem.geometricBounds; // [left, top, right, bottom]
           if (sb[2] > maxRight) maxRight = sb[2];
@@ -279,11 +281,14 @@ if (preflight) {
       }
       var groupColorNames = ["Red", "Blue", "Green", "Purple", "Orange", "Teal"];
 
-      // Collect object bounds (visibleBounds for accurate visual edges)
+      // Collect object bounds (visibleBounds for accurate visual edges).
+      // レイヤー直下のアイテムだけを使う（doc.pageItems はグループの子・複合パス内部まで含み、
+      // 親子の bounds が混ざるうえ、150 件の上限を子が埋めてトップレベルが漏れる）
       var objInfos = [];
-      for (var oi = 0; oi < doc.pageItems.length && oi < 150; oi++) {
+      var topItems = collectTopLevelPageItems(doc);
+      for (var oi = 0; oi < topItems.length && oi < 150; oi++) {
         try {
-          var pItem = doc.pageItems[oi];
+          var pItem = topItems[oi];
           if (pItem.layer.name === layerName) continue;
           if (pItem.layer.name === "Color Chips") continue;
           var ob;

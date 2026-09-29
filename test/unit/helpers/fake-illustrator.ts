@@ -215,20 +215,23 @@ export function makeDoc(opts: FakeDocOptions = {}): Fake {
     symbolItems: { add: (sym: Fake) => layers[0].addItem(makeItem('SymbolItem', { symbol: sym })) },
   };
   for (const l of layers) l.parent = doc;
-  // doc.pathItems / textFrames / pageItems は全レイヤーから動的に集める（グループ・複合パス内部を含む）
+  // doc.pathItems / textFrames / pageItems は全レイヤー（サブレイヤー含む）から動的に集める（グループ・複合パス内部を含む）
   const walk = (container: Fake, out: Fake[]) => {
     for (const item of container.pageItems) {
       out.push(item);
       if (item.typename === 'GroupItem') walk(item, out);
       if (item.typename === 'CompoundPathItem') out.push(...item.pathItems);
     }
+    if (container.typename === 'Layer') for (const sub of container.layers ?? []) walk(sub, out);
   };
   const all = () => {
     const out: Fake[] = [];
     for (const l of doc.layers) walk(l, out);
     return out;
   };
-  Object.defineProperty(doc, 'pageItems', { get: () => all().filter((i) => i.parent?.typename !== 'CompoundPathItem') });
+  // 実機の Document.pageItems は再帰的で、グループの子も複合パス内部の PathItem も含む（issue #52）。
+  // Layer.pageItems / GroupItem.pageItems は直下のみ
+  Object.defineProperty(doc, 'pageItems', { get: () => all() });
   Object.defineProperty(doc, 'pathItems', { get: () => all().filter((i) => i.typename === 'PathItem') });
   Object.defineProperty(doc, 'textFrames', { get: () => all().filter((i) => i.typename === 'TextFrame') });
   Object.defineProperty(doc, 'rasterItems', { get: () => all().filter((i) => i.typename === 'RasterItem') });

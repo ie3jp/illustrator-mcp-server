@@ -60,11 +60,14 @@ if (preflight) {
       } catch(e) {}
     }
 
-    // Collect object bounds for spacing analysis
+    // Collect object bounds for spacing analysis.
+    // レイヤー直下のアイテムだけを使う（doc.pageItems はグループの子・複合パス内部まで含み、
+    // 親と子の bounds が混ざって間隔の頻度が水増しされる）
     var objectBounds = [];
-    for (var oi = 0; oi < doc.pageItems.length; oi++) {
+    var topItems = collectTopLevelPageItems(doc);
+    for (var oi = 0; oi < topItems.length; oi++) {
       try {
-        var pItem = doc.pageItems[oi];
+        var pItem = topItems[oi];
         if (skipLayers[pItem.layer.name]) continue;
         var ob = pItem.geometricBounds;
         objectBounds.push({ left: ob[0], top: ob[1], right: ob[2], bottom: ob[3] });

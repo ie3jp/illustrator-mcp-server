@@ -759,6 +759,22 @@ function collectAllItems(container) {
   return list;
 }
 
+// レイヤー（サブレイヤー含む）直下の PageItem だけを配列で返す（親が Layer のもの。doc.pageItems の順）。
+// Document.pageItems は再帰的で、グループの子や複合パス内部の PathItem まで含む（issue #52）。
+// 親と子を両方拾うと複製が二重になり、間隔の集計ではグループと子の bounds が混ざる
+function collectTopLevelPageItems(doc) {
+  var list = [];
+  var all = doc.pageItems;
+  var n = all.length;
+  for (var i = 0; i < n; i++) {
+    var item = all[i];
+    var parentType = "";
+    try { parentType = item.parent.typename; } catch(e) {}
+    if (parentType === "Layer") list.push(item);
+  }
+  return list;
+}
+
 // --- 塗り（fill / stroke）の読み書き対象 ---
 // GroupItem・CompoundPathItem の fillColor への代入は子に伝わらず、読み返すと代入値が見えるだけの
 // 偽成功になる（実機確認済み）。塗りは末端の PathItem と TextFrame（文字属性）で読み書きする
