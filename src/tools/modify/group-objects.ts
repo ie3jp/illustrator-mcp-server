@@ -47,10 +47,10 @@ if (preflight) {
       var parentLayer = items[0].layer;
       var group = parentLayer.groupItems.add();
 
-      // 順方向で PLACEATEND → items[0] がグループ最下位 (bottom)、最後が最上位 (top)
+      // 順方向で PLACEATBEGINNING（最前面）に積む → items[0] がグループ最下位 (bottom)、最後が最上位 (top)
       // クリッピングマスクでは最上位アイテム（＝配列末尾）がクリップパスになる
       for (var j = 0; j < items.length; j++) {
-        items[j].move(group, ElementPlacement.PLACEATEND);
+        items[j].move(group, ElementPlacement.PLACEATBEGINNING);
       }
 
       if (params.name) {

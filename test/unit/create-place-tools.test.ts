@@ -383,7 +383,9 @@ describe('import_svg_as_editable (T11-2, T11-10, D)', () => {
       makeItem('PathItem', { filled: true, fillColor: rgb(255), stroked: true, strokeColor: rgb(10), geometricBounds: [0, 100, 50, 50] }),
       makeItem('PathItem', { filled: true, fillColor: { typename: 'CMYKColor' }, geometricBounds: [60, 100, 100, 60] }),
     ];
+    const srcLayer = { typename: 'Layer' };
     for (const s of src) {
+      s.parent = srcLayer;
       s.duplicate = (target: Fake) => target.addItem(makeItem(s.typename, {
         filled: s.filled, fillColor: s.fillColor, stroked: s.stroked, strokeColor: s.strokeColor,
         geometricBounds: [...s.geometricBounds],
@@ -413,6 +415,28 @@ describe('import_svg_as_editable (T11-2, T11-10, D)', () => {
     expect(r.warnings).toHaveLength(1);
     expect(r.warnings[0]).toContain('2 RGB');
     expect(r.warnings[0]).toContain('replace_color');
+  });
+
+  it('copies only layer-level items, not compound-path sub-paths or group children separately (#52)', async () => {
+    const doc = makeDoc();
+    const layer = doc.layers[0];
+    const srcLayer = { typename: 'Layer' };
+    const mk = (typename: string, parent: Fake) => {
+      const it = makeItem(typename, { parent, geometricBounds: [0, 100, 50, 50] });
+      it.duplicate = (target: Fake) => target.addItem(makeItem(typename, { geometricBounds: [0, 100, 50, 50] }));
+      return it;
+    };
+    const cp = mk('CompoundPathItem', srcLayer);
+    const grp = mk('GroupItem', srcLayer);
+    // Document.pageItems は再帰的に子を含む（実機 Windows / 2026 で報告）
+    const srcPageItems = [cp, mk('PathItem', cp), mk('PathItem', cp), grp, mk('PathItem', grp)];
+    const app = makeApp(doc);
+    app.open = () => ({ pageItems: srcPageItems, close: () => {} });
+
+    const r = await runTool(registerImportSvg, { file_path: '/tmp/holes.svg', group: false }, app);
+    expect(r.success).toBe(true);
+    expect(r.importedCount).toBe(2);
+    expect(layer.pageItems.map((i: Fake) => i.typename)).toEqual(['CompoundPathItem', 'GroupItem']);
   });
 
   it('runs with the heavy timeout', async () => {

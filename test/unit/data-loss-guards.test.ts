@@ -277,6 +277,33 @@ describe('複数 UUID 操作の欠落報告', () => {
     expect(a.move).not.toHaveBeenCalled();
   });
 
+  it('group_objects: 配列の先頭が最背面、末尾が最前面（＝ clipped のクリップパス）になる (#53)', async () => {
+    const { code, params } = await captureJsx(registerGroupObjects, 'group_objects', {
+      uuids: [UUID_A, UUID_B],
+      clipped: true,
+    });
+    // Illustrator の pageItems は index 0 が最前面。PLACEATBEGINNING は最前面、PLACEATEND は最背面に入れる
+    const group: { pageItems: unknown[]; clipped?: boolean } = { pageItems: [] };
+    const mk = (uuid: string) => ({
+      uuid,
+      layer: { groupItems: { add: () => group } },
+      move(target: { pageItems: unknown[] }, placement: string) {
+        if (placement === 'BEGIN') target.pageItems.unshift(this);
+        else if (placement === 'END') target.pageItems.push(this);
+        else throw new Error(`unexpected placement ${placement}`);
+      },
+    });
+    const content = mk(UUID_A);
+    const mask = mk(UUID_B);
+    const result = runJsx(code, params, {
+      app: { activeDocument: {} },
+      findItemByUUID: itemsById({ [UUID_A]: content, [UUID_B]: mask }),
+    });
+    expect(result.success).toBe(true);
+    expect(group.pageItems).toEqual([mask, content]);
+    expect(group.clipped).toBe(true);
+  });
+
   it('align_objects: 1 件でも欠けたら何も動かさずエラー', async () => {
     const { code, params } = await captureJsx(registerAlignObjects, 'align_objects', {
       uuids: [UUID_A, UUID_B, UUID_MISSING],

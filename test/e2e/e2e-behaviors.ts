@@ -1075,6 +1075,62 @@ async function runPhases(): Promise<void> {
         assert([a, b, c].every((u) => got.includes(u)), `all 3 descendants should be green: ${brief(f)}`);
       });
 
+      await t('group_objects: first UUID is bottommost, last is topmost / clip path (#53)', async () => {
+        const a = await rect({ x: 200, y: 400, width: 40, height: 40, fill: { type: 'rgb', r: 255, g: 0, b: 0 } });
+        const b = await rect({ x: 220, y: 420, width: 40, height: 40, fill: { type: 'rgb', r: 0, g: 0, b: 255 } });
+        const g = await call('group_objects', { uuids: [a, b] });
+        assert(g.success === true, `group_objects failed: ${brief(g)}`);
+        // pageItems[0] が最前面
+        const order = fixtureJsx(`var g = F_item(${J(g.uuid)}); return [extractUUIDFromNote(g.pageItems[0].note), extractUUIDFromNote(g.pageItems[1].note)];`);
+        assert(order[0] === b && order[1] === a, `expected [b(top), a(bottom)], got ${J(order)}`);
+
+        const content = await rect({ x: 300, y: 400, width: 60, height: 60, fill: { type: 'rgb', r: 0, g: 200, b: 0 } });
+        const mask = await call('create_ellipse', { x: 310, y: 410, width: 40, height: 40, fill: { type: 'rgb', r: 0, g: 0, b: 0 } });
+        const cg = await call('group_objects', { uuids: [content, mask.uuid], clipped: true });
+        assert(cg.success === true, `clipped group failed: ${brief(cg)}`);
+        const clip = fixtureJsx(`
+          var g = F_item(${J(cg.uuid)});
+          var out = {};
+          for (var i = 0; i < g.pageItems.length; i++) {
+            var it = g.pageItems[i];
+            out[extractUUIDFromNote(it.note)] = { clipping: it.clipping === true, filled: it.filled };
+          }
+          return out;`);
+        assert(clip[mask.uuid]?.clipping === true, `mask (last UUID) should be the clip path: ${J(clip)}`);
+        assert(clip[content]?.clipping === false && clip[content]?.filled === true, `content should keep its fill: ${J(clip)}`);
+      });
+
+      await t('import_svg_as_editable keeps compound-path holes and does not duplicate children (#52)', async () => {
+        const svg = `${TMP}/t14-holes.svg`;
+        writeFileSync(svg, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 120" width="320" height="120">
+  <path fill="#E63946" fill-rule="evenodd" d="M60,10 A50,50 0 1,1 59.99,10 Z M60,35 A25,25 0 1,1 59.99,35 Z"/>
+  <path fill="#2A9D8F" fill-rule="evenodd" d="M240,10 H310 V110 H240 Z M255,25 V95 H295 V25 Z"/>
+  <g><rect x="120" y="10" width="20" height="20" fill="#000"/><rect x="150" y="10" width="20" height="20" fill="#000"/></g>
+</svg>`, 'utf-8');
+        const before = fixtureJsx(`return doc.pageItems.length;`) as number;
+        const imp = await call('import_svg_as_editable', { file_path: svg, group: false, layer_name: '__t14_svg' });
+        assert(imp.success === true, `import failed: ${brief(imp)}`);
+        const kinds = fixtureJsx(`
+          var L = doc.layers.getByName("__t14_svg");
+          var out = [];
+          for (var i = 0; i < L.pageItems.length; i++) out.push(L.pageItems[i].typename);
+          return out;`) as string[];
+        assert(imp.importedCount === 3 && !imp.duplicationErrors, `expected 3 roots without errors: ${brief(imp)}`);
+        assert(J([...kinds].sort()) === J(['CompoundPathItem', 'CompoundPathItem', 'GroupItem']), `layer should hold 2 compound paths + 1 group: ${J(kinds)}`);
+        const inner = fixtureJsx(`
+          var L = doc.layers.getByName("__t14_svg");
+          var out = [];
+          for (var i = 0; i < L.pageItems.length; i++) {
+            var it = L.pageItems[i];
+            out.push(it.typename === "CompoundPathItem" ? it.pathItems.length : it.pageItems.length);
+          }
+          return out;`) as number[];
+        assert(inner.every((n) => n === 2), `each root should keep its 2 children (sub-paths / rects): ${J(inner)}`);
+        const after = fixtureJsx(`return doc.pageItems.length;`) as number;
+        // doc.pageItems の数え方（子を含むか）に関係なく、2 複合パス + 4 サブパス + 1 グループ + 2 子 = 9 を超えない
+        assert(after - before <= 9, `too many items added: ${before} -> ${after} (${J(kinds)})`);
+      });
+
       await t('replace_color RGB → CMYK replaces path and text colors', async () => {
         const r1 = await rect({ x: 10, y: 100, width: 30, height: 30, fill: { type: 'rgb', r: 255, g: 0, b: 0 } });
         const tf = await call('create_text_frame', { x: 10, y: 200, contents: 'Red text', font_size: 18, fill: { type: 'rgb', r: 255, g: 0, b: 0 } });
