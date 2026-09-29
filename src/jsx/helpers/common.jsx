@@ -759,21 +759,19 @@ function collectAllItems(container) {
   return list;
 }
 
-// レイヤー（サブレイヤー含む）直下の PageItem だけを配列で返す（上のレイヤーから、各レイヤーは前面→背面）。
+// レイヤー（サブレイヤー含む）直下の PageItem だけを配列で返す（親が Layer のもの。doc.pageItems の順）。
 // Document.pageItems は再帰的で、グループの子や複合パス内部の PathItem まで含む（issue #52）。
-// 親と子を両方拾うと複製が二重になり、間隔の集計ではグループと子の bounds が混ざる。
-// Layer.pageItems は直下のみなので、レイヤーを辿って集める
+// 親と子を両方拾うと複製が二重になり、間隔の集計ではグループと子の bounds が混ざる
 function collectTopLevelPageItems(doc) {
   var list = [];
-  var walk = function(layer) {
-    for (var i = 0; i < layer.pageItems.length; i++) list.push(layer.pageItems[i]);
-    var subLayers = null;
-    try { subLayers = layer.layers; } catch(e) {}
-    if (subLayers) {
-      for (var sl = 0; sl < subLayers.length; sl++) walk(subLayers[sl]);
-    }
-  };
-  for (var li = 0; li < doc.layers.length; li++) walk(doc.layers[li]);
+  var all = doc.pageItems;
+  var n = all.length;
+  for (var i = 0; i < n; i++) {
+    var item = all[i];
+    var parentType = "";
+    try { parentType = item.parent.typename; } catch(e) {}
+    if (parentType === "Layer") list.push(item);
+  }
   return list;
 }
 
