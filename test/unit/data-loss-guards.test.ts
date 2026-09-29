@@ -33,6 +33,7 @@ import { register as registerApplyGraphicStyle } from '../../src/tools/modify/ap
 import { register as registerManageLayers } from '../../src/tools/modify/manage-layers.js';
 import { register as registerSaveDocument } from '../../src/tools/modify/save-document.js';
 import { register as registerUndo } from '../../src/tools/modify/undo.js';
+import { formatToolResult } from '../../src/tools/tool-executor.js';
 
 type Handler = (params: Record<string, unknown>) => Promise<unknown>;
 type ToolConfig = { inputSchema: Record<string, z.ZodTypeAny>; annotations?: Record<string, boolean> };
@@ -385,6 +386,338 @@ describe('複数 UUID 操作の欠落報告', () => {
     expect(result.success).toBe(false);
     expect(result.appliedCount).toBe(1);
     expect(result.notFound).toEqual([UUID_MISSING]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+
+/**
+ * group_objects 用のフェイク DOM。pageItems は前面→背面（index 0 が最前面）。
+ * ElementPlacement: BEGIN=最前面 / END=最背面 / BEFORE=参照の前面 / AFTER=参照の背面
+ */
+type FakeNode = {
+  typename: string;
+  name: string;
+  uuid?: string;
+  parent: FakeNode | null;
+  pageItems: FakeNode[];
+  locked: boolean;
+  visible: boolean;
+  hidden: boolean;
+  clipping?: boolean;
+  clipped?: boolean;
+  groupItems: { add: () => FakeNode };
+  move: (ref: FakeNode, placement: string) => FakeNode;
+  remove: () => void;
+  /** 失敗注入: move の直前に呼ばれる（throw で move 失敗） */
+  onMove?: (ref: FakeNode, placement: string) => void;
+};
+
+function makeGroupDom() {
+  const created: FakeNode[] = [];
+  const detach = (n: FakeNode) => {
+    if (!n.parent) return;
+    const arr = n.parent.pageItems;
+    const i = arr.indexOf(n);
+    if (i >= 0) arr.splice(i, 1);
+    n.parent = null;
+  };
+  const node = (typename: string, name: string, parent: FakeNode | null, uuid?: string): FakeNode => {
+    const n: FakeNode = {
+      typename,
+      name,
+      uuid,
+      parent: null,
+      pageItems: [],
+      locked: false,
+      visible: true,
+      hidden: false,
+      groupItems: {
+        add: () => {
+          const g = node('GroupItem', '', null);
+          g.clipped = false;
+          g.parent = n;
+          n.pageItems.unshift(g);
+          created.push(g);
+          return g;
+        },
+      },
+      move(ref, placement) {
+        this.onMove?.(ref, placement);
+        detach(this);
+        if (placement === 'END' || placement === 'BEGIN') {
+          if (placement === 'END') ref.pageItems.push(this);
+          else ref.pageItems.unshift(this);
+          this.parent = ref;
+        } else {
+          const container = ref.parent as FakeNode;
+          const i = container.pageItems.indexOf(ref);
+          container.pageItems.splice(placement === 'BEFORE' ? i : i + 1, 0, this);
+          this.parent = container;
+        }
+        return this;
+      },
+      remove() {
+        detach(this);
+      },
+    };
+    if (parent) {
+      n.parent = parent;
+      parent.pageItems.push(n);
+    }
+    return n;
+  };
+  const doc = node('Document', 'doc', null);
+  const layer = (name: string) => node('Layer', name, doc);
+  const item = (container: FakeNode, uuid: string, typename = 'PathItem') => {
+    const n = node(typename, uuid.slice(0, 4), container, uuid);
+    if (typename === 'PathItem') n.clipping = false;
+    return n;
+  };
+  return { layer, item, node, created };
+}
+
+describe('group_objects: 変更前の検証と失敗時のロールバック', () => {
+  const U = (c: string) => `${c.repeat(8)}-${c.repeat(4)}-4${c.repeat(3)}-8${c.repeat(3)}-${c.repeat(12)}`;
+  const [UA, UB, UC, UX, UY, UZ] = ['a', 'b', 'c', 'd', 'e', 'f'].map(U);
+
+  async function run(rawParams: Record<string, unknown>, nodes: FakeNode[], globals: Globals = {}) {
+    const { code, params } = await captureJsx(registerGroupObjects, 'group_objects', rawParams);
+    const byId = Object.fromEntries(nodes.map((n) => [n.uuid, n]));
+    return runJsx(code, params, {
+      app: { activeDocument: {} },
+      findItemByUUID: (uuid: string) => byId[uuid] ?? null,
+      ...globals,
+    });
+  }
+  const ids = (arr: FakeNode[]) => arr.map((n) => n.uuid ?? n.typename);
+
+  it('同じ親の中で、最前面の対象があった位置にグループを置く（末尾 UUID が最前面）', async () => {
+    const { layer, item } = makeGroupDom();
+    const L = layer('L1');
+    const nodes = [UX, UA, UY, UB, UZ].map((u) => item(L, u));
+    const result = await run({ uuids: [UA, UB], name: 'G' }, nodes);
+    expect(result.success).toBe(true);
+    expect(ids(L.pageItems)).toEqual([UX, 'GroupItem', UY, UZ]);
+    const g = L.pageItems[1];
+    expect(g.name).toBe('G');
+    expect(ids(g.pageItems)).toEqual([UB, UA]);
+  });
+
+  it('最前面の対象が親の先頭ならグループも先頭に置く', async () => {
+    const { layer, item } = makeGroupDom();
+    const L = layer('L1');
+    const nodes = [UA, UX, UB].map((u) => item(L, u));
+    const result = await run({ uuids: [UB, UA] }, nodes);
+    expect(result.success).toBe(true);
+    expect(ids(L.pageItems)).toEqual(['GroupItem', UX]);
+    expect(ids(L.pageItems[0].pageItems)).toEqual([UA, UB]);
+  });
+
+  it('親が違うアイテム（別レイヤー・別グループ）は何も変更せずエラー', async () => {
+    const { layer, item, node, created } = makeGroupDom();
+    const L1 = layer('L1');
+    const L2 = layer('L2');
+    const a = item(L1, UA);
+    const b = item(L2, UB);
+    const inner = node('GroupItem', 'inner', L1);
+    const c = item(inner, UC);
+    const result = await run({ uuids: [UA, UB, UC] }, [a, b, c]);
+    expect(result.error).toBe(true);
+    expect(result.expectedParent).toEqual({ parentType: 'Layer', parentName: 'L1' });
+    expect(result.differentParents).toEqual([
+      { uuid: UB, parentType: 'Layer', parentName: 'L2' },
+      { uuid: UC, parentType: 'GroupItem', parentName: 'inner' },
+    ]);
+    expect(created).toHaveLength(0);
+    expect(a.parent).toBe(L1);
+    expect(b.parent).toBe(L2);
+    expect(c.parent).toBe(inner);
+  });
+
+  it('ロック中・ロックされた親・非表示レイヤーのアイテムは何も変更せずエラー', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const a = dom.item(L, UA);
+    const b = dom.item(L, UB);
+    b.locked = true;
+    let result = await run({ uuids: [UA, UB] }, [a, b]);
+    expect(result.error).toBe(true);
+    expect(result.locked).toEqual([UB]);
+
+    b.locked = false;
+    L.locked = true;
+    result = await run({ uuids: [UA, UB] }, [a, b]);
+    expect(result.locked).toEqual([UA, UB]);
+
+    L.locked = false;
+    L.visible = false;
+    result = await run({ uuids: [UA, UB] }, [a, b]);
+    expect(result.error).toBe(true);
+    expect(result.hiddenLayer).toEqual([UA, UB]);
+    expect(dom.created).toHaveLength(0);
+    expect(ids(L.pageItems)).toEqual([UA, UB]);
+  });
+
+  it('同じアイテムの重複指定・既存クリップグループのクリップパスは拒否', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const a = dom.item(L, UA);
+    let result = await run({ uuids: [UA, UA] }, [a]);
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('more than once');
+
+    const clipGroup = dom.node('GroupItem', 'clip', L);
+    clipGroup.clipped = true;
+    const content = dom.item(clipGroup, UB);
+    const mask = dom.item(clipGroup, UC);
+    mask.clipping = true;
+    result = await run({ uuids: [UB, UC] }, [content, mask]);
+    expect(result.error).toBe(true);
+    expect(result.clippingPaths).toEqual([UC]);
+    expect(dom.created).toHaveLength(0);
+  });
+
+  it('clipped: true は 2 件以上・末尾がパス/複合パス/テキストでなければ何も変更せずエラー', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const a = dom.item(L, UA);
+    const g = dom.item(L, UB, 'GroupItem');
+    let result = await run({ uuids: [UA], clipped: true }, [a]);
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('at least 2');
+
+    result = await run({ uuids: [UA, UB], clipped: true }, [a, g]);
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('GroupItem');
+    expect(dom.created).toHaveLength(0);
+    expect(ids(L.pageItems)).toEqual([UA, UB]);
+  });
+
+  it('clipped: true でテキストをクリップパスにできる', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const a = dom.item(L, UA);
+    const t = dom.item(L, UB, 'TextFrame');
+    const result = await run({ uuids: [UA, UB], clipped: true }, [a, t]);
+    expect(result.success).toBe(true);
+    expect(L.pageItems[0].clipped).toBe(true);
+  });
+
+  it('途中の move が失敗したら元の親・重ね順へ戻し、空グループを削除する（isError の JSON で返る）', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const nodes = [UA, UX, UB, UY, UC].map((u) => dom.item(L, u));
+    nodes[4].onMove = () => {
+      throw new Error('boom');
+    };
+    const result = await run({ uuids: [UA, UB, UC] }, nodes);
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('boom');
+    expect(String(result.message)).toContain('rolled back');
+    expect(result.rollback).toMatchObject({ complete: true, groupRemoved: true, failed: [], restored: [UA, UB] });
+    expect(ids(L.pageItems)).toEqual([UA, UX, UB, UY, UC]);
+    expect(dom.created[0].parent).toBeNull();
+
+    const formatted = formatToolResult(result);
+    expect(formatted.isError).toBe(true);
+    expect(JSON.parse(formatted.content[0].text).rollback.complete).toBe(true);
+  });
+
+  it('グループ内のアイテム同士をグループ化でき、失敗時はそのグループ内の元の位置へ戻す', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const outer = dom.node('GroupItem', 'outer', L);
+    const nodes = [UA, UB, UX].map((u) => dom.item(outer, u));
+    const ok = await run({ uuids: [UB, UA] }, nodes);
+    expect(ok.success).toBe(true);
+    expect(ids(outer.pageItems)).toEqual(['GroupItem', UX]);
+
+    const dom2 = makeGroupDom();
+    const outer2 = dom2.node('GroupItem', 'outer', dom2.layer('L1'));
+    const nodes2 = [UA, UB, UX].map((u) => dom2.item(outer2, u));
+    const failed = await run({ uuids: [UB, UA] }, nodes2, {
+      ensureUUID: () => {
+        throw new Error('note write failed');
+      },
+    });
+    expect(failed.error).toBe(true);
+    expect(failed.rollback).toMatchObject({ complete: true });
+    expect(ids(outer2.pageItems)).toEqual([UA, UB, UX]);
+  });
+
+  it('group.clipped = true が例外なら戻し、クリップパスの clipping も解除して警告する', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const content = dom.item(L, UA);
+    const mask = dom.item(L, UB);
+    const origAdd = L.groupItems.add;
+    L.groupItems.add = () => {
+      const g = origAdd();
+      Object.defineProperty(g, 'clipped', {
+        get: () => false,
+        set: (v: boolean) => {
+          if (v) {
+            mask.clipping = true;
+            throw new Error('clip failed');
+          }
+        },
+        configurable: true,
+      });
+      return g;
+    };
+    const result = await run({ uuids: [UA, UB], clipped: true }, [content, mask]);
+    expect(result.error).toBe(true);
+    expect(result.rollback).toMatchObject({ complete: true });
+    expect(String((result.rollback as { warning?: string }).warning)).toContain('fill/stroke');
+    expect(mask.clipping).toBe(false);
+    expect(ids(L.pageItems)).toEqual([UA, UB]);
+  });
+
+  it('group.clipped = true が黙って無視されたら成功扱いにせず戻す', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const content = dom.item(L, UA);
+    const mask = dom.item(L, UB);
+    const origAdd = L.groupItems.add;
+    L.groupItems.add = () => {
+      const g = origAdd();
+      Object.defineProperty(g, 'clipped', { get: () => false, set: () => {}, configurable: true });
+      return g;
+    };
+    const result = await run({ uuids: [UA, UB], clipped: true }, [content, mask]);
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('did not turn the group into a clipping group');
+    expect(ids(L.pageItems)).toEqual([UA, UB]);
+    expect(dom.created[0].parent).toBeNull();
+  });
+
+  it('戻す move も失敗したらグループを消さず、残ったグループと失敗を返す', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const a = dom.item(L, UA);
+    const b = dom.item(L, UB);
+    const result = await run({ uuids: [UA, UB] }, [a, b], {
+      ensureUUID: (item: FakeNode) => {
+        if (item.typename === 'GroupItem' && !a.onMove) {
+          a.onMove = () => {
+            throw new Error('stuck');
+          };
+          throw new Error('note write failed');
+        }
+        return 'group-uuid';
+      },
+    });
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('Rollback was incomplete');
+    const rb = result.rollback as Record<string, unknown>;
+    expect(rb.complete).toBe(false);
+    expect(rb.groupRemoved).toBe(false);
+    expect(rb.failed).toEqual([{ uuid: UA, message: 'stuck' }]);
+    expect(rb.restored).toEqual([UB]);
+    expect(rb.remainingGroupUuid).toBe('group-uuid');
+    expect(L.pageItems[0].typename).toBe('GroupItem');
+    expect(ids(L.pageItems[0].pageItems)).toEqual([UA]);
   });
 });
 
