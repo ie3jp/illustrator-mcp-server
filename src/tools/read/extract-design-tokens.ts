@@ -61,16 +61,17 @@ if (preflight) {
     }
 
     // Collect object bounds for spacing analysis.
-    // レイヤー直下のアイテムだけを使う（doc.pageItems はグループの子・複合パス内部まで含み、
-    // 親と子の bounds が混ざって間隔の頻度が水増しされる）
+    // 同じ親の兄弟どうしだけを比べる（scope）。doc.pageItems はグループの子・複合パス内部まで含み、
+    // そのまま使うと親と子の bounds が混ざって間隔の頻度が水増しされる（issue #52）。
+    // レイヤー直下だけにするとグループ内の間隔が拾えなくなるので、グループの中へも降りる
     var objectBounds = [];
-    var topItems = collectTopLevelPageItems(doc);
-    for (var oi = 0; oi < topItems.length; oi++) {
+    var spacingItems = collectSpacingItems(doc, 500);
+    for (var oi = 0; oi < spacingItems.length; oi++) {
       try {
-        var pItem = topItems[oi];
+        var pItem = spacingItems[oi].item;
         if (skipLayers[pItem.layer.name]) continue;
         var ob = pItem.geometricBounds;
-        objectBounds.push({ left: ob[0], top: ob[1], right: ob[2], bottom: ob[3] });
+        objectBounds.push({ left: ob[0], top: ob[1], right: ob[2], bottom: ob[3], scope: spacingItems[oi].scope });
       } catch(e) {}
     }
 
@@ -235,7 +236,7 @@ export function register(server: McpServer): void {
         fillColors: ColorObj[];
         strokeColors: ColorObj[];
         fontEntries: FontEntry[];
-        objectBounds: Array<{ left: number; top: number; right: number; bottom: number }>;
+        objectBounds: Array<{ left: number; top: number; right: number; bottom: number; scope?: number }>;
         error?: boolean;
         message?: string;
         warnings?: unknown[];
@@ -295,8 +296,10 @@ export function register(server: McpServer): void {
       // Detect common spacing patterns
       const gaps: number[] = [];
       const bounds = result.objectBounds;
-      for (let i = 0; i < bounds.length && i < 100; i++) {
-        for (let j = i + 1; j < bounds.length && j < 100; j++) {
+      for (let i = 0; i < bounds.length; i++) {
+        for (let j = i + 1; j < bounds.length; j++) {
+          // 同じ親の兄弟どうしだけ比べる（グループとその子を比べない）
+          if (bounds[i].scope !== bounds[j].scope) continue;
           const { horizontal, vertical } = boundsGaps(bounds[i], bounds[j]);
           if (horizontal !== null && horizontal < 200) gaps.push(Math.round(horizontal));
           if (vertical !== null && vertical < 200) gaps.push(Math.round(vertical));

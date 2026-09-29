@@ -570,17 +570,15 @@ async function runPhases(): Promise<void> {
         assert(s.clipped === true && s.top === '__t3_g7' && s.clipping === true, `mask should clip: ${J(s)}`);
       });
 
-      await t('group_objects clipped: true with text as the last object → text clips (as in the UI)', async () => {
+      await t('group_objects clipped: true with text as the last object → rejected with an outline hint, nothing changed', async () => {
+        // スクリプトの group.clipped = true はテキストを受け付けない（2026 / macOS 実機で確認）
         const content = await gRect(8, { width: 120, height: 60 });
         const tf = await call('create_text_frame', { x: 20 + 8 * 45, y: 600, contents: 'CLIP', font_size: 48, layer_name: G_LAYER });
         assert(typeof tf.uuid === 'string', `create_text_frame failed: ${brief(tf)}`);
+        const before = J(layerOrder());
         const r = await call('group_objects', { uuids: [content, tf.uuid], clipped: true });
-        assert(r.success === true, `text clip group failed: ${brief(r)}`);
-        const s = fixtureJsx(`
-          var G = F_item(${J(r.uuid)});
-          return { clipped: G.clipped, topType: G.pageItems[0].typename, count: G.pageItems.length };
-        `);
-        assert(s.clipped === true && s.topType === 'TextFrame' && s.count === 2, `text should be the clip path: ${J(s)}`);
+        assert(r.error === true && /convert_to_outlines/.test(r.message), `text clip should be rejected: ${brief(r)}`);
+        assert(J(layerOrder()) === before, `layer contents changed: ${before} → ${J(layerOrder())}`);
       });
 
       await t('align_objects with a missing UUID → error, nothing moved', async () => {

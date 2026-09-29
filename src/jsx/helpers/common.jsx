@@ -775,6 +775,43 @@ function collectTopLevelPageItems(doc) {
   return list;
 }
 
+// 間隔の集計用に、同じ親を持つ兄弟ごとの PageItem を集める。戻り値は { item, scope } の配列で、
+// scope が同じもの（同じレイヤー直下、または同じグループの直下）どうしだけを比べる。
+// グループは自分の親の scope に入り、その子は新しい scope に入る（親と子の bounds を比べない）。
+// 複合パスは 1 つの図形として扱い内部へ降りない。limit 件で打ち切る
+function collectSpacingItems(doc, limit) {
+  var out = [];
+  var scopes = [];
+  function scopeOf(container) {
+    for (var s = 0; s < scopes.length; s++) {
+      if (scopes[s] == container) return s;
+    }
+    scopes.push(container);
+    return scopes.length - 1;
+  }
+  function visit(item, scope) {
+    if (out.length >= limit) return;
+    out.push({ item: item, scope: scope });
+    var tn = "";
+    try { tn = item.typename; } catch(e) {}
+    if (tn !== "GroupItem") return;
+    var childScope = scopes.length;
+    scopes.push(item);
+    var kids = [];
+    try {
+      for (var k = 0; k < item.pageItems.length; k++) kids.push(item.pageItems[k]);
+    } catch(e) {}
+    for (var c = 0; c < kids.length; c++) visit(kids[c], childScope);
+  }
+  var top = collectTopLevelPageItems(doc);
+  for (var i = 0; i < top.length && out.length < limit; i++) {
+    var parent = null;
+    try { parent = top[i].parent; } catch(e) {}
+    visit(top[i], scopeOf(parent));
+  }
+  return out;
+}
+
 // --- 塗り（fill / stroke）の読み書き対象 ---
 // GroupItem・CompoundPathItem の fillColor への代入は子に伝わらず、読み返すと代入値が見えるだけの
 // 偽成功になる（実機確認済み）。塗りは末端の PathItem と TextFrame（文字属性）で読み書きする

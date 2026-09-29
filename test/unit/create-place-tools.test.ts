@@ -585,7 +585,7 @@ describe('place_style_guide (T11-1)', () => {
     for (const c of item.pathItems ?? []) setLayerDeep(c, layer);
   }
 
-  it('measures spacing between top-level items, not between group children (#52)', async () => {
+  it('measures spacing among siblings only: between cards, and inside each card, never card-to-child (#52)', async () => {
     const art = makeLayer('Art');
     const doc = makeDoc({ layers: [art], artboardRect: [0, 1000, 500, 0] });
     // 幅 20 のカード（グループ）を 20pt 間隔で 3 つ。カード内部は 8pt 幅の子 2 つが 4pt 間隔
@@ -600,7 +600,18 @@ describe('place_style_guide (T11-1)', () => {
     expect(doc.pageItems).toHaveLength(9);
     const r = await runTool(registerPlaceStyleGuide, {}, makeApp(doc));
     expect(r.success).toBe(true);
-    // 20pt の 1 種類だけ（内部の 4pt や子どうしの 24pt・36pt 等は数えない）
+    // カード間の 20pt とカード内の 4pt の 2 種類（別カードの子どうしの 24pt・36pt や、カードと子の比較は数えない）
+    expect(r.sections.horizontalSpacings).toBe(2);
+  });
+
+  it('still finds spacing when everything sits inside a single group on the layer (#52)', async () => {
+    const art = makeLayer('Art');
+    const doc = makeDoc({ layers: [art], artboardRect: [0, 1000, 500, 0] });
+    const wrapper = makeGroup([100, 120, 140].map((left) => makeItem('PathItem', { geometricBounds: [left, 500, left + 10, 490] })));
+    art.addItem(wrapper);
+    setLayerDeep(wrapper, art);
+    const r = await runTool(registerPlaceStyleGuide, {}, makeApp(doc));
+    expect(r.success).toBe(true);
     expect(r.sections.horizontalSpacings).toBe(1);
   });
 

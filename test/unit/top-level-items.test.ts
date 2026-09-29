@@ -63,15 +63,17 @@ describe('collectTopLevelPageItems', () => {
 });
 
 describe('extract_design_tokens spacing bounds (#52)', () => {
-  it('collects bounds of top-level items only', () => {
+  it('tags bounds with a sibling scope: groups stay in their parent scope, their children get their own, compound paths are one shape', () => {
     const { doc } = layeredDoc();
     const r = runToolJsx(extractJsxCode('read/extract-design-tokens.ts'), {}, makeApp(doc));
     expect(r.error).toBeUndefined();
     expect(r.objectBounds).toEqual([
-      { left: 0, top: 100, right: 40, bottom: 60 },
-      { left: 60, top: 100, right: 100, bottom: 60 },
-      { left: 120, top: 100, right: 160, bottom: 60 },
-      { left: 180, top: 100, right: 220, bottom: 60 },
+      { left: 0, top: 100, right: 40, bottom: 60, scope: 0 }, // 複合パス（内部のパスは拾わない）
+      { left: 60, top: 100, right: 100, bottom: 60, scope: 0 }, // グループ
+      { left: 60, top: 100, right: 70, bottom: 60, scope: 1 }, // グループの子
+      { left: 80, top: 100, right: 100, bottom: 60, scope: 1 },
+      { left: 120, top: 100, right: 160, bottom: 60, scope: 0 },
+      { left: 180, top: 100, right: 220, bottom: 60, scope: 2 }, // サブレイヤー
     ]);
   });
 });

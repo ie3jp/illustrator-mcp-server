@@ -282,18 +282,18 @@ if (preflight) {
       var groupColorNames = ["Red", "Blue", "Green", "Purple", "Orange", "Teal"];
 
       // Collect object bounds (visibleBounds for accurate visual edges).
-      // レイヤー直下のアイテムだけを使う（doc.pageItems はグループの子・複合パス内部まで含み、
-      // 親子の bounds が混ざるうえ、150 件の上限を子が埋めてトップレベルが漏れる）
+      // 同じ親の兄弟どうしだけを比べる（scope）。doc.pageItems はグループの子・複合パス内部まで含み、
+      // 親子の bounds が混ざる（issue #52）。レイヤー直下だけだとグループ内の間隔を拾えないので中へも降りる
       var objInfos = [];
-      var topItems = collectTopLevelPageItems(doc);
-      for (var oi = 0; oi < topItems.length && oi < 150; oi++) {
+      var spacingItems = collectSpacingItems(doc, 300);
+      for (var oi = 0; oi < spacingItems.length; oi++) {
         try {
-          var pItem = topItems[oi];
+          var pItem = spacingItems[oi].item;
           if (pItem.layer.name === layerName) continue;
           if (pItem.layer.name === "Color Chips") continue;
           var ob;
           try { ob = pItem.visibleBounds; } catch(e2) { ob = pItem.geometricBounds; }
-          objInfos.push({ left: ob[0], top: ob[1], right: ob[2], bottom: ob[3] });
+          objInfos.push({ left: ob[0], top: ob[1], right: ob[2], bottom: ob[3], scope: spacingItems[oi].scope });
         } catch(e) {}
       }
 
@@ -307,6 +307,7 @@ if (preflight) {
         for (var gj = gi + 1; gj < objInfos.length; gj++) {
           var a = objInfos[gi];
           var b = objInfos[gj];
+          if (a.scope !== b.scope) continue;
 
           // --- Horizontal gap ---
           var yOvlp = Math.min(a.top, b.top) - Math.max(a.bottom, b.bottom);

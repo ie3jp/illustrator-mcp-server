@@ -540,14 +540,25 @@ describe('group_objects: 変更前の検証と失敗時のロールバック', (
     expect(result.error).toBe(true);
     expect(String(result.message)).toContain('more than once');
 
+    // pageItems[0] が最前面＝クリップパス
     const clipGroup = dom.node('GroupItem', 'clip', L);
     clipGroup.clipped = true;
-    const content = dom.item(clipGroup, UB);
     const mask = dom.item(clipGroup, UC);
+    const content = dom.item(clipGroup, UB);
     mask.clipping = true;
     result = await run({ uuids: [UB, UC] }, [content, mask]);
     expect(result.error).toBe(true);
     expect(result.clippingPaths).toEqual([UC]);
+    expect(dom.created).toHaveLength(0);
+
+    // UI で作ったテキストのマスクは clipping を持たないので、最前面の位置で判定する
+    const textClip = dom.node('GroupItem', 'textclip', L);
+    textClip.clipped = true;
+    const textMask = dom.item(textClip, UX, 'TextFrame');
+    const textContent = dom.item(textClip, UY);
+    result = await run({ uuids: [UY, UX] }, [textContent, textMask]);
+    expect(result.error).toBe(true);
+    expect(result.clippingPaths).toEqual([UX]);
     expect(dom.created).toHaveLength(0);
   });
 
@@ -567,14 +578,16 @@ describe('group_objects: 変更前の検証と失敗時のロールバック', (
     expect(ids(L.pageItems)).toEqual([UA, UB]);
   });
 
-  it('clipped: true でテキストをクリップパスにできる', async () => {
+  it('clipped: true でテキストをクリップパスにしようとしたら、アウトライン化を案内して何も変更しない', async () => {
+    // スクリプトの group.clipped = true はテキストを受け付けない（2026 / macOS 実機で確認）
     const dom = makeGroupDom();
     const L = dom.layer('L1');
     const a = dom.item(L, UA);
     const t = dom.item(L, UB, 'TextFrame');
     const result = await run({ uuids: [UA, UB], clipped: true }, [a, t]);
-    expect(result.success).toBe(true);
-    expect(L.pageItems[0].clipped).toBe(true);
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('convert_to_outlines');
+    expect(dom.created).toHaveLength(0);
   });
 
   it('途中の move が失敗したら元の親・重ね順へ戻し、空グループを削除する（isError の JSON で返る）', async () => {
@@ -619,11 +632,7 @@ describe('group_objects: 変更前の検証と失敗時のロールバック', (
     expect(ids(outer2.pageItems)).toEqual([UA, UB, UX]);
   });
 
-  it('group.clipped = true が例外なら戻し、クリップパスの clipping も解除して警告する', async () => {
-    const dom = makeGroupDom();
-    const L = dom.layer('L1');
-    const content = dom.item(L, UA);
-    const mask = dom.item(L, UB);
+  function clipFailsAfterStrippingPaint(L: FakeNode, mask: FakeNode) {
     const origAdd = L.groupItems.add;
     L.groupItems.add = () => {
       const g = origAdd();
@@ -631,7 +640,10 @@ describe('group_objects: 変更前の検証と失敗時のロールバック', (
         get: () => false,
         set: (v: boolean) => {
           if (v) {
+            // 実機と同じく、クリップパスにした時点で塗り/線が消える
             mask.clipping = true;
+            mask.filled = false;
+            mask.stroked = false;
             throw new Error('clip failed');
           }
         },
@@ -639,11 +651,56 @@ describe('group_objects: 変更前の検証と失敗時のロールバック', (
       });
       return g;
     };
+  }
+
+  it('group.clipped = true が例外なら戻し、クリップパスの clipping と塗り/線も控えから戻す', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const content = dom.item(L, UA);
+    const mask = dom.item(L, UB);
+    const red = { typename: 'RGBColor', red: 255 };
+    const black = { typename: 'RGBColor', red: 0 };
+    Object.assign(mask, { filled: true, fillColor: red, stroked: true, strokeColor: black, strokeWidth: 3 });
+    clipFailsAfterStrippingPaint(L, mask);
     const result = await run({ uuids: [UA, UB], clipped: true }, [content, mask]);
     expect(result.error).toBe(true);
-    expect(result.rollback).toMatchObject({ complete: true });
+    expect(result.rollback).toMatchObject({ complete: true, appearanceRestored: true });
+    expect((result.rollback as { warning?: string }).warning).toBeUndefined();
+    expect(mask).toMatchObject({ clipping: false, filled: true, fillColor: red, stroked: true, strokeColor: black, strokeWidth: 3 });
+    expect(ids(L.pageItems)).toEqual([UA, UB]);
+  });
+
+  it('塗り/線を戻せなければ complete: false と警告を返す（元に戻ったとは言わない）', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const content = dom.item(L, UA);
+    const mask = dom.item(L, UB);
+    Object.assign(mask, { filled: true, fillColor: { typename: 'RGBColor' }, stroked: false });
+    clipFailsAfterStrippingPaint(L, mask);
+    const origFill = { value: mask.fillColor };
+    Object.defineProperty(mask, 'fillColor', {
+      get: () => origFill.value,
+      set: () => { throw new Error('cannot set fillColor'); },
+      configurable: true,
+    });
+    const result = await run({ uuids: [UA, UB], clipped: true }, [content, mask]);
+    expect(result.error).toBe(true);
+    expect(result.rollback).toMatchObject({ complete: false, appearanceRestored: false });
     expect(String((result.rollback as { warning?: string }).warning)).toContain('fill/stroke');
-    expect(mask.clipping).toBe(false);
+    expect(String(result.message)).toContain('incomplete');
+    expect(ids(L.pageItems)).toEqual([UA, UB]);
+  });
+
+  it('成功の結果を組み立てる途中（verifyItem）で失敗したら、変更を確定せずに戻す', async () => {
+    const dom = makeGroupDom();
+    const L = dom.layer('L1');
+    const nodes = [UA, UB].map((u) => dom.item(L, u));
+    const result = await run({ uuids: [UA, UB] }, nodes, {
+      verifyItem: () => { throw new Error('bounds unavailable'); },
+    });
+    expect(result.error).toBe(true);
+    expect(String(result.message)).toContain('bounds unavailable');
+    expect(result.rollback).toMatchObject({ complete: true, groupRemoved: true });
     expect(ids(L.pageItems)).toEqual([UA, UB]);
   });
 

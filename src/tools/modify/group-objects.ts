@@ -20,8 +20,10 @@ import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from './shared.js';
  *   不透明度・効果・クリッピングが変わるため。まとめたいときは先に move_to_layer / ungroup_objects で揃える
  * - 新しいグループは同じ親の中で、対象のうち最前面のアイテムがあった位置に置く（UI の Cmd+G と同じ）
  * - ロック（親グループ・レイヤー含む）・非表示レイヤー上のアイテム、既存クリップグループのクリップパスは拒否
- * - clipped: true は 2 件以上で、最後（最前面＝クリップパス）がパス・複合パス・テキストであること
- * - 変更後に失敗したら、アイテムを元の親・重ね順へ戻し、空になったグループを削除する（rollback を返す）
+ * - clipped: true は 2 件以上で、最後（最前面＝クリップパス）がパスか複合パスであること。
+ *   テキストは UI ではクリップパスにできるが、スクリプトの group.clipped = true は受け付けない（2026 / macOS 実機で確認）
+ * - 変更後に失敗したら、アイテムを元の親・重ね順へ戻し、空になったグループを削除する（rollback を返す）。
+ *   clipped: true の失敗ではクリップパスの塗り/線も控えから戻す
  */
 const jsxCode = `
 // 親チェーンに非表示レイヤーがあるか（スクリプトから移動できない）
@@ -98,7 +100,9 @@ function goValidate(items, uuids, clipped) {
   for (var j = 0; j < items.length; j++) {
     if (isItemEffectivelyLocked(items[j])) locked.push(uuids[j]);
     else if (goOnHiddenLayer(items[j])) hiddenLayer.push(uuids[j]);
-    if (parentType === "GroupItem" && parent.clipped === true && goIsClippingPath(items[j])) clipPaths.push(uuids[j]);
+    // クリップグループの最前面はクリップパス。テキストのマスク（UI で作ったもの）は clipping を持たないので位置でも判定する
+    if (parentType === "GroupItem" && parent.clipped === true &&
+        (goIsClippingPath(items[j]) || (parent.pageItems.length > 0 && parent.pageItems[0] == items[j]))) clipPaths.push(uuids[j]);
   }
   if (locked.length > 0 || hiddenLayer.length > 0) {
     var r = { error: true, message: "Some objects cannot be edited (locked, or on a locked/hidden layer or in a locked group). Unlock/show them first. Nothing was grouped." };
@@ -119,10 +123,12 @@ function goValidate(items, uuids, clipped) {
       return { error: true, message: "clipped: true needs at least 2 objects: the content and, last, the clipping path. Nothing was grouped." };
     }
     var clipType = items[items.length - 1].typename;
-    if (clipType !== "PathItem" && clipType !== "CompoundPathItem" && clipType !== "TextFrame") {
+    if (clipType !== "PathItem" && clipType !== "CompoundPathItem") {
       return {
         error: true,
-        message: "With clipped: true the last object becomes the clipping path and must be a path, compound path or text (got " + clipType + "). Nothing was grouped.",
+        message: "With clipped: true the last object becomes the clipping path and must be a path or compound path (got " + clipType + ")." +
+          (clipType === "TextFrame" ? " Text cannot be made a clipping path from a script; convert it to outlines first (convert_to_outlines)." : "") +
+          " Nothing was grouped.",
         uuid: uuids[items.length - 1]
       };
     }
@@ -144,12 +150,55 @@ function goIndexIn(list, item) {
   return -1;
 }
 
+// クリップパスになるパス（複合パスは内部パス全部）の塗り/線を控える。group.clipped = true で消えるため
+function goClipTargets(item) {
+  var list = [];
+  try {
+    if (item.typename === "PathItem") list.push(item);
+    else if (item.typename === "CompoundPathItem") {
+      for (var i = 0; i < item.pathItems.length; i++) list.push(item.pathItems[i]);
+    }
+  } catch(e) {}
+  return list;
+}
+
+function goSnapshotPaint(item) {
+  var targets = goClipTargets(item);
+  var list = [];
+  for (var i = 0; i < targets.length; i++) {
+    var t = targets[i];
+    var p = { path: t };
+    try { p.filled = t.filled; if (t.filled) p.fillColor = t.fillColor; } catch(e) {}
+    try { p.stroked = t.stroked; if (t.stroked) { p.strokeColor = t.strokeColor; p.strokeWidth = t.strokeWidth; } } catch(e) {}
+    list.push(p);
+  }
+  return list;
+}
+
+// 戻せたら true。1 つでも戻せなければ false
+function goRestorePaint(paint) {
+  var ok = true;
+  for (var i = 0; i < paint.length; i++) {
+    var p = paint[i];
+    try {
+      if (p.path.clipping === true) p.path.clipping = false;
+      if (p.filled === true) { p.path.filled = true; p.path.fillColor = p.fillColor; }
+      else if (p.filled === false) p.path.filled = false;
+      if (p.stroked === true) { p.path.stroked = true; p.path.strokeColor = p.strokeColor; p.path.strokeWidth = p.strokeWidth; }
+      else if (p.stroked === false) p.path.stroked = false;
+      if (p.path.clipping === true || p.path.filled !== p.filled || p.path.stroked !== p.stroked) ok = false;
+    } catch(e) { ok = false; }
+  }
+  return ok;
+}
+
 // 変更後の失敗から戻す。前面側から順に、元の並びで直下にあって今も親にあるものの前へ置く。
 // 途中で失敗したアイテム（まだ動かしていないもの）は元の位置のままなので基準になる
-function goRollback(group, parent, snapshot, items, uuids, clipped) {
-  var rb = { restored: [], failed: [], groupRemoved: false };
+function goRollback(group, parent, snapshot, items, uuids, clipped, paint) {
+  var rb = { restored: [], failed: [], groupRemoved: false, appearanceRestored: true };
   if (clipped) {
     try { if (group.clipped === true) group.clipped = false; } catch(e) {}
+    try { if (group.clipped === true) rb.appearanceRestored = false; } catch(e) { rb.appearanceRestored = false; }
   }
   var order = [];
   for (var i = 0; i < items.length; i++) order.push({ item: items[i], uuid: uuids[i], index: goIndexIn(snapshot, items[i]) });
@@ -174,31 +223,26 @@ function goRollback(group, parent, snapshot, items, uuids, clipped) {
     }
   }
 
-  if (clipped) {
-    // group.clipped = true はクリップパスの塗り/線を消す。clipping は戻せても塗り/線は戻らない
-    var clipItem = items[items.length - 1];
-    var clipTarget = null;
-    try {
-      if (clipItem.typename === "PathItem") clipTarget = clipItem;
-      else if (clipItem.typename === "CompoundPathItem" && clipItem.pathItems.length > 0) clipTarget = clipItem.pathItems[0];
-    } catch(e) {}
-    try {
-      if (clipTarget && clipTarget.clipping === true) {
-        clipTarget.clipping = false;
-        rb.warning = "The clipping path " + uuids[items.length - 1] + " was restored, but its fill/stroke may have been removed by the clipping attempt.";
-      }
-    } catch(e) {}
+  if (clipped && paint) {
+    // group.clipped = true はクリップパスの塗り/線を消すので、控えから戻す
+    if (!goRestorePaint(paint)) rb.appearanceRestored = false;
+    if (!rb.appearanceRestored) {
+      rb.warning = "The clipping path " + uuids[items.length - 1] + " was moved back, but its clipping state or fill/stroke could not be fully restored. Check it (undo may help).";
+    }
   }
 
   var left = -1;
   try { left = group.pageItems.length; } catch(e) {}
   if (left === 0) {
-    try { group.remove(); rb.groupRemoved = true; } catch(e) { rb.removeError = e.message; }
+    try { group.remove(); rb.groupRemoved = true; } catch(e) {
+      rb.removeError = e.message;
+      try { rb.remainingGroupUuid = ensureUUID(group); } catch(e2) {}
+    }
   } else {
     // 戻しきれなかったアイテムを残したグループは消さない（中身ごと消えるため）
     try { rb.remainingGroupUuid = ensureUUID(group); } catch(e) {}
   }
-  rb.complete = rb.failed.length === 0 && rb.groupRemoved === true;
+  rb.complete = rb.failed.length === 0 && rb.groupRemoved === true && rb.appearanceRestored === true;
   return rb;
 }
 
@@ -213,6 +257,7 @@ if (preflight) {
   var uuids = [];
   var clipped = false;
   var committed = false;
+  var paint = null;
   try {
     var params = readParamsFile(PARAMS_PATH);
     var doc = app.activeDocument;
@@ -279,24 +324,27 @@ if (preflight) {
 
       // クリップパスの塗り/線を消す操作なので最後に行う
       if (clipped) {
+        paint = goSnapshotPaint(items[items.length - 1]);
         group.clipped = true;
         if (group.clipped !== true) {
           throw new Error("Illustrator did not turn the group into a clipping group");
         }
       }
-      committed = true;
 
-      writeResultFile(RESULT_PATH, {
+      // 結果を組み立てて書き出すまでが変更の一部。ここで例外になったら戻す
+      var okResult = {
         success: true,
         uuid: uuid,
         childCount: group.pageItems.length,
         verified: verifyItem(group)
-      });
+      };
+      writeResultFile(RESULT_PATH, okResult);
+      committed = true;
     }
   } catch (e) {
     var failure = { error: true, message: "group_objects failed: " + e.message, line: e.line };
     if (group && !committed) {
-      failure.rollback = goRollback(group, targetParent, snapshot, items, uuids, clipped);
+      failure.rollback = goRollback(group, targetParent, snapshot, items, uuids, clipped, paint);
       failure.message += failure.rollback.complete
         ? ". Changes were rolled back; nothing was grouped."
         : ". Rollback was incomplete; see rollback.";
@@ -312,14 +360,14 @@ export function register(server: McpServer): void {
     {
       title: 'Group Objects',
       description:
-        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. All objects must be directly in the same parent (layer or group); objects on different layers or in different groups are rejected (use move_to_layer / ungroup_objects first). The new group takes the stacking position of the frontmost object. Nothing is changed and an error is returned if any UUID is not found (notFound), any object is locked or on a hidden layer, or clipped: true is given with fewer than 2 objects or a last object that is not a path, compound path or text. If grouping fails midway, the objects are moved back and the empty group is removed (see rollback in the error). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. All objects must be directly in the same parent (layer or group); objects on different layers or in different groups are rejected (use move_to_layer / ungroup_objects first). The new group takes the stacking position of the frontmost object. Nothing is changed and an error is returned if any UUID is not found (notFound), any object is locked or on a hidden layer, or clipped: true is given with fewer than 2 objects or a last object that is not a path or compound path (convert text to outlines first). If grouping fails midway, the objects are moved back and the empty group is removed (see rollback in the error). Note: Illustrator will be activated (brought to foreground) during execution.',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group, all with the same parent. Order matters: first=bottom, last=top in layer panel.'),
         name: z.string().optional().describe('Name for the new group'),
         clipped: coerceBoolean
           .optional()
           .default(false)
-          .describe('Create as clipping group. Needs at least 2 objects; the last UUID becomes the clip path (topmost) and must be a path, compound path or text. Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
+          .describe('Create as clipping group. Needs at least 2 objects; the last UUID becomes the clip path (topmost) and must be a path or compound path. Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
       },
       // clipped: true ではクリップパスになるパスの塗り/線が失われる（UI のクリッピングマスクと同じ）
       annotations: DESTRUCTIVE_ANNOTATIONS,
