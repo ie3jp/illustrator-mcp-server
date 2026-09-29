@@ -473,6 +473,116 @@ async function runPhases(): Promise<void> {
         assert(parent === 'Layer', `object should not be grouped (parent ${parent})`);
       });
 
+      // group_objects の契約: 同じ親の直下のみ・最前面の対象の位置に置く・編集できないものは変更前に拒否
+      const G_LAYER = '__t3_grp';
+      const layerOrder = (): string[] => fixtureJsx(`
+        var L = doc.layers.getByName(${J(G_LAYER)});
+        var out = [];
+        for (var i = 0; i < L.pageItems.length; i++) out.push(L.pageItems[i].name);
+        return out;
+      `);
+      const gRect = (n: number, extra: Record<string, unknown> = {}): Promise<string> =>
+        rect({ x: 20 + n * 45, y: 600, width: 40, height: 40, name: `__t3_g${n}`, layer_name: G_LAYER, ...extra });
+      let g1 = '';
+      let g2 = '';
+      let g3 = '';
+      let grp = '';
+
+      await t('group_objects → group takes the frontmost object\'s stacking slot; last UUID is on top', async () => {
+        await call('manage_layers', { action: 'add', layer_name: G_LAYER });
+        const ids: string[] = [];
+        for (let n = 1; n <= 5; n++) ids.push(await gRect(n));
+        [g1, g2, g3] = ids;
+        const g4 = ids[3];
+        assert(J(layerOrder()) === J(['__t3_g5', '__t3_g4', '__t3_g3', '__t3_g2', '__t3_g1']), `precondition: ${J(layerOrder())}`);
+        const r = await call('group_objects', { uuids: [g2, g4], name: '__t3_grp_group' });
+        assert(r.success === true && r.childCount === 2, `group_objects failed: ${brief(r)}`);
+        grp = r.uuid;
+        const order = layerOrder();
+        assert(J(order) === J(['__t3_g5', '__t3_grp_group', '__t3_g3', '__t3_g1']), `group should sit where g4 was: ${J(order)}`);
+        const inner = fixtureJsx(`
+          var G = F_item(${J(grp)});
+          return [G.pageItems[0].name, G.pageItems[1].name];
+        `);
+        assert(J(inner) === J(['__t3_g4', '__t3_g2']), `last UUID should be topmost in the group: ${J(inner)}`);
+      });
+
+      await t('group_objects across layers / nesting levels → error with differentParents, nothing changed', async () => {
+        await call('manage_layers', { action: 'add', layer_name: '__t3_grp_other' });
+        const other = await rect({ x: 300, y: 650, width: 40, height: 40, layer_name: '__t3_grp_other' });
+        const before = (await call('get_groups', {})).count;
+        const r = await call('group_objects', { uuids: [g1, other] });
+        assert(r.error === true && Array.isArray(r.differentParents) && r.differentParents[0].uuid === other,
+          `cross-layer should be rejected: ${brief(r)}`);
+        const nested = await call('group_objects', { uuids: [g2, g3] });
+        assert(nested.error === true && nested.differentParents?.[0]?.uuid === g3,
+          `group child + layer item should be rejected: ${brief(nested)}`);
+        assert((await call('get_groups', {})).count === before, 'group count changed');
+        const parents = fixtureJsx(`return [F_item(${J(g1)}).parent.name, F_item(${J(other)}).parent.name, F_item(${J(g2)}).parent.name];`);
+        assert(J(parents) === J([G_LAYER, '__t3_grp_other', '__t3_grp_group']), `parents changed: ${J(parents)}`);
+      });
+
+      await t('group_objects with a locked object / locked layer / hidden layer → error, nothing changed', async () => {
+        const before = J(layerOrder());
+        const lock = await call('modify_object', { uuid: g3, properties: { locked: true } });
+        assert(lock.success === true, `lock failed: ${brief(lock)}`);
+        try {
+          const r = await call('group_objects', { uuids: [g1, g3] });
+          assert(r.error === true && J(r.locked) === J([g3]), `locked object should be rejected: ${brief(r)}`);
+        } finally {
+          await call('modify_object', { uuid: g3, properties: { locked: false } });
+        }
+        await call('manage_layers', { action: 'lock', layer_name: G_LAYER });
+        try {
+          const r = await call('group_objects', { uuids: [g1, g3] });
+          assert(r.error === true && J(r.locked) === J([g1, g3]), `locked layer should be rejected: ${brief(r)}`);
+        } finally {
+          await call('manage_layers', { action: 'unlock', layer_name: G_LAYER });
+        }
+        await call('manage_layers', { action: 'hide', layer_name: G_LAYER });
+        try {
+          const r = await call('group_objects', { uuids: [g1, g3] });
+          assert(r.error === true && J(r.hiddenLayer) === J([g1, g3]), `hidden layer should be rejected: ${brief(r)}`);
+        } finally {
+          await call('manage_layers', { action: 'show', layer_name: G_LAYER });
+        }
+        assert(J(layerOrder()) === before, `layer contents changed: ${before} → ${J(layerOrder())}`);
+      });
+
+      await t('group_objects clipped: true with 1 object or a group as the last object → error, nothing changed', async () => {
+        const before = J(layerOrder());
+        const one = await call('group_objects', { uuids: [g1], clipped: true });
+        assert(one.error === true, `1 object should be rejected: ${brief(one)}`);
+        const lastGroup = await call('group_objects', { uuids: [g1, grp], clipped: true });
+        assert(lastGroup.error === true && /GroupItem/.test(lastGroup.message), `group as clip path should be rejected: ${brief(lastGroup)}`);
+        assert(J(layerOrder()) === before, `layer contents changed: ${before} → ${J(layerOrder())}`);
+      });
+
+      await t('group_objects clipped: true → last path becomes the clipping path', async () => {
+        const content = await gRect(6, { width: 80 });
+        const mask = await gRect(7, { width: 30 });
+        const r = await call('group_objects', { uuids: [content, mask], clipped: true, name: '__t3_clip_path' });
+        assert(r.success === true, `clip group failed: ${brief(r)}`);
+        const s = fixtureJsx(`
+          var G = F_item(${J(r.uuid)});
+          return { clipped: G.clipped, top: G.pageItems[0].name, clipping: F_item(${J(mask)}).clipping };
+        `);
+        assert(s.clipped === true && s.top === '__t3_g7' && s.clipping === true, `mask should clip: ${J(s)}`);
+      });
+
+      await t('group_objects clipped: true with text as the last object → text clips (as in the UI)', async () => {
+        const content = await gRect(8, { width: 120, height: 60 });
+        const tf = await call('create_text_frame', { x: 20 + 8 * 45, y: 600, contents: 'CLIP', font_size: 48, layer_name: G_LAYER });
+        assert(typeof tf.uuid === 'string', `create_text_frame failed: ${brief(tf)}`);
+        const r = await call('group_objects', { uuids: [content, tf.uuid], clipped: true });
+        assert(r.success === true, `text clip group failed: ${brief(r)}`);
+        const s = fixtureJsx(`
+          var G = F_item(${J(r.uuid)});
+          return { clipped: G.clipped, topType: G.pageItems[0].typename, count: G.pageItems.length };
+        `);
+        assert(s.clipped === true && s.topType === 'TextFrame' && s.count === 2, `text should be the clip path: ${J(s)}`);
+      });
+
       await t('align_objects with a missing UUID → error, nothing moved', async () => {
         const r = await call('align_objects', { uuids: [a, b, FAKE], alignment: 'left' });
         assert(r.error === true && J(r.notFound) === J([FAKE]), `should be an error with notFound: ${brief(r)}`);
