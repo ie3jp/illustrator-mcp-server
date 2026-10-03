@@ -227,6 +227,47 @@ describe('create_gradient (A)', () => {
     expect(r.success).toBe(false);
   });
 
+  // 実機（2026）では add() がそれまで末尾の分岐点を 100% へ動かす。上書きしながら add() すると
+  // 2 番目の分岐点が 100% に飛んでいた（#54）
+  function quirkyGradientDoc(): { doc: Fake; created: Fake[] } {
+    const doc = makeDoc();
+    const created: Fake[] = [];
+    doc.gradients = {
+      add: () => {
+        const stops: Fake[] = [{ rampPoint: 0 }, { rampPoint: 100 }];
+        (stops as Fake).add = () => {
+          stops[stops.length - 1].rampPoint = 100;
+          const s = { rampPoint: 100 };
+          stops.push(s);
+          return s;
+        };
+        const g = { name: '', type: 'LINEAR', gradientStops: stops };
+        created.push(g);
+        return g;
+      },
+    };
+    return { doc, created };
+  }
+  const stop = (position: number, r: number) => ({ color: { type: 'rgb', r, g: 0, b: 0 }, position });
+
+  it('places every stop at its position with more than two stops (#54)', async () => {
+    const { doc, created } = quirkyGradientDoc();
+    await runTool(registerCreateGradient, {
+      name: 'g', stops: [stop(0, 1), stop(22, 2), stop(72, 3), stop(100, 4)],
+    }, makeApp(doc));
+    const got = created[0].gradientStops.map((s: Fake) => [s.rampPoint, s.color.red]);
+    expect(got).toEqual([[0, 1], [22, 2], [72, 3], [100, 4]]);
+  });
+
+  it('sorts stops given out of order by position (#54)', async () => {
+    const { doc, created } = quirkyGradientDoc();
+    await runTool(registerCreateGradient, {
+      name: 'g', stops: [stop(0, 1), stop(100, 4), stop(22, 2), stop(72, 3)],
+    }, makeApp(doc));
+    expect(created[0].gradientStops.map((s: Fake) => s.rampPoint)).toEqual([0, 22, 72, 100]);
+    expect(created[0].gradientStops.map((s: Fake) => s.color.red)).toEqual([1, 2, 3, 4]);
+  });
+
   it('resolves the coordinate system when omitted', async () => {
     const { params } = await captureCall(registerCreateGradient, { name: 'g', stops });
     expect(params.coordinate_system).toBe('document');

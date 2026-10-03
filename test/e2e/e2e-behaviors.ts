@@ -1225,6 +1225,28 @@ async function runPhases(): Promise<void> {
         assert([a, b, c].every((u) => got.includes(u)), `all 3 descendants should be green: ${brief(f)}`);
       });
 
+      await t('create_gradient with 4 stops (given out of order) → ramp 0/22/72/100 in position order (#54)', async () => {
+        const red = (r: number) => ({ type: 'rgb', r, g: 0, b: 0 });
+        const r = await call('create_gradient', {
+          name: '__t14_grad4', type: 'radial',
+          stops: [
+            { color: red(10), position: 0 }, { color: red(240), position: 100 },
+            { color: red(60), position: 22 }, { color: red(160), position: 72 },
+          ],
+        });
+        assert(r.success === true, `create_gradient failed: ${brief(r)}`);
+        const ramp = fixtureJsx(`
+          var g = app.activeDocument.gradients.getByName("__t14_grad4");
+          var out = [];
+          for (var i = 0; i < g.gradientStops.length; i++) {
+            var s = g.gradientStops[i];
+            out.push([Math.round(s.rampPoint), Math.round(s.color.red)]);
+          }
+          return out;
+        `);
+        assert(J(ramp) === J([[0, 10], [22, 60], [72, 160], [100, 240]]), `ramp: ${J(ramp)}`);
+      });
+
       await t('group_objects: first UUID is bottommost, last is topmost / clip path (#53)', async () => {
         const a = await rect({ x: 200, y: 400, width: 40, height: 40, fill: { type: 'rgb', r: 255, g: 0, b: 0 } });
         const b = await rect({ x: 220, y: 420, width: 40, height: 40, fill: { type: 'rgb', r: 0, g: 0, b: 255 } });

@@ -38,14 +38,16 @@ if (preflight) {
     grad.name = params.name;
     grad.type = (params.type === "radial") ? GradientType.RADIAL : GradientType.LINEAR;
 
-    var stops = params.stops;
+    // 既存の分岐点を上書きしながら add() すると、add() がそれまで末尾の分岐点を 100% へ
+    // 動かしてしまう（#54、2026 実機で確認）。先に必要な数だけ add() してから、
+    // 位置の小さい順に値を入れる（同じ位置は指定順を保つ）
+    var stops = [];
+    for (var sj = 0; sj < params.stops.length; sj++) stops.push({ s: params.stops[sj], i: sj });
+    stops.sort(function(a, b) { return (a.s.position - b.s.position) || (a.i - b.i); });
+    for (var sk = 0; sk < stops.length; sk++) stops[sk] = stops[sk].s;
+    while (grad.gradientStops.length < stops.length) grad.gradientStops.add();
     for (var si = 0; si < stops.length; si++) {
-      var gs;
-      if (si < grad.gradientStops.length) {
-        gs = grad.gradientStops[si];
-      } else {
-        gs = grad.gradientStops.add();
-      }
+      var gs = grad.gradientStops[si];
       gs.color = createColor(stops[si].color);
       gs.rampPoint = stops[si].position;
       if (typeof stops[si].mid_point === "number") gs.midPoint = stops[si].mid_point;
