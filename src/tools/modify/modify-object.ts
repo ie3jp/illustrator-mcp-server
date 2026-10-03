@@ -271,18 +271,32 @@ if (preflight) {
 
       var verifiedState = verifyItem(item, coordSystem, abRect);
       if (isContainer) verifyPaintContainer(verifiedState, item);
+      // 文字属性を変えたのに読み返せなければ、反映を確かめられないので失敗にする（値を省いて成功で返さない）
+      var textPropsRequested = item.typename === "TextFrame" && (resolvedFont || typeof props.font_size === "number" ||
+        typeof props.tracking === "number" || typeof props.leading !== "undefined" || props.justification ||
+        typeof props.fill !== "undefined" || props.stroke);
+      if (textPropsRequested && verifiedState.textReadError) {
+        errors.push("verify: could not read back the text attributes: " + verifiedState.textReadError);
+      }
       if (item.typename === "TextFrame" && (typeof props.leading !== "undefined" || props.justification)) {
         try {
-          var vca = item.textRange.characterAttributes;
-          verifiedState.autoLeading = vca.autoLeading;
-          verifiedState.leading = vca.leading;
-        } catch(eVL) {}
+          var vl = readTextWhole(item, function(tr) {
+            var vca = tr.characterAttributes;
+            return { autoLeading: vca.autoLeading, leading: vca.leading };
+          });
+          verifiedState.autoLeading = vl.autoLeading;
+          verifiedState.leading = vl.leading;
+        } catch(eVL) {
+          errors.push("verify: could not read back leading: " + describeTextReadError(eVL));
+        }
         try {
-          var vj = item.textRange.paragraphAttributes.justification;
+          var vj = readTextWhole(item, function(tr) { return tr.paragraphAttributes.justification; });
           // ExtendScript は括弧なしの三項演算子の連鎖を誤評価するため必ず括弧で囲む
           verifiedState.justification = (vj === Justification.LEFT) ? "left" : ((vj === Justification.CENTER) ? "center" :
             ((vj === Justification.RIGHT) ? "right" : String(vj)));
-        } catch(eVJ) {}
+        } catch(eVJ) {
+          errors.push("verify: could not read back justification: " + describeTextReadError(eVJ));
+        }
       }
 
       var result = { success: errors.length === 0, uuid: params.uuid, coordinateSystem: coordSystem };

@@ -145,6 +145,7 @@ if (preflight) {
 
     var scanned = { pathItems: 0, textFrames: 0, rasterItems: 0 };
     var skippedItems = {};
+    var textReadLog = newTextReadLog();
 
     for (var li = 0; li < doc.layers.length; li++) {
       // iterateAllItems はグループ・複合パス内部・サブレイヤーまで辿る（非表示も含む）
@@ -159,12 +160,21 @@ if (preflight) {
             try { if (item.stroked) collectPlates(item.strokeColor, hit); } catch(e) {}
           } else if (tn === "TextFrame") {
             scanned.textFrames++;
-            var ranges = item.textRanges;
-            for (var ri = 0; ri < ranges.length; ri++) {
-              var ca = null;
-              try { ca = ranges[ri].characterAttributes; } catch(e) { continue; }
-              try { collectPlates(ca.fillColor, hit); } catch(e) {}
-              try { collectPlates(ca.strokeColor, hit); } catch(e) {}
+            // 読めなかったフレームは版を使っていないとみなさず、記録して部分失敗にする
+            var charColors = null;
+            try {
+              charColors = readTextUnits(item, "characters", function(ch) {
+                var ca = ch.characterAttributes;
+                return { fill: ca.fillColor, stroke: ca.strokeColor };
+              }, { units: item.textRanges });
+            } catch(eText) {
+              noteTextReadFailure(textReadLog, item, "character colors", eText);
+            }
+            if (charColors) {
+              for (var ri = 0; ri < charColors.length; ri++) {
+                try { collectPlates(charColors[ri].fill, hit); } catch(e) {}
+                try { collectPlates(charColors[ri].stroke, hit); } catch(e) {}
+              }
             }
           } else if (tn === "RasterItem") {
             scanned.rasterItems++;
@@ -213,7 +223,7 @@ if (preflight) {
       }
     } catch(e) { documentInks = null; }
 
-    writeResultFile(RESULT_PATH, {
+    writeResultFile(RESULT_PATH, markTextReadFailures({
       documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
       separationCount: separations.length,
       separations: separations,
@@ -227,7 +237,7 @@ if (preflight) {
         patternFillCount: patternFillCount,
         note: "usageCount = number of objects using the plate: path fills/strokes (incl. compound paths, gradient stops, global process colors), text character colors, and raster images (estimated from color space, approximate). Hidden items are included (hiddenUsageCount). NOT inspected: pattern contents, placed/linked files, symbols, meshes, plugin items (skippedItems) and Appearance-panel extra fills/strokes — an ink in unusedInks may still be used there." + (isCMYKDoc ? "" : " RGB document: process plates depend on output conversion and are not listed.")
       }
-    });
+    }, textReadLog));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }

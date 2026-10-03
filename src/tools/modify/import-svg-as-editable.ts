@@ -124,10 +124,14 @@ if (preflight) {
 
               // CMYK 文書でも SVG 由来の RGB 色はそのまま残る（実機確認済み）。変換せず件数を警告する
               var importWarnings = [];
+              var rgbTextReadLog = newTextReadLog();
               if (isCMYKTarget) {
-                var rgbCount = countRGBColors(duplicated);
+                var rgbCount = countRGBColors(duplicated, rgbTextReadLog);
                 if (rgbCount > 0) {
                   importWarnings.push("The target document is CMYK but " + rgbCount + " RGB fill/stroke/text color(s) were imported from the SVG and kept as RGB. They were not converted. Use replace_color (from_color rgb -> to_color cmyk) or find_objects to fix them before print output.");
+                }
+                if (rgbTextReadLog.count > 0) {
+                  importWarnings.push(rgbTextReadLog.count + " imported text object(s) could not be checked for RGB colors (text attributes could not be read; see textReadFailures).");
                 }
               }
 
@@ -144,7 +148,8 @@ if (preflight) {
                 verified: rootItem ? verifyItem(rootItem, coordSystem, abRect) : null
               };
               if (importWarnings.length > 0) svgResult.warnings = importWarnings;
-              writeResultFile(RESULT_PATH, svgResult);
+              // 取り込みは終えているので失敗にはせず、読めなかったテキストを明示する
+              writeResultFile(RESULT_PATH, attachTextReadFailures(svgResult, rgbTextReadLog));
             }
           }
         }
@@ -170,7 +175,7 @@ function _isRGBColor(color) {
 }
 
 // 取り込んだアイテム（グループ・複合パス内部・テキストを含む）の RGB 色の数
-function countRGBColors(items) {
+function countRGBColors(items, textReadLog) {
   var count = 0;
   function visit(item) {
     var tn = "";
@@ -179,13 +184,16 @@ function countRGBColors(items) {
       try { if (item.filled && _isRGBColor(item.fillColor)) count++; } catch (e) {}
       try { if (item.stroked && _isRGBColor(item.strokeColor)) count++; } catch (e) {}
     } else if (tn === "TextFrame") {
+      // 読めなかったテキストは RGB が無いとみなさず textReadLog に積む（警告が出ないまま RGB が残るのを防ぐ）
       try {
-        for (var ri = 0; ri < item.textRanges.length; ri++) {
-          var ca = item.textRanges[ri].characterAttributes;
-          if (_isRGBColor(ca.fillColor)) count++;
-          try { if (ca.strokeWeight > 0 && _isRGBColor(ca.strokeColor)) count++; } catch (e2) {}
-        }
-      } catch (e) {}
+        var rgbFlags = readTextUnits(item, "characters", function(ch) {
+          var ca = ch.characterAttributes;
+          return (_isRGBColor(ca.fillColor) ? 1 : 0) + ((ca.strokeWeight > 0 && _isRGBColor(ca.strokeColor)) ? 1 : 0);
+        }, { units: item.textRanges });
+        for (var ri = 0; ri < rgbFlags.length; ri++) count += rgbFlags[ri];
+      } catch (e) {
+        noteTextReadFailure(textReadLog, item, "character colors", e);
+      }
     }
   }
   for (var i = 0; i < items.length; i++) {

@@ -39,6 +39,7 @@ import {
   makeItem,
   makeLayer,
   makeTextFrame,
+  mrapOnRead,
   rejectWrites,
   runToolJsx,
 } from './helpers/fake-illustrator.js';
@@ -165,6 +166,39 @@ describe('create_text_frame (T11-5, B, C)', () => {
     const tf = doc.layers[0].pageItems[0];
     expect(tf.textRange.characterAttributes.autoLeading).toBe(true);
     expect(tf.textRange.paragraphAttributes.justification).toBeUndefined();
+  });
+
+  it('作成後に文字属性を読み返せなければ、作成済みであることを添えて失敗にする（verified.fill を黙って省かない）', async () => {
+    const doc = makeDoc();
+    const layer = doc.layers[0];
+    const pointText = layer.textFrames.pointText;
+    // 作成されたフレームの文字サイズを読むと MRAP（書き込みは通る）
+    layer.textFrames.pointText = (p: number[]) => {
+      const tf = pointText(p);
+      mrapOnRead(tf.textRange.characterAttributes, 'size');
+      return tf;
+    };
+    const r = await runTool(registerCreateTextFrame, { x: 0, y: 0, contents: 'Hello', font_size: 18 }, makeApp(doc));
+    expect(r.success).toBe(false);
+    expect(r.created).toBe(true);
+    expect(r.uuid).toBeTruthy();
+    expect(r.message).toContain(r.uuid);
+    expect(r.verified.textReadError).toContain('MRAP');
+    expect(layer.pageItems).toHaveLength(1);
+  });
+
+  it('一時的な MRAP は読み直して検証できる', async () => {
+    const doc = makeDoc();
+    const layer = doc.layers[0];
+    const pointText = layer.textFrames.pointText;
+    layer.textFrames.pointText = (p: number[]) => {
+      const tf = pointText(p);
+      mrapOnRead(tf.textRange.characterAttributes, 'size', 1);
+      return tf;
+    };
+    const r = await runTool(registerCreateTextFrame, { x: 0, y: 0, contents: 'Hello' }, makeApp(doc));
+    expect(r.success).toBeUndefined();
+    expect(r.verified.fontSize).toBe(12);
   });
 
   it('schema: justification enum, positive leading, baseline wording', () => {
@@ -563,6 +597,20 @@ describe('place_color_chips (T11-8)', () => {
     expect(labels).toContain('PANTONE 185 C');
     expect(labels).toContain('PANTONE 185 C 50%');
     expect(labels).not.toContain('C0 M0 Y0 K55');
+  });
+
+  it('文字色を読めなかったテキストは textReadFailures に出す（チップは作り終えているので success は変えない）', async () => {
+    const art = makeLayer('Art');
+    const doc = makeDoc({ layers: [art] });
+    const cmyk = (k: number) => ({ typename: 'CMYKColor', cyan: 0, magenta: 0, yellow: 0, black: k });
+    art.addItem(makeItem('PathItem', { filled: true, fillColor: cmyk(30) }));
+    const broken = textWithColor(cmyk(100));
+    mrapOnRead(broken.textRange.characters[0], 'characterAttributes');
+    art.addItem(broken);
+    const r = await runTool(registerPlaceColorChips, {}, makeApp(doc));
+    expect(r.success).toBe(true);
+    expect(r.chipCount).toBe(1);
+    expect(r.textReadFailures.count).toBe(1);
   });
 });
 

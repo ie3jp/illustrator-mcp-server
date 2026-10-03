@@ -29,6 +29,8 @@ if (preflight) {
       });
     } else {
       var frames = [];
+      // 読めなかったフレームを黙って除くと「問題なし」に見えるので、記録して部分失敗にする
+      var readLog = newTextReadLog();
       for (var i = 0; i < doc.textFrames.length; i++) {
         var tf = doc.textFrames[i];
         try {
@@ -45,13 +47,15 @@ if (preflight) {
             layerName: layerName,
             artboardIndex: abIdx
           });
-        } catch(e) {}
+        } catch(e) {
+          noteTextReadFailure(readLog, tf, "contents", e);
+        }
       }
 
-      writeResultFile(RESULT_PATH, {
+      writeResultFile(RESULT_PATH, markTextReadFailures({
         totalFrames: frames.length,
         frames: frames
-      });
+      }, readLog));
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
@@ -332,6 +336,8 @@ export function register(server: McpServer): void {
         error?: boolean;
         message?: string;
         warnings?: unknown[];
+        success?: boolean;
+        textReadFailures?: unknown;
       };
 
       if (result.error) {
@@ -354,6 +360,8 @@ export function register(server: McpServer): void {
         ...(result.warnings && result.warnings.length > 0
           ? { warnings: result.warnings }
           : {}),
+        // 読めなかったフレームは解析に入っていない。success: false で isError にする
+        ...(result.textReadFailures ? { success: false, textReadFailures: result.textReadFailures } : {}),
       });
     },
   );

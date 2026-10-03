@@ -61,6 +61,8 @@ if (preflight) {
       }
     }
 
+    var textReadLog = newTextReadLog();
+
     function describeItem(item) {
       var uuid = ensureUUID(item);
       var zIdx = getZIndex(item);
@@ -89,19 +91,28 @@ if (preflight) {
       try { info.opacity = item.opacity; } catch(e) {}
 
       // type-specific attributes
+      // 文字の内容・属性は読めなければ null にして記録する（"" や省略で読めたように見せない）
       if (itemType === "text") {
         try {
           info.contents = item.contents;
         } catch(e) {
-          info.contents = "";
+          info.contents = null;
+          noteTextReadFailure(textReadLog, item, "contents", e);
         }
         try {
-          if (item.textRanges.length > 0) {
-            var firstRange = item.textRanges[0];
-            info.fontFamily = firstRange.characterAttributes.textFont.family;
-            info.fontSize = firstRange.characterAttributes.size;
+          var firstChar = readTextUnits(item, "characters", function(ch) {
+            var ca = ch.characterAttributes;
+            return { fontFamily: ca.textFont.family, fontSize: ca.size };
+          }, { units: item.textRanges, limit: 1 });
+          if (firstChar.length > 0) {
+            info.fontFamily = firstChar[0].fontFamily;
+            info.fontSize = firstChar[0].fontSize;
           }
-        } catch(e) {}
+        } catch(e) {
+          info.fontFamily = null;
+          info.fontSize = null;
+          noteTextReadFailure(textReadLog, item, "font", e);
+        }
         try { info.textKind = getTextKind(item); } catch(e) {}
       }
 
@@ -184,7 +195,10 @@ if (preflight) {
             if (!tf) continue;
             var tInfo = describeItem(tf);
             var textSel = { contents: "", length: 0 };
-            try { textSel.contents = entry.contents; } catch(e) {}
+            try { textSel.contents = entry.contents; } catch(e) {
+              textSel.contents = null;
+              noteTextReadFailure(textReadLog, tf, "selected text", e);
+            }
             try { textSel.length = entry.length; } catch(e) {}
             try { textSel.start = entry.start; } catch(e) {}
             textSel.insertionPoint = (textSel.length === 0);
@@ -201,11 +215,11 @@ if (preflight) {
         }
       }
 
-      writeResultFile(RESULT_PATH, {
+      writeResultFile(RESULT_PATH, markTextReadFailures({
         selectionCount: items.length,
         coordinateSystem: coordSystem,
         items: items
-      });
+      }, textReadLog));
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });

@@ -4,6 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { runToolJsx } from './helpers/run-tool-jsx.js';
+import { mrapOnRead } from './helpers/fake-illustrator.js';
 
 // --- Illustrator 列挙定数のモック ---
 const ENUMS = {
@@ -44,10 +45,15 @@ function path(props: Obj): Obj {
   };
 }
 
+// ranges の length は同じ属性が続く文字数。textRange.characters は実機どおり 1 文字ずつに展開する
 function text(ranges: Obj[]): Obj {
+  const chars = ranges.flatMap((ca) =>
+    Array.from({ length: (ca.length as number) ?? 1 }, () => ({ length: 1, characterAttributes: ca })),
+  );
   return {
     typename: 'TextFrame', name: '', note: '', hidden: false,
-    textRanges: ranges.map((ca) => ({ length: (ca.length as number) ?? 1, characterAttributes: ca })),
+    textRanges: chars,
+    textRange: { characters: chars, characterAttributes: ranges[0] },
   };
 }
 
@@ -101,6 +107,17 @@ describe('get_overprint_info', () => {
     expect(items[0]).toMatchObject({
       itemType: 'text', fillOverprint: true, characterCount: 7, heuristic: 'likely_accidental',
     });
+  });
+
+  it('文字属性を読めなかったテキストは「オーバープリントなし」とみなさず部分失敗にする', () => {
+    const white = cmyk(0, 0, 0, 0);
+    const broken = text([{ overprintFill: true, overprintStroke: false, fillColor: white, strokeColor: NO_COLOR }]);
+    mrapOnRead(((broken.textRange as Obj).characters as Obj[])[0], 'characterAttributes');
+    const doc = makeDoc([layer('L1', [broken, path({ filled: true, fillOverprint: true, fillColor: cmyk(0, 0, 0, 100) })])]);
+    const result = run(TOOL, doc);
+    expect(result.overprintCount).toBe(1);
+    expect(result.success).toBe(false);
+    expect((result.textReadFailures as Obj).count).toBe(1);
   });
 
   it('ラスタ画像の overprint を検出する', () => {
@@ -159,6 +176,18 @@ type Plate = { name: string; type: string; usageCount: number; hiddenUsageCount:
 
 describe('get_separation_info', () => {
   const TOOL = 'read/get-separation-info.ts';
+
+  it('文字色を読めなかったテキストは版を使っていないとみなさず部分失敗にする', () => {
+    const spotA = spot('PANTONE A', 'CM_SPOT');
+    const broken = text([{ fillColor: spotColor(spotA), strokeColor: NO_COLOR }]);
+    mrapOnRead(((broken.textRange as Obj).characters as Obj[])[0], 'characterAttributes');
+    const doc = makeDoc([layer('L1', [broken])], { spots: [spotA] });
+    const result = run(TOOL, doc);
+    expect(result.success).toBe(false);
+    expect((result.textReadFailures as Obj).count).toBe(1);
+    // 読めなかったので使用中とは言えないが、未使用と断定もしない（textReadFailures で知らせる）
+    expect((result.separations as Plate[]).map((s) => s.name)).not.toContain('PANTONE A');
+  });
 
   it('CMYK 文書でも使っていないプロセス版は separations に載せない', () => {
     const doc = makeDoc([layer('L1', [path({ filled: true, fillColor: cmyk(0, 0, 0, 100) })])]);

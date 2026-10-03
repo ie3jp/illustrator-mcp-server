@@ -39,6 +39,8 @@ if (preflight) {
       return "unknown";
     }
 
+    var textReadLog = newTextReadLog();
+
     function getEffectInfo(item, coordSys) {
       var uuid = ensureUUID(item);
       var zIdx = getZIndex(item);
@@ -90,20 +92,24 @@ if (preflight) {
             }
           }
         } else if (itemType === "text") {
-          // TextFrameItem does not expose fill/stroke directly in the same way
-          // but we can try character attributes
+          // TextFrame 自体は塗り・線を持たないので先頭の文字の属性を返す。
+          // 読めなければ fill / stroke を null のまま黙って返さず、記録して部分失敗にする
           try {
-            if (item.textRanges.length > 0) {
-              var tr = item.textRanges[0];
-              var ca = tr.characterAttributes;
-              info.fill = { filled: true, color: colorToObject(ca.fillColor) };
-              if (ca.strokeWeight > 0) {
-                info.stroke = { stroked: true, color: colorToObject(ca.strokeColor), width: ca.strokeWeight };
-              } else {
-                info.stroke = { stroked: false };
-              }
+            var firstPaint = readTextUnits(item, "characters", function(ch) {
+              var ca = ch.characterAttributes;
+              var sw = ca.strokeWeight;
+              return {
+                fill: { filled: true, color: colorToObject(ca.fillColor) },
+                stroke: (sw > 0) ? { stroked: true, color: colorToObject(ca.strokeColor), width: sw } : { stroked: false }
+              };
+            }, { units: item.textRanges, limit: 1 });
+            if (firstPaint.length > 0) {
+              info.fill = firstPaint[0].fill;
+              info.stroke = firstPaint[0].stroke;
             }
-          } catch(e) {}
+          } catch(eText) {
+            noteTextReadFailure(textReadLog, item, "fill / stroke", eText);
+          }
         }
       } catch(e) {}
 
@@ -149,11 +155,11 @@ if (preflight) {
     }
 
     if (!targetUuid || items.length > 0) {
-      writeResultFile(RESULT_PATH, {
+      writeResultFile(RESULT_PATH, markTextReadFailures({
         coordinateSystem: coordSystem,
         count: items.length,
         items: items
-      });
+      }, textReadLog));
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });

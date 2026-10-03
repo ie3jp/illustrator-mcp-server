@@ -24,6 +24,7 @@ if (preflight) {
     if (autoDetect) {
       var colorItems = [];
       var skippedHidden = 0;
+      var textReadLog = newTextReadLog();
 
       for (var i = 0; i < doc.pathItems.length; i++) {
         var item = doc.pathItems[i];
@@ -57,11 +58,16 @@ if (preflight) {
             fillColor: null,
             strokeColor: null
           };
+          // 文字色は先頭の文字。読めなければ黙って判定から外さず、記録して部分失敗にする
+          var firstFill = null;
           try {
-            if (tf.textRanges.length > 0) {
-              tInfo.fillColor = colorToObject(tf.textRanges[0].characterAttributes.fillColor);
-            }
-          } catch(e2) {}
+            firstFill = readTextUnits(tf, "characters", function(ch) {
+              return colorToObject(ch.characterAttributes.fillColor);
+            }, { units: tf.textRanges, limit: 1, refetch: (function(idx) { return function() { return doc.textFrames[idx]; }; })(ti) });
+          } catch(e2) {
+            noteTextReadFailure(textReadLog, tf, "text color", e2);
+          }
+          if (firstFill && firstFill.length > 0) tInfo.fillColor = firstFill[0];
           if (tInfo.fillColor) colorItems.push(tInfo);
         } catch(e) {}
       }
@@ -87,7 +93,7 @@ if (preflight) {
         }
       }
 
-      writeResultFile(RESULT_PATH, { colorItems: colorItems, skippedHidden: skippedHidden });
+      writeResultFile(RESULT_PATH, markTextReadFailures({ colorItems: colorItems, skippedHidden: skippedHidden }, textReadLog));
     } else {
       // Manual mode: just return success, calculation done in Node.js
       writeResultFile(RESULT_PATH, { colorItems: [] });
@@ -303,6 +309,7 @@ export function register(server: McpServer): void {
         error?: boolean;
         message?: string;
         warnings?: unknown[];
+        textReadFailures?: unknown;
       };
 
       if (result.error) {
@@ -372,6 +379,8 @@ export function register(server: McpServer): void {
         ...(result.warnings && result.warnings.length > 0
           ? { warnings: result.warnings }
           : {}),
+        // 文字色を読めなかったテキストは判定に入っていない。success: false で isError にする
+        ...(result.textReadFailures ? { success: false, textReadFailures: result.textReadFailures } : {}),
       });
     },
   );

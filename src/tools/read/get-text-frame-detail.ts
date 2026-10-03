@@ -30,11 +30,13 @@ if (preflight) {
       writeResultFile(RESULT_PATH, { error: true, message: "uuid parameter is required" });
     } else {
       var found = null;
+      var foundIndex = -1;
       for (var i = 0; i < doc.textFrames.length; i++) {
         var item = doc.textFrames[i];
         var itemUUID = ensureUUID(item);
         if (itemUUID === targetUUID) {
           found = item;
+          foundIndex = i;
           break;
         }
       }
@@ -46,6 +48,8 @@ if (preflight) {
         });
       } else {
         var tf = found;
+        // 文字属性の読み直しでは tf ごと文書から取り直す（同じ tf より成功しやすい。common.jsx の readTextUnits）
+        var refetchFrame = function() { return doc.textFrames[foundIndex]; };
 
         var textKind = getTextKind(tf);
 
@@ -59,110 +63,100 @@ if (preflight) {
         var orientation = "horizontal";
         try { if (tf.orientation === TextOrientation.VERTICAL) orientation = "vertical"; } catch (e) {}
 
+        // ポイント文字・パス上文字では nextFrame / previousFrame が例外（9544、実機）。連結が無いだけなので null のまま
         var nextFrameUUID = null;
         var previousFrameUUID = null;
         try { if (tf.nextFrame) nextFrameUUID = ensureUUID(tf.nextFrame); } catch (e) {}
         try { if (tf.previousFrame) previousFrameUUID = ensureUUID(tf.previousFrame); } catch (e) {}
 
-        // 段落属性（各段落ごと）
-        var paraAttrs = [];
-        for (var pi = 0; pi < tf.paragraphs.length; pi++) {
-          var para = tf.paragraphs[pi];
-          var pa = para.paragraphAttributes;
-          var paraInfo = {
-            text: para.contents,
-            leading: 0,
-            autoLeading: false,
-            autoLeadingAmount: null,
-            firstLineIndent: 0,
-            leftIndent: 0,
-            rightIndent: 0,
-            spaceBefore: 0,
-            spaceAfter: 0,
-            justification: "left",
-            hyphenation: false,
-            paragraphStyle: ""
-          };
+        // 文字属性は既定値で埋めない。読めなければ（再試行しても）どの項目かを添えてエラーにする
+        var readStage = "the text frame";
 
-          // leading / autoLeading は文字属性（段落先頭文字の値）
-          try { paraInfo.leading = para.characterAttributes.leading; } catch (e) {}
-          try { paraInfo.autoLeading = para.characterAttributes.autoLeading; } catch (e) {}
-          try { paraInfo.autoLeadingAmount = pa.autoLeadingAmount; } catch (e) {}
-          try { paraInfo.firstLineIndent = pa.firstLineIndent; } catch (e) {}
-          try { paraInfo.leftIndent = pa.leftIndent; } catch (e) {}
-          try { paraInfo.rightIndent = pa.rightIndent; } catch (e) {}
-          try { paraInfo.spaceBefore = pa.spaceBefore; } catch (e) {}
-          try { paraInfo.spaceAfter = pa.spaceAfter; } catch (e) {}
-          try {
+        // 段落属性（各段落ごと）。leading / autoLeading は文字属性（段落先頭文字の値）
+        var paraAttrs;
+        try {
+          paraAttrs = readTextUnits(tf, "paragraphs", function(para, pIndex) {
+            readStage = "paragraph " + pIndex;
+            var pa = para.paragraphAttributes;
+            var info = { text: para.contents };
+            info.leading = para.characterAttributes.leading;
+            info.autoLeading = para.characterAttributes.autoLeading;
+            info.autoLeadingAmount = pa.autoLeadingAmount;
+            info.firstLineIndent = pa.firstLineIndent;
+            info.leftIndent = pa.leftIndent;
+            info.rightIndent = pa.rightIndent;
+            info.spaceBefore = pa.spaceBefore;
+            info.spaceAfter = pa.spaceAfter;
             var j = pa.justification;
-            if (j === Justification.LEFT) paraInfo.justification = "left";
-            else if (j === Justification.CENTER) paraInfo.justification = "center";
-            else if (j === Justification.RIGHT) paraInfo.justification = "right";
-            else if (j === Justification.FULLJUSTIFYLASTLINELEFT) paraInfo.justification = "justify-left";
-            else if (j === Justification.FULLJUSTIFYLASTLINECENTER) paraInfo.justification = "justify-center";
-            else if (j === Justification.FULLJUSTIFYLASTLINERIGHT) paraInfo.justification = "justify-right";
-            else if (j === Justification.FULLJUSTIFY) paraInfo.justification = "justify-all";
-            else paraInfo.justification = j.toString();
-          } catch (e) {}
-          try { paraInfo.hyphenation = pa.hyphenation; } catch (e) {}
-          try {
-            if (para.paragraphStyles.length > 0) {
-              paraInfo.paragraphStyle = para.paragraphStyles[0].name || "";
-            }
-          } catch (e) {}
-
-          paraAttrs.push(paraInfo);
+            if (j === Justification.LEFT) info.justification = "left";
+            else if (j === Justification.CENTER) info.justification = "center";
+            else if (j === Justification.RIGHT) info.justification = "right";
+            else if (j === Justification.FULLJUSTIFYLASTLINELEFT) info.justification = "justify-left";
+            else if (j === Justification.FULLJUSTIFYLASTLINECENTER) info.justification = "justify-center";
+            else if (j === Justification.FULLJUSTIFYLASTLINERIGHT) info.justification = "justify-right";
+            else if (j === Justification.FULLJUSTIFY) info.justification = "justify-all";
+            else info.justification = String(j);
+            info.hyphenation = pa.hyphenation;
+            info.paragraphStyle = (para.paragraphStyles.length > 0) ? (para.paragraphStyles[0].name || "") : "";
+            return info;
+          }, { units: tf.paragraphs, refetch: refetchFrame });
+        } catch (eP) {
+          throw new Error("Could not read the attributes of " + readStage + ": " + describeTextReadError(eP));
         }
 
-        // 文字単位走査: 同一属性の連続文字はランにまとめる
-        var chars = tf.characters;
-        var runs = [];
-        var prevKey = "";
-        var currentRun = null;
-
-        for (var ci = 0; ci < chars.length; ci++) {
-          var ch = chars[ci];
-          var cca = ch.characterAttributes;
-          var info = {
-            fontFamily: "",
-            fontStyle: "",
-            fontSize: 0,
-            color: { type: "none" },
-            tracking: 0,
-            kerningMethod: "auto",
-            akiLeft: -1,
-            akiRight: -1,
-            tsume: 0,
-            proportionalMetrics: false,
-            baselineShift: 0,
-            horizontalScale: 100,
-            verticalScale: 100,
-            rotation: 0
-          };
-
-          try { info.fontFamily = cca.textFont.family; } catch (e2) {}
-          try { info.fontStyle = cca.textFont.style; } catch (e2) {}
-          try { info.fontSize = cca.size; } catch (e2) {}
-          try { info.color = colorToObject(cca.fillColor); } catch (e2) {}
-          try { info.tracking = cca.tracking; } catch (e2) {}
-          try {
+        // 1 文字ずつの属性
+        var charInfos;
+        try {
+          charInfos = readTextUnits(tf, "characters", function(ch, cIndex) {
+            readStage = "character " + cIndex;
+            var cca = ch.characterAttributes;
+            var info = { text: ch.contents };
+            info.fontFamily = cca.textFont.family;
+            info.fontStyle = cca.textFont.style;
+            info.fontSize = cca.size;
+            info.color = colorToObject(cca.fillColor);
+            info.tracking = cca.tracking;
             var km2 = cca.kerningMethod;
             if (km2 === AutoKernType.AUTO) info.kerningMethod = "auto";
             else if (km2 === AutoKernType.OPTICAL) info.kerningMethod = "optical";
             else if (km2 === AutoKernType.METRICSROMANONLY) info.kerningMethod = "metrics";
             else if (km2 === AutoKernType.NOAUTOKERN) info.kerningMethod = "none";
             else info.kerningMethod = String(km2);
-          } catch (e2) {}
-          try { info.proportionalMetrics = cca.proportionalMetrics; } catch (e2) {}
-          try { info.akiLeft = cca.akiLeft; } catch (e2) {}
-          try { info.akiRight = cca.akiRight; } catch (e2) {}
-          try { info.tsume = cca.Tsume; } catch (e2) {}
-          try { info.baselineShift = cca.baselineShift; } catch (e2) {}
-          try { info.horizontalScale = cca.horizontalScale; } catch (e2) {}
-          try { info.verticalScale = cca.verticalScale; } catch (e2) {}
-          try { info.rotation = cca.rotation; } catch (e2) {}
+            info.proportionalMetrics = cca.proportionalMetrics;
+            info.akiLeft = cca.akiLeft;
+            info.akiRight = cca.akiRight;
+            info.tsume = cca.Tsume;
+            info.baselineShift = cca.baselineShift;
+            info.horizontalScale = cca.horizontalScale;
+            info.verticalScale = cca.verticalScale;
+            info.rotation = cca.rotation;
+            return info;
+          }, { units: tf.characters, refetch: refetchFrame });
+        } catch (eC) {
+          throw new Error("Could not read the attributes of " + readStage + ": " + describeTextReadError(eC));
+        }
 
-          // 色は全成分（特色名・濃度・グラデーション分岐点など）まで比較してランを結合する
+        // 手動カーニング（TextRange.kerning は手動設定が無い位置で 9551 を投げる＝値なし。内部エラーは値なしにしない）
+        var kernings;
+        try {
+          kernings = readTextUnits(tf, "characters", function(ch, kIndex) {
+            readStage = "kerning at character " + kIndex;
+            try { return ch.kerning; } catch (ek) {
+              if (isIllustratorInternalError(ek)) throw ek;
+              return null;
+            }
+          }, { units: tf.characters, refetch: refetchFrame });
+        } catch (eK) {
+          throw new Error("Could not read the " + readStage + ": " + describeTextReadError(eK));
+        }
+
+        // 同一属性の連続文字はランにまとめる（色は全成分＝特色名・濃度・グラデーション分岐点まで比較する）
+        var runs = [];
+        var prevKey = "";
+        var currentRun = null;
+        var kerningPairs = [];
+        for (var ci = 0; ci < charInfos.length; ci++) {
+          var info = charInfos[ci];
           var key = info.fontFamily + "|" + info.fontStyle + "|" + info.fontSize
             + "|" + info.tracking + "|" + info.kerningMethod
             + "|" + info.akiLeft + "|" + info.akiRight + "|" + info.tsume + "|" + info.proportionalMetrics
@@ -171,10 +165,10 @@ if (preflight) {
             + "|" + jsonStringify(info.color);
 
           if (key === prevKey && currentRun) {
-            currentRun.text += ch.contents;
+            currentRun.text += info.text;
           } else {
             currentRun = {
-              text: ch.contents,
+              text: info.text,
               fontFamily: info.fontFamily,
               fontStyle: info.fontStyle,
               fontSize: info.fontSize,
@@ -193,17 +187,10 @@ if (preflight) {
             runs.push(currentRun);
             prevKey = key;
           }
-        }
 
-        // 文字ペア間のカーニング値を収集 (TextRange.kerning — 手動設定がない位置では例外)
-        var kerningPairs = [];
-        for (var ki = 0; ki < chars.length; ki++) {
-          var kVal = null;
-          try { kVal = chars[ki].kerning; } catch (ek) { /* no manual kerning */ }
-          if (kVal !== null) {
-            var left = chars[ki].contents;
-            var right = (ki + 1 < chars.length) ? chars[ki + 1].contents : "";
-            kerningPairs.push({ index: ki, left: left, right: right, value: kVal });
+          if (kernings[ci] !== null) {
+            var right = (ci + 1 < charInfos.length) ? charInfos[ci + 1].text : "";
+            kerningPairs.push({ index: ci, left: info.text, right: right, value: kernings[ci] });
           }
         }
 
