@@ -34,7 +34,9 @@ import {
 
 const TMP = '/tmp/illustrator-mcp-e2e-behaviors';
 const PNG_100 = `${TMP}/img-100.png`;
-const ILLUSTRATOR_APP = process.env.E2E_ILLUSTRATOR_APP ?? '/Applications/Adobe Illustrator 2025/Adobe Illustrator.app';
+// 既定はサーバーと同じく名前で宛てる。版をパスで決め打ちすると、別の版が起動していないときに
+// その版を起動してしまい、フィクスチャとツールが別々の Illustrator に届く
+const ILLUSTRATOR_APP = process.env.E2E_ILLUSTRATOR_APP ?? 'Adobe Illustrator';
 const COMMON_JSX = readFileSync(resolve('src/jsx/helpers/common.jsx'), 'utf-8');
 const PKG_VERSION = (JSON.parse(readFileSync(resolve('package.json'), 'utf-8')) as { version: string }).version;
 
@@ -1183,8 +1185,10 @@ async function runPhases(): Promise<void> {
         assert(del.success === true, 'cleanup delete failed');
       });
 
-      await t('spacing tokens / style guide measure gaps between groups, not their children (#52)', async () => {
-        // 幅 20 のカード（グループ）を 20pt 間隔で 3 つ。カード内部は幅 8 の矩形 2 つが 4pt 間隔
+      await t('spacing tokens / style guide compare siblings only, not a group with its children (#52)', async () => {
+        // 幅 20 のカード（グループ）を 20pt 間隔で 3 つ。カード内部は幅 8 の矩形 2 つが 4pt 間隔。
+        // 兄弟どうしの 20pt（カード間）と 4pt（カード内）だけが出るはず。グループとその子、
+        // 別カードの子どうしを比べると 32pt・12pt などの水増しが出る
         for (const left of [100, 140, 180]) {
           const a = await rect({ x: left, y: 300, width: 8, height: 10 });
           const b = await rect({ x: left + 12, y: 300, width: 8, height: 10 });
@@ -1193,11 +1197,10 @@ async function runPhases(): Promise<void> {
         }
         const tokens = await call('extract_design_tokens', { format: 'json' });
         const spacing = tokens.spacing as string[];
-        assert(spacing.includes('20pt'), `20pt card gap missing: ${brief(spacing)}`);
-        assert(!spacing.includes('4pt'), `4pt gap inside groups should not be counted: ${brief(spacing)}`);
+        assert(J([...spacing].sort()) === J(['20pt', '4pt']), `expected only 4pt and 20pt: ${brief(spacing)}`);
         const sg = await call('place_style_guide', {});
         assert(sg.success === true, `place_style_guide: ${brief(sg)}`);
-        assert(sg.sections.horizontalSpacings === 1, `expected only the 20pt spacing: ${brief(sg.sections)}`);
+        assert(sg.sections.horizontalSpacings === 2, `expected only the 4pt and 20pt spacings: ${brief(sg.sections)}`);
       });
     });
   }
