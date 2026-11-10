@@ -1,7 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 vi.mock('../../src/executor/jsx-runner.js', () => ({
@@ -226,10 +226,15 @@ describe('activation is confined to menu-command tools', () => {
     });
   }
 
+  /** Windows の path.relative は \\ 区切りを返すので、比較できるよう / に正規化する */
+  function toolPath(file: string): string {
+    return relative(SRC_TOOLS_DIR, file).split(sep).join('/');
+  }
+
   it('only create_crop_marks hardcodes activate: true', () => {
     const offenders = collectTsFiles(SRC_TOOLS_DIR)
       .filter((file) => /activate:\s*true/.test(readFileSync(file, 'utf8')))
-      .map((file) => relative(SRC_TOOLS_DIR, file))
+      .map(toolPath)
       .sort();
     expect(offenders).toEqual(['modify/create-crop-marks.ts']);
   });
@@ -242,7 +247,7 @@ describe('activation is confined to menu-command tools', () => {
   it('no tool description still promises foreground activation', () => {
     const offenders = collectTsFiles(SRC_TOOLS_DIR)
       .filter((file) => /Illustrator will be activated/.test(readFileSync(file, 'utf8')))
-      .map((file) => relative(SRC_TOOLS_DIR, file))
+      .map(toolPath)
       .sort();
     expect(offenders).toEqual(['export/export-pdf.ts', 'modify/create-crop-marks.ts']);
   });
