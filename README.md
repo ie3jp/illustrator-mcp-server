@@ -139,7 +139,7 @@ This adds the server to `~/.codex/config.toml`. If the first launch times out wh
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
 > [!NOTE]
-> Most modify tools bring Illustrator to the foreground during execution. Read tools and `export` run without switching apps; `export_pdf` brings Illustrator forward only when drawing Japanese crop marks.
+> Only `create_crop_marks` and `export_pdf` with Japanese crop marks explicitly bring Illustrator to the foreground. Other tools do not request activation.
 
 > [!NOTE]
 > **Your files are protected by default.** `close_document` will not throw away unsaved changes unless you explicitly choose to (`save: false`), and `export`, `export_pdf`, `save_document` (save as) and `extract_design_tokens` will not replace an existing file unless `overwrite: true` is set. If that is what you want, just tell Claude to "close without saving" or "overwrite the file".

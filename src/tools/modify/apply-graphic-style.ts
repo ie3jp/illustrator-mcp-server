@@ -97,7 +97,7 @@ export function register(server: McpServer): void {
     {
       title: 'Apply Graphic Style',
       description:
-        'Apply a graphic style to objects. Objects that are found are styled; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Apply a graphic style to objects. Objects that are found are styled; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty).',
       inputSchema: {
         style_name: z.string().describe('Name of the graphic style to apply'),
         uuids: z.array(z.string()).min(1).describe('UUIDs of target objects'),
@@ -110,7 +110,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(applyJsxCode, params, { activate: true });
+      const result = await executeJsx(applyJsxCode, params);
       return formatToolResult(result);
     },
   );

@@ -113,7 +113,7 @@ export function register(server: McpServer): void {
     {
       title: 'Place Image',
       description:
-        'Place a raster or PDF image file (PNG, JPG, TIFF, PSD, PDF, etc.) into the document as a linked or embedded image. SVG is NOT supported here because PlacedItems produces a non-editable linked artwork — use import_svg_as_editable instead to bring SVG content in as editable paths/text. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Place a raster or PDF image file (PNG, JPG, TIFF, PSD, PDF, etc.) into the document as a linked or embedded image. SVG is NOT supported here because PlacedItems produces a non-editable linked artwork — use import_svg_as_editable instead to bring SVG content in as editable paths/text.',
       inputSchema: {
         file_path: z.string().describe('Absolute path to the image file'),
         x: z.number().optional().describe('X position'),
@@ -131,7 +131,7 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       // 大きな画像のリンク・埋め込みは 30 秒を超えうるため heavy
-      return executeToolJsx(jsxCode, params, { activate: true, heavy: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { heavy: true, resolveCoordinate: true });
     },
   );
 }

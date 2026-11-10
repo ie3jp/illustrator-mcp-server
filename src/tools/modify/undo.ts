@@ -71,7 +71,7 @@ export function register(server: McpServer): void {
       title: 'Undo / Redo',
       description:
         'Undo or redo steps in Illustrator\'s history. Steps are Illustrator history entries, not MCP tool calls (one tool call may create several steps). ' +
-        'Returns count = steps actually performed; if a step fails, the result is an error that still reports how many were performed. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Returns count = steps actually performed; if a step fails, the result is an error that still reports how many were performed.',
       inputSchema: {
         action: z.enum(['undo', 'redo']).optional().default('undo'),
         count: z
@@ -86,7 +86,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

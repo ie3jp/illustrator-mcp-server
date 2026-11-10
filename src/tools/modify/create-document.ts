@@ -46,7 +46,7 @@ export function register(server: McpServer): void {
     {
       title: 'Create Document',
       description:
-        'Create a new Illustrator document. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Create a new Illustrator document.',
       inputSchema: {
         width: z
           .number()
@@ -67,7 +67,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       invalidateAutoDetectCache();
       return formatToolResult(result);
     },

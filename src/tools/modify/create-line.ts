@@ -68,7 +68,7 @@ export function register(server: McpServer): void {
     'create_line',
     {
       title: 'Create Line',
-      description: 'Create a line. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Create a line.',
       inputSchema: {
         x1: z.number().describe('Start point X coordinate'),
         y1: z.number().describe('Start point Y coordinate'),
@@ -92,7 +92,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

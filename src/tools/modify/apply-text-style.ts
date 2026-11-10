@@ -98,7 +98,7 @@ export function register(server: McpServer): void {
     {
       title: 'Apply Text Style',
       description:
-        'Apply a character or paragraph style to a text frame. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Apply a character or paragraph style to a text frame.',
       inputSchema: {
         uuid: z.string().describe('UUID of the text frame'),
         style_type: z.enum(['character', 'paragraph']).describe('Type of style to apply'),
@@ -112,7 +112,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(applyJsxCode, params, { activate: true });
+      const result = await executeJsx(applyJsxCode, params);
       return formatToolResult(result);
     },
   );

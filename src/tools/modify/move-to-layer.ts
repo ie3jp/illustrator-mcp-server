@@ -80,7 +80,7 @@ export function register(server: McpServer): void {
     {
       title: 'Move to Layer',
       description:
-        'Move one or more objects to a different layer. Objects that are found are moved; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Move one or more objects to a different layer. Objects that are found are moved; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty).',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to move'),
         target_layer: z.string().describe('Target top-level layer name. If several layers share the name, the topmost one is used and a warning is returned'),
@@ -93,7 +93,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

@@ -1,5 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('../../src/executor/jsx-runner.js', () => ({
   executeJsx: vi.fn(),
@@ -29,6 +32,12 @@ import { register as registerExport } from '../../src/tools/export/export.js';
 import { register as registerCheckContrast } from '../../src/tools/read/check-contrast.js';
 import { register as registerExtractDesignTokens } from '../../src/tools/read/extract-design-tokens.js';
 import { register as registerCheckTextConsistency } from '../../src/tools/utility/check-text-consistency.js';
+import { register as registerCreateRectangle } from '../../src/tools/modify/create-rectangle.js';
+import { register as registerCreateTextFrame } from '../../src/tools/modify/create-text-frame.js';
+import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
+import { register as registerCreateDocument } from '../../src/tools/modify/create-document.js';
+import { register as registerPlaceImage } from '../../src/tools/modify/place-image.js';
+import { register as registerCreateCropMarks } from '../../src/tools/modify/create-crop-marks.js';
 
 type ToolResponse = { content: Array<{ type: string; text?: string }> };
 type ToolHandler = (params: Record<string, unknown>) => Promise<ToolResponse>;
@@ -170,5 +179,71 @@ describe('export tool activation', () => {
       params,
       { activate },
     );
+  });
+});
+
+describe('DOM tool activation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecuteJsx.mockResolvedValue({ success: true });
+    mockExecuteJsxHeavy.mockResolvedValue({ success: true });
+  });
+
+  it.each([
+    [registerCreateRectangle, { x: 10, y: 20, width: 30, height: 40 }],
+    [registerCreateTextFrame, { x: 10, y: 20, contents: 'Test' }],
+    [registerModifyObject, { uuid: 'test', properties: { position: { x: 10, y: 20 } } }],
+    [registerCreateDocument, {}],
+    [registerPlaceImage, { file_path: '/tmp/test.png' }],
+  ])('DOM handler %s does not request activation', async (register, params) => {
+    await captureToolHandler(register)(params);
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]?.activate ?? false).toBe(false);
+  });
+
+  it('crop marks still request activation', async () => {
+    await captureToolHandler(registerCreateCropMarks)({ style: 'japanese' });
+    expect(mockExecuteJsx).toHaveBeenCalledWith(expect.any(String), expect.any(Object), {
+      activate: true,
+    });
+  });
+});
+
+/**
+ * activate: true は executeMenuCommand を使うツールだけが指定する（前面でないと失敗するため）。
+ * 上のハンドラテストは代表例しか押さえられないので、src/tools 全体を走査して
+ * 前面化の再混入を検出する。
+ */
+describe('activation is confined to menu-command tools', () => {
+  const SRC_TOOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../src/tools');
+
+  function collectTsFiles(dir: string): string[] {
+    return readdirSync(dir).flatMap((entry) => {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) return collectTsFiles(full);
+      return entry.endsWith('.ts') ? [full] : [];
+    });
+  }
+
+  it('only create_crop_marks hardcodes activate: true', () => {
+    const offenders = collectTsFiles(SRC_TOOLS_DIR)
+      .filter((file) => /activate:\s*true/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(SRC_TOOLS_DIR, file))
+      .sort();
+    expect(offenders).toEqual(['modify/create-crop-marks.ts']);
+  });
+
+  it('export_pdf activates only when it needs the trim-mark menu command', () => {
+    const src = readFileSync(join(SRC_TOOLS_DIR, 'export/export-pdf.ts'), 'utf8');
+    expect(src).toContain('activate: requiresMenuCommandActivation(params)');
+  });
+
+  it('no tool description still promises foreground activation', () => {
+    const offenders = collectTsFiles(SRC_TOOLS_DIR)
+      .filter((file) => /Illustrator will be activated/.test(readFileSync(file, 'utf8')))
+      .map((file) => relative(SRC_TOOLS_DIR, file))
+      .sort();
+    expect(offenders).toEqual(['export/export-pdf.ts', 'modify/create-crop-marks.ts']);
   });
 });

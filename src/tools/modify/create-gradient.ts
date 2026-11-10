@@ -149,7 +149,7 @@ export function register(server: McpServer): void {
     {
       title: 'Create Gradient',
       description:
-        'Create a gradient in the document and optionally apply it to objects. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Create a gradient in the document and optionally apply it to objects.',
       inputSchema: {
         name: z.string().describe('Gradient name'),
         type: z.enum(['linear', 'radial']).optional().default('linear'),
@@ -181,7 +181,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

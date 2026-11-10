@@ -114,7 +114,7 @@ export function register(server: McpServer): void {
     {
       title: 'Duplicate Objects',
       description:
-        'Duplicate one or more objects, optionally offsetting the copies. Copies (and their group/compound-path children) get new UUIDs; notes/memos are kept (objects whose note cannot be rewritten keep the source UUID and are listed in warnings). Missing UUIDs are listed in notFound and per-item failures in failed (success is then false, but copies that were made are still returned). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Duplicate one or more objects, optionally offsetting the copies. Copies (and their group/compound-path children) get new UUIDs; notes/memos are kept (objects whose note cannot be rewritten keep the source UUID and are listed in warnings). Missing UUIDs are listed in notFound and per-item failures in failed (success is then false, but copies that were made are still returned).',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to duplicate'),
         offset: z
@@ -130,7 +130,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

@@ -81,8 +81,7 @@ export function register(server: McpServer): void {
         'Delete one or more objects by UUID (get UUIDs from find_objects / get_layers / get_selection). ' +
         'Locked objects are skipped unless force_unlock is true. success is false if any UUID was not found or could not be deleted (see notFound / errors). ' +
         'The undo tool may revert it, but undo steps are Illustrator history steps, not tied to MCP calls. ' +
-        'To delete a whole layer use manage_layers instead. ' +
-        'Note: Illustrator will be activated (brought to foreground) during execution.',
+        'To delete a whole layer use manage_layers instead.',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to delete'),
         force_unlock: z
@@ -94,7 +93,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

@@ -137,7 +137,7 @@ Esto añade el servidor a `~/.codex/config.toml`. Si en el primer arranque se ag
 > **macOS:** En la primera ejecución, concede acceso de automatización en Ajustes del Sistema > Privacidad y Seguridad > Automatización.
 
 > [!NOTE]
-> La mayoría de las herramientas de modificación traen Illustrator al primer plano durante su ejecución. Las herramientas de lectura y `export` se ejecutan sin cambiar de aplicación; `export_pdf` solo lo trae al frente cuando dibuja marcas de corte japonesas.
+> Solo `create_crop_marks` y `export_pdf` con marcas de corte japonesas traen explícitamente Illustrator al primer plano. Las demás herramientas no solicitan la activación.
 
 > [!NOTE]
 > **Tus archivos están protegidos por defecto.** `close_document` no descarta cambios sin guardar a menos que lo indiques explícitamente (`save: false`), y `export`, `export_pdf`, `save_document` (guardar como) y `extract_design_tokens` no reemplazan un archivo existente salvo que se indique `overwrite: true`. Si es lo que quieres, basta con pedirle a Claude que "cierre sin guardar" o que "sobrescriba el archivo".

@@ -79,7 +79,7 @@ export function register(server: McpServer): void {
     {
       title: 'Save Document',
       description:
-        'Save the active Illustrator document. save_as refuses to replace an existing file unless overwrite is true. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Save the active Illustrator document. save_as refuses to replace an existing file unless overwrite is true.',
       inputSchema: {
         mode: z
           .enum(['save', 'save_as'])
@@ -106,7 +106,7 @@ export function register(server: McpServer): void {
         // シンボリックリンク経由のディレクトリ（macOS の /tmp 等）は実パスに解決してから渡す
         resolvedParams.path = resolveOutputPath(resolvedParams.path);
       }
-      const result = await executeJsx(jsxCode, resolvedParams, { activate: true });
+      const result = await executeJsx(jsxCode, resolvedParams);
       return formatToolResult(result);
     },
   );

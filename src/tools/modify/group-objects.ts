@@ -360,7 +360,7 @@ export function register(server: McpServer): void {
     {
       title: 'Group Objects',
       description:
-        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. All objects must be directly in the same parent (layer or group); objects on different layers or in different groups are rejected (use move_to_layer / ungroup_objects first). The new group takes the stacking position of the frontmost object. Nothing is changed and an error is returned if any UUID is not found (notFound), any object is locked or on a hidden layer, or clipped: true is given with fewer than 2 objects or a last object that is not a path or compound path (convert text to outlines first). If grouping fails midway, the objects are moved back and the empty group is removed (see rollback in the error). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. All objects must be directly in the same parent (layer or group); objects on different layers or in different groups are rejected (use move_to_layer / ungroup_objects first). The new group takes the stacking position of the frontmost object. Nothing is changed and an error is returned if any UUID is not found (notFound), any object is locked or on a hidden layer, or clipped: true is given with fewer than 2 objects or a last object that is not a path or compound path (convert text to outlines first). If grouping fails midway, the objects are moved back and the empty group is removed (see rollback in the error).',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group, all with the same parent. Order matters: first=bottom, last=top in layer panel.'),
         name: z.string().optional().describe('Name for the new group'),
@@ -373,7 +373,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

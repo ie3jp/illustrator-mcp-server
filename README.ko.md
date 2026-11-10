@@ -137,7 +137,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS:** 처음 실행 시, 시스템 설정 > 개인정보 보호 및 보안 > 자동화에서 자동화 접근 권한을 허용하세요.
 
 > [!NOTE]
-> 대부분의 수정 도구는 실행 중에 Illustrator를 전면으로 가져옵니다. 읽기 도구와 `export`는 앱을 전환하지 않고 실행되며, `export_pdf`는 일본식 재단선을 그릴 때만 Illustrator를 전면으로 가져옵니다.
+> `create_crop_marks`와 일본식 재단선을 그리는 `export_pdf`만 Illustrator를 명시적으로 전면으로 가져옵니다. 다른 도구는 앱 활성화를 요청하지 않습니다.
 
 > [!NOTE]
 > **파일은 기본적으로 보호됩니다.** `close_document`는 명시적으로 지정하지 않는 한(`save: false`) 저장하지 않은 변경 사항을 버리지 않으며, `export`, `export_pdf`, `save_document`(다른 이름으로 저장), `extract_design_tokens`는 `overwrite: true`를 지정하지 않는 한 기존 파일을 덮어쓰지 않습니다. 그렇게 하고 싶다면 Claude에게 "저장하지 않고 닫아줘" 또는 "파일을 덮어써줘"라고 말하면 됩니다.

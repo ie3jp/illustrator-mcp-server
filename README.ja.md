@@ -135,7 +135,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
 
 > [!NOTE]
-> ほとんどの操作系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。読み取り系ツールと `export` はアプリを切り替えずに実行します（`export_pdf` は日本式トンボを描くときだけ前面に出します）。
+> `create_crop_marks` と日本式トンボを描く `export_pdf` だけが Illustrator を明示的に前面化します。他のツールは前面化を要求しません。
 
 > [!NOTE]
 > **ファイルは既定で保護されます。** `close_document` は、明示的に指定しない限り（`save: false`）未保存の変更を破棄しません。`export`・`export_pdf`・`save_document`（別名保存）・`extract_design_tokens` は、`overwrite: true` を指定しない限り既存ファイルを上書きしません。破棄・上書きしたいときは「保存せずに閉じて」「上書きして」と伝えてください。

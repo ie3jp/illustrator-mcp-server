@@ -66,14 +66,14 @@ export function register(server: McpServer): void {
     {
       title: 'Ungroup Objects',
       description:
-        'Ungroup a group, releasing its children to the parent layer. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Ungroup a group, releasing its children to the parent layer.',
       inputSchema: {
         uuid: z.string().describe('UUID of the group to ungroup'),
       },
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

@@ -137,7 +137,7 @@ Damit wird der Server in `~/.codex/config.toml` eingetragen. Falls der erste Sta
 > **macOS:** Erlaube beim ersten Start den Automatisierungszugriff unter Systemeinstellungen > Datenschutz & Sicherheit > Automation.
 
 > [!NOTE]
-> Die meisten Bearbeitungswerkzeuge bringen Illustrator während der Ausführung in den Vordergrund. Lesewerkzeuge und `export` laufen ohne App-Wechsel; `export_pdf` holt Illustrator nur beim Erzeugen japanischer Schnittmarken nach vorn.
+> Nur `create_crop_marks` und `export_pdf` mit japanischen Schnittmarken bringen Illustrator ausdrücklich in den Vordergrund. Andere Werkzeuge fordern keine Aktivierung an.
 
 > [!NOTE]
 > **Deine Dateien sind standardmäßig geschützt.** `close_document` verwirft ungespeicherte Änderungen nur, wenn Du das ausdrücklich angibst (`save: false`), und `export`, `export_pdf`, `save_document` (Speichern unter) sowie `extract_design_tokens` ersetzen eine vorhandene Datei nur mit `overwrite: true`. Wenn Du genau das willst, sag Claude einfach „ohne Speichern schließen" oder „Datei überschreiben".

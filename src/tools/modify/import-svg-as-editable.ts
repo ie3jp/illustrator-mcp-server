@@ -260,7 +260,7 @@ export function register(server: McpServer): void {
     {
       title: 'Import SVG as Editable',
       description:
-        'Import an SVG file into the active document as editable Illustrator paths/text/groups (NOT as a linked image). Internally opens the SVG as a temporary document, duplicates its contents into the target document, then closes the source. Use this instead of place_image for SVG. Colors are NOT converted: importing into a CMYK document keeps the SVG\'s RGB colors, and the result then includes a warning with the count (fix with replace_color). Note: Illustrator will be activated (brought to foreground) during execution. Font caveat: Illustrator does not fall back per glyph across a font-family list. If the FIRST family in the list is installed but lacks a glyph, that character is dropped silently and the import still reports success. Specify a single font-family per text element, and pick one that actually contains the glyphs you use (symbols such as U+2713 are the common failure case). An uninstalled family is substituted by Illustrator and is NOT affected by this.',
+        'Import an SVG file into the active document as editable Illustrator paths/text/groups (NOT as a linked image). Internally opens the SVG as a temporary document, duplicates its contents into the target document, then closes the source. Use this instead of place_image for SVG. Colors are NOT converted: importing into a CMYK document keeps the SVG\'s RGB colors, and the result then includes a warning with the count (fix with replace_color). Font caveat: Illustrator does not fall back per glyph across a font-family list. If the FIRST family in the list is installed but lacks a glyph, that character is dropped silently and the import still reports success. Specify a single font-family per text element, and pick one that actually contains the glyphs you use (symbols such as U+2713 are the common failure case). An uninstalled family is substituted by Illustrator and is NOT affected by this.',
       inputSchema: {
         file_path: z.string().describe('Absolute path to the .svg or .svgz file'),
         x: z
@@ -299,7 +299,7 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       // 大きな SVG の open・複製は 30 秒を超えうるため heavy
-      return executeToolJsx(jsxCode, params, { activate: true, heavy: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { heavy: true, resolveCoordinate: true });
     },
   );
 }

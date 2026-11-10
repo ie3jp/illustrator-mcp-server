@@ -324,7 +324,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Variables & Datasets',
       description:
-        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header.',
       inputSchema: {
         action: z
           .enum([
@@ -363,7 +363,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

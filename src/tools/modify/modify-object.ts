@@ -304,7 +304,7 @@ export function register(server: McpServer): void {
     {
       title: 'Modify Object',
       description:
-        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target object'),
         properties: z
@@ -357,7 +357,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

@@ -53,7 +53,7 @@ export function register(server: McpServer): void {
     'create_ellipse',
     {
       title: 'Create Ellipse',
-      description: 'Create an ellipse. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Create an ellipse.',
       inputSchema: {
         x: z.number().describe('Bounding box top-left X coordinate'),
         y: z.number().describe('Bounding box top-left Y coordinate'),
@@ -68,7 +68,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }
