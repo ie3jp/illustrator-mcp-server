@@ -22,13 +22,27 @@ if (preflight) {
     var hasError = false;
     var warnings = [];
 
-    // アウトライン化は不可逆。失敗（ロック・非表示など）を握りつぶさず、対象と理由を返す
+    // アウトライン化は不可逆。失敗（ロック・非表示など）を握りつぶさず、対象と理由を返す。
+    // 変換後のグループは名前も note も引き継がない（実機確認: 変換後に find_objects で
+    // 元の名前を引けない）ため、旧 UUID と新 UUID の対応を返す。これが無いと、
+    // 印刷直前にアウトライン化してから modify_object を呼ぶ流れで UUID が無言で解決不能になる
+    var convertedItems = [];
     function convertFrame(tf) {
       try {
         // createOutline() はロック中でも例外なしで変換してしまう（実機確認）ため、ロックを尊重して除外する
         if (isItemEffectivelyLocked(tf)) throw new Error("locked (unlock the object or its layer first)");
-        tf.createOutline();
+        var oldUuid = null;
+        var oldName = "";
+        try { oldUuid = extractUUIDFromNote(tf.note) || null; } catch (eU) {}
+        try { oldName = tf.name || ""; } catch (eN) {}
+        var outlined = tf.createOutline();
         count++;
+        var newUuid = null;
+        try {
+          if (oldName) { try { outlined.name = oldName; } catch (eSet) {} }
+          newUuid = ensureUUID(outlined);
+        } catch (eNew) {}
+        convertedItems.push({ oldUuid: oldUuid, newUuid: newUuid, name: oldName });
       } catch (convErr) {
         var info = { uuid: null, name: "", layer: "", message: convErr.message };
         try { info.uuid = extractUUIDFromNote(tf.note) || null; } catch (e1) {}
@@ -77,7 +91,12 @@ if (preflight) {
         convertedCount: count,
         failedCount: failed.length,
         failed: failed,
-        verified: { convertedCount: count }
+        converted: convertedItems,
+        verified: { convertedCount: count, withNewUuid: (function () {
+          var n = 0;
+          for (var ci = 0; ci < convertedItems.length; ci++) if (convertedItems[ci].newUuid) n++;
+          return n;
+        })() }
       };
       if (warnings.length > 0) convResult.warnings = warnings;
       writeResultFile(RESULT_PATH, convResult);
@@ -94,7 +113,8 @@ export function register(server: McpServer): void {
     {
       title: 'Convert to Outlines',
       description:
-        'Convert text to outlines (irreversible except via undo). Text frames that cannot be converted (e.g. locked) are left as-is and listed in "failed" with the message; success is false if any failed.',
+        'Convert text to outlines (irreversible except via undo). Text frames that cannot be converted (e.g. locked) are left as-is and listed in "failed" with the message; success is false if any failed. '
+        + 'The outlined group does not inherit the text frame\'s UUID, so converted reports each oldUuid → newUuid pair and the name is carried over — use it to keep working with the artwork after converting.',
       inputSchema: {
         target: z
           .string()

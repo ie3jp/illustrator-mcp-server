@@ -103,21 +103,28 @@ if (preflight) {
             duplicatedItems.push(dup);
           }
 
-          // Move and scale duplicated items
+          // 大きさと位置を同じ倍率で変換する。位置を軸ごとの比率（relX * tgtWidthPt）で
+          // 決めると、大きさは一様倍率なのに間隔だけ伸びてレイアウトが崩れる
+          // （実測: 100x100 → 200x100 の proportional で大きさ 1.00 倍・間隔 2.67 倍）。
+          // 一様倍率で位置も変換し、余った領域は空けたまま中央に寄せる
+          var contentW = srcWidth * scale;
+          var contentH = srcHeight * scale;
+          var offsetX = (tgtWidthPt - contentW) / 2;
+          var offsetY = (tgtHeightPt - contentH) / 2;
           for (var di = 0; di < duplicatedItems.length; di++) {
             var dupItem = duplicatedItems[di];
             var origPos = duplicatedItems[di].position; // [x, y] in doc coords
 
-            // Calculate relative position within source artboard (0-1)
-            var relX = (origPos[0] - srcRect[0]) / srcWidth;
-            var relY = (origPos[1] - srcRect[1]) / srcHeight; // srcRect[1] is top
+            // ソースアートボード左上からの距離を同じ倍率で縮める
+            var relX = (origPos[0] - srcRect[0]) * scale;
+            var relY = (origPos[1] - srcRect[1]) * scale; // srcRect[1] is top
 
             var scalePercent = scale * 100;
             dupItem.resize(scalePercent, scalePercent);
 
-            // Position on target artboard
-            var newX = newRect[0] + relX * tgtWidthPt;
-            var newY = newRect[1] + relY * tgtHeightPt;
+            // Position on target artboard（中央寄せ。Y は上方向が正なので符号が逆）
+            var newX = newRect[0] + offsetX + relX;
+            var newY = newRect[1] - offsetY + relY;
             dupItem.position = [newX, newY];
           }
 
@@ -165,7 +172,10 @@ export function register(server: McpServer): void {
     {
       title: 'Resize for Variation',
       description:
-        'Create size variations from a source artboard. Duplicates all objects and scales/repositions them proportionally to fit target sizes. New artboards are placed to the right of all existing artboards; copies get new UUIDs. Limitations: no text reflow, effects/strokes scale with objects but may need manual adjustment, proportional placement only (not smart layout).',
+        'Create size variations from a source artboard. Duplicates all objects and scales them, and the gaps between them, by the same factor, so the layout keeps its proportions instead of being stretched along one axis. '
+        + 'The scaled artwork is centered on the target artboard, so changing the aspect ratio leaves empty space rather than distorting the composition — move or realign it afterwards if you want it elsewhere. '
+        + 'New artboards are placed to the right of all existing artboards; copies get new UUIDs. '
+        + 'Limitations: no text reflow, effects/strokes scale with objects but may need manual adjustment, no smart layout.',
       inputSchema: {
         source_artboard_index: z
           .number()
