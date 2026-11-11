@@ -19,50 +19,12 @@
   GitHub ハンドルで載せ、該当項目の行末にも「（@handle さんのコントリビューション）」を付ける
   （README に置くと 8 言語の同期コストがかかり、リリースごとの貢献も見えにくいため。2026-09 に撤去）
 
-# ディレクトリ掲載
+# 内部メモ
 
-- 掲載済み: Glama（README にバッジ）、MCP Registry（CI がリリースごとに自動公開）
-- 申請済み・結果待ち（いずれも 2026-09-26）:
-  - Claude Desktop 拡張ディレクトリ（Google フォーム、v1.10.2 の .mcpb を添付）。
-    掲載名を変えたら「既存の拡張の更新: Yes」で出し直す
-  - Claude プラグインディレクトリ（platform.claude.com/plugins/submit）。掲載されると
-    anthropics/claude-plugins-community の marketplace.json に載る。2026-11-11 時点では未掲載
-- `modelcontextprotocol/servers` の README リストはメンテナンス終了、MCP Registry へ移行済み
-
-## Anthropic のディレクトリでの掲載名
-
-- 掲載名は **Design Bridge by IE3**（プラグイン名 `ie3-design-bridge`、マーケットプレイス名 `ie3`、
-  manifest の `display_name`）
-- 理由: プラグインディレクトリは所有していないブランド名（Adobe / Illustrator）を名前に使うことを
-  禁じている。Adobe 公式の「Illustrator MCP」と紛らわしいのも避けたい
-- Illustrator 用であることは説明文の冒頭とキーワード（`adobe-illustrator` 等）で示し、
-  「Not affiliated with Adobe」を添える
-- npm パッケージ名・リポジトリ名 `illustrator-mcp-server` と manifest の内部名は変えない
-  （既存ユーザーの導入が壊れる）
-- 審査はツールの説明文や結果で Claude の振る舞いを指図することを禁じている
-  （「ユーザーに確認せず実行せよ」等を書かない）
-
-# 露出の施策
-
-- **すぐできること**: Smithery / mcp.so などの MCP 系ディレクトリに登録。X で動画デモ
-  （Claude と対話して Illustrator が動く短いもの）。Reddit（r/ClaudeAI、r/AdobeIllustrator、
-  r/graphic_design）に投稿
-- **記事・動画**: Zenn / note / Qiita に日本のデザイナー・DTP 界隈向けの実践記事
-  （例「入稿チェックを AI に任せてみた」）。YouTube やショート動画で「AI で Illustrator を
-  操作してみた」系
-- **中長期**: Adobe Community Forum は Illustrator ユーザーが直接集まる場所で、ターゲットに
-  そのまま届くので優先度が高い。Product Hunt は出しても問題ないが MCP 系の upvote は全体的に
-  低調なので「ついで」の温度感で。デザイン系メディア（CreatorZine 等）への寄稿
-- **データ（2026-03）**: npm 月間 DL 933（3/23 リリース）。紹介するたびにスパイクが出るので、
-  定期的に違う切り口で露出するのが効果的
+掲載・申請状況、掲載名の方針、露出の施策、実績データは `docs/internal.md`（git 管理外）に置いた。
+公開リポジトリに出すものではないため。
 
 # 入稿系ツールの方針（2026-11）
-
-- **差別化は「入稿系を持っていること」ではない。** 他にも入稿系を持つ実装はある。実際の差別化は
-  日本の印刷商習慣（日本式トンボ、表記揺れ検出）と、検査・検証の厚さ（preflight / 分版・
-  オーバープリントの読み取り / `verified` で読み返す設計）
-- 創作系（ブラシ・パターン・遠近・3D・画像トレース・ブレンド・効果・パス編集）は未実装。
-  入れるかは需要を見て判断する
 
 あえて実装していないもの（同じ検討を繰り返さないため）:
 
