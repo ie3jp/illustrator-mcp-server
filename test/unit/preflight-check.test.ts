@@ -24,6 +24,7 @@ function runPreflightJsx(doc: Fake, params: Fake = {}, missingFonts: string[] = 
   var BlendModes = { NORMAL: 0, MULTIPLY: 1 };
   var ImageColorSpace = { RGB: 1, CMYK: 2, Grayscale: 3 };
   var TextType = { POINTTEXT: 1, AREATEXT: 2, PATHTEXT: 3 };
+  var ColorModel = { REGISTRATION: 0, PROCESS: 1, SPOT: 2 };
   var app = {
     version: "30.0",
     documents: { length: 1 },
@@ -292,6 +293,33 @@ function raw(results: PreflightEntry[], extra: Partial<PreflightRawResult> = {})
 }
 const entry = (category: string, level = 'error', uuid: string | null = 'u'): PreflightEntry =>
   ({ level, category, message: 'm', uuid, details: {} });
+
+describe('preflight_check JSX: spot colors', () => {
+  const spot = (name: string, colorType: number) => ({ name, colorType, spotKind: { toString: () => 'SpotColorKind.SPOTCMYK' } });
+  const spotWarnings = (r: Record<string, any>) => r.results.filter((e: any) => e.category === 'spot_color').map((e: any) => e.details.spotName);
+
+  it('reports only real spot colors, not global process swatches or a localized Registration swatch at any index', () => {
+    // Illustrator 29.1 (ru_RU): spots[0] was a global process swatch, Registration came later under a localized name
+    const doc = makeDoc([pathItem()], {
+      spots: [spot('Accent', 1), spot('Ink', 1), spot('[Совмещение]', 0), spot('PANTONE 186 C', 2), spot('Paper', 1)],
+    });
+    const r = runPreflightJsx(doc);
+    expect(spotWarnings(r)).toEqual(['PANTONE 186 C']);
+    expect(r.pdfxSummary.hasSpotColors).toBe(true);
+  });
+
+  it('does not report spot colors when the document only has global process swatches', () => {
+    const doc = makeDoc([pathItem()], { spots: [spot('Paper', 1), spot('[Registration]', 0), spot('Ink', 1)] });
+    const r = runPreflightJsx(doc);
+    expect(spotWarnings(r)).toEqual([]);
+    expect(r.pdfxSummary.hasSpotColors).toBe(false);
+  });
+
+  it('reports a spot color stored at index 0', () => {
+    const doc = makeDoc([pathItem()], { spots: [spot('Gold', 2), spot('[Registration]', 0)] });
+    expect(spotWarnings(runPreflightJsx(doc))).toEqual(['Gold']);
+  });
+});
 
 describe('postProcessPreflightResult', () => {
   it('caps entries per category and summarizes the rest with counts and UUIDs', () => {
