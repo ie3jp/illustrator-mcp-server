@@ -1,3 +1,6 @@
+# 末尾スラッシュだとディレクトリにしか効かず、worktree で張った symlink が
+# git add -A で拾われてコミットされた（実体のディレクトリが symlink に置き換わる事故）
+node_modules
 node_modules/
 dist/
 *.tsbuildinfo
