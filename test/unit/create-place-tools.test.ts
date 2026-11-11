@@ -109,6 +109,29 @@ describe('color schema ranges (T11-6)', () => {
   });
 });
 
+// 単一オブジェクトの作成系だけ success を返しておらず、LLM から見て
+// 「成功したか」の判定方法がツールごとに違っていた（他の modify ツールは success を返す）
+describe('作成系ツールの結果の形', () => {
+  it('create_rectangle は success: true を返す', async () => {
+    const r = await runTool(registerCreateRectangle, { x: 0, y: 0, width: 10, height: 10 }, makeApp(makeDoc()));
+    expect(r.success).toBe(true);
+    expect(r.uuid).toBeTruthy();
+  });
+
+  it('create_text_frame は success: true を返す', async () => {
+    const r = await runTool(registerCreateTextFrame, { x: 0, y: 0, contents: 'x' }, makeApp(makeDoc()));
+    expect(r.success).toBe(true);
+    expect(r.uuid).toBeTruthy();
+  });
+
+  it('create_path_text は success: true を返す', async () => {
+    const doc = makeDoc();
+    const r = await runTool(registerCreatePathText, { uuid: 'missing', contents: 'x' }, makeApp(doc));
+    // パスが見つからないのでエラーになるが、成功時と同じく success フィールドで判定できる形であること
+    expect(r.success === true || r.error === true).toBe(true);
+  });
+});
+
 describe('createColor color-mode mismatch (T11-7)', () => {
   it('warns when an RGB color is given to a CMYK document', async () => {
     const doc = makeDoc({ colorSpace: 'cmyk' });

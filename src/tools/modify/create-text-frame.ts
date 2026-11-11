@@ -110,7 +110,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(tf);
-    var resultData = { uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) };
+    var resultData = { success: true, uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) };
     writeResultFile(RESULT_PATH, appendColorSpaceWarnings(resultData));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create text frame: " + e.message, line: e.line });

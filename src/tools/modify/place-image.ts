@@ -92,6 +92,7 @@ if (preflight) {
       if (heightPt < 0) heightPt = -heightPt;
 
       writeResultFile(RESULT_PATH, {
+        success: true,
         uuid: uuid,
         coordinateSystem: coordSystem,
         type: params.embed ? "embedded" : "linked",
