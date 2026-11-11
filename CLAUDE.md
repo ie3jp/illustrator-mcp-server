@@ -56,6 +56,34 @@
 手順・ウィンドウ配置の座標・自動タイピング・`screencapture` のオプションは
 [demo/README.md](demo/README.md) に分離した（録画するときだけ読む）。
 
+# 入稿系ツールの実装方針（2026-11 調査）
+
+- **差別化は「入稿系を持っていること」ではない。** 他にも入稿系を持つ実装はあるので、
+  その前提で訴求しない。実際の差別化は日本の印刷商習慣（日本式トンボ、表記揺れ検出）と、
+  検査・検証の厚さ（preflight / 分版・オーバープリントの読み取り / `verified` で読み返す設計）
+- 創作系（ブラシ・パターン・遠近・3D・画像トレース・ブレンド・効果・パス編集）は未実装。
+  入れるかは需要を見て判断する
+
+あえて実装していないもの（同じ検討を繰り返さないための記録）:
+
+- **`flatten_transparency`（透明の分割・統合）**: 公式リファレンス全体に `flattenTransparency` が
+  1 件も無く、メニューコマンド経由しかない。ダイアログの設定（ラスタライズ解像度・線や文字の
+  アウトライン化）を制御できず、過去に記録された値のまま実行される。不可逆な処理で
+  設定が意図通りか確認できないため、preflight 寄りの方針と合わない
+- **`print_document`（実印刷）**: `Document.print()` と `PrintOptions` は存在する。ただし物理的に
+  紙が出て取り消せない。入稿データを作るという用途から外れるため当面見送る
+
+実装したもの:
+
+- **`make_trap_stroke`**: Illustrator にトラッピングの API は無い（`trapping` は `PDFSaveOptions` と
+  `InkInfo` のみ）。「塗りと同じ色の線をオーバープリントで引く」という手作業の自動化として実装
+- **`toggle_prepress_view`**: メニューコマンド経由なので前面化が必須。コマンド名は実機確認済み
+  （`ink` / `pagetiling` / `Adobe Separation Preview Panel` / `Adobe Flattening Preview` /
+  `internal palettes posing as plug-in menus-attributes`。2025 / 29.5.0 で全て成功）
+- **`Document.printTiles` は View > プリント分割表示の状態ではない。** read-only で、意味は
+  「タイル出力として印刷するか」。`pagetiling` を実行しても変化しない（実機確認）ので、
+  表示状態の取得には使えない
+
 # ExtendScript / Illustrator 実機で確認した落とし穴（2026-09）
 
 コードコメントにも残してあるが、新しいツールを書くときに踏みやすいものをまとめる。

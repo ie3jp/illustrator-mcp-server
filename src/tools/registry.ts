@@ -48,6 +48,8 @@ import { register as registerManageLayers } from './modify/manage-layers.js';
 import { register as registerPlaceColorChips } from './modify/place-color-chips.js';
 import { register as registerPlaceStyleGuide } from './modify/place-style-guide.js';
 import { register as registerCreateCropMarks } from './modify/create-crop-marks.js';
+import { register as registerMakeTrapStroke } from './modify/make-trap-stroke.js';
+import { register as registerTogglePrepressView } from './modify/toggle-prepress-view.js';
 
 // Phase 5: ドキュメント管理ツール
 import { register as registerCreateDocument } from './modify/create-document.js';
@@ -125,6 +127,8 @@ export function registerAllTools(server: McpServer): void {
   registerPlaceColorChips(server);
   registerPlaceStyleGuide(server);
   registerCreateCropMarks(server);
+  registerMakeTrapStroke(server);
+  registerTogglePrepressView(server);
 
   // Phase 5: ドキュメント管理
   registerCreateDocument(server);

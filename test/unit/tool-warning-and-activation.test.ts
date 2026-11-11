@@ -302,6 +302,8 @@ describe('activation is confined to menu-command tools', () => {
       'modify/modify-object.ts',
       'modify/place-color-chips.ts',
       'modify/place-style-guide.ts',
+      // メニューコマンドを使うため前面でないと失敗する
+      'modify/toggle-prepress-view.ts',
       'tool-executor.ts',
     ]);
   });
@@ -316,7 +318,12 @@ describe('activation is confined to menu-command tools', () => {
       .filter((file) => /Illustrator will be activated/.test(readFileSync(file, 'utf8')))
       .map(toolPath)
       .sort();
-    expect(offenders).toEqual(['export/export-pdf.ts', 'modify/create-crop-marks.ts']);
+    // メニューコマンドを使うツールは、前面化することを従来と同じ文面で説明する
+    expect(offenders).toEqual([
+      'export/export-pdf.ts',
+      'modify/create-crop-marks.ts',
+      'modify/toggle-prepress-view.ts',
+    ]);
   });
 
   // 前面化するツールは、なぜ前面化するのかを説明文に書く（利用者が驚かないため）
