@@ -196,7 +196,9 @@ describe('modify_object fill/stroke on containers', () => {
     );
 
     expect(r.success).toBe(false);
-    expect(r.errors.join(' ')).toMatch(/fill: 1 of 2 objects did not take the requested value/);
+    // 失敗は {property, message} で返る（"fill: ..." の文字列連結ではない）
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed.some((f) => f.property === 'fill' && /1 of 2 objects did not take the requested value/.test(f.message))).toBe(true);
     expect(r.painted.fill.changed).toBe(1);
     expect(r.verified.descendantFills).toHaveLength(2);
   });
@@ -215,7 +217,9 @@ describe('modify_object fill/stroke on containers', () => {
       { findItem: () => makeGroup([locked]) },
     );
     expect(r.success).toBe(false);
-    expect(r.errors[0]).toMatch(/fill: failed on 1 of 1 objects \(e\.g\. Target layer cannot be modified\)/);
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed[0].property).toBe('fill');
+    expect(failed[0].message).toMatch(/failed on 1 of 1 objects \(e\.g\. Target layer cannot be modified\)/);
   });
 
   it('applies stroke recursively to group descendants', async () => {
@@ -241,7 +245,8 @@ describe('modify_object fill/stroke on containers', () => {
       { findItem: () => placed },
     );
     expect(r.success).toBe(false);
-    expect(r.errors[0]).toMatch(/no path or text object to paint/);
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed[0].message).toMatch(/no path or text object to paint/);
     expect((placed as Record<string, unknown>).fillColor).toBeUndefined();
   });
 

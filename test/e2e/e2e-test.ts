@@ -1559,7 +1559,7 @@ async function main(): Promise<void> {
     assert(r1.deletedCount === 1, `should delete 1, got ${r1.deletedCount}`);
     assert(r1.deleted[0].name === '__e2e_delete_plain', 'deleted snapshot should carry name');
     assert(r1.notFound.length === 1 && r1.notFound[0] === 'not-a-real-uuid', 'unknown uuid goes to notFound');
-    assert(r1.errors.length === 1 && r1.errors[0].uuid === b.uuid, 'locked uuid goes to errors');
+    assert(r1.failed.length === 1 && r1.failed[0].uuid === b.uuid, 'locked uuid goes to failed');
 
     const r2 = await callTool(client, 'delete_objects', {
       uuids: [b.uuid],

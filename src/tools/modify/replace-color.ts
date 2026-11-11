@@ -73,7 +73,7 @@ if (preflight) {
     function noteFailure(item, attribute, reason) {
       failedCount++;
       if (failed.length >= MAX_FAILED_LISTED) return;
-      var info = { uuid: null, type: "", name: "", layer: "", attribute: attribute, reason: reason };
+      var info = { uuid: null, type: "", name: "", layer: "", attribute: attribute, message: reason };
       try { info.uuid = extractUUIDFromNote(item.note) || null; } catch(e1) {}
       try { info.type = getItemType(item); } catch(e2) {}
       try { info.name = item.name || ""; } catch(e3) {}
