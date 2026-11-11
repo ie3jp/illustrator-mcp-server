@@ -184,6 +184,20 @@ function parseOsascriptError(stderr: string): string {
   if (stderr.includes('not allowed to send keystrokes') || stderr.includes('not allowed assistive access')) {
     return 'Automation permission denied. Please allow access in System Settings > Privacy & Security > Automation.';
   }
+  // -1712: Illustrator が Apple Event に応答しないまま with timeout を超えた。
+  // -2741: tell ブロックのコンパイル時に用語辞書を引けなかった（Illustrator が応答しないときに出る）。
+  // どちらも「Illustrator が長時間ビジー」の症状で、実測ではフォントが数千ある環境の
+  // 初回テキスト処理（テキストエンジンの初期化）で起きる。
+  if (stderr.includes('-1712')) {
+    return 'Illustrator did not respond before the AppleEvent timeout. It is busy, not crashed: '
+      + 'the first text operation after launch or after being idle can take minutes when many fonts are installed. '
+      + 'Wait for it to settle, or raise ILLUSTRATOR_MCP_TIMEOUT_NORMAL / ILLUSTRATOR_MCP_TIMEOUT_HEAVY (ms), then retry. '
+      + 'Check the document state before retrying so the operation is not applied twice.';
+  }
+  if (stderr.includes('-2741')) {
+    return 'Could not read Illustrator\'s scripting terminology, which means it is busy and not answering. '
+      + 'This happens while Illustrator is still initializing its text engine. Wait for it to settle and retry.';
+  }
   return stderr;
 }
 
@@ -236,7 +250,7 @@ async function executeViaOsascript(
     await writeParams(files.paramsPath, params);
     const fullJsx = await buildJsx(jsxCode, files.paramsPath, files.resultPath);
     await writeJsx(files.scriptPath, fullJsx);
-    await writeAppleScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath() });
+    await writeAppleScript(files.runnerPath, files.scriptPath, { activate, appPath: getAppPath(), timeoutMs: timeout });
 
     const startedAt = Date.now();
     await new Promise<void>((resolve, reject) => {

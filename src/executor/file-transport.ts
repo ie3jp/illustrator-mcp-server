@@ -50,11 +50,25 @@ export async function writeJsx(scriptPath: string, jsxCode: string): Promise<voi
   await fs.writeFile(scriptPath, BOM + jsxCode, 'utf-8');
 }
 
+/**
+ * AppleScript の Apple Event 既定タイムアウトは 120 秒で、超えると
+ * 「AppleEvent timed out (-1712)」になる。tell ブロックを with timeout で
+ * 包まないと ILLUSTRATOR_MCP_TIMEOUT_NORMAL / _HEAVY を 120 秒以上にしても
+ * 効かない（実測: フォント 2000 以上の環境では初回のテキスト生成が 120 秒を超える）。
+ * execFile 側の制限より長く取り、先に execFile のタイムアウトを発火させて
+ * 分かりやすいメッセージを返す。
+ */
+const APPLE_EVENT_TIMEOUT_MARGIN_SEC = 60;
+
+export function appleEventTimeoutSeconds(timeoutMs: number): number {
+  return Math.ceil(timeoutMs / 1000) + APPLE_EVENT_TIMEOUT_MARGIN_SEC;
+}
+
 /** macOS 用 AppleScript 生成 */
 export async function writeAppleScript(
   scptPath: string,
   scriptPath: string,
-  options?: { activate?: boolean; appPath?: string },
+  options?: { activate?: boolean; appPath?: string; timeoutMs?: number },
 ): Promise<void> {
   const escaped = scriptPath.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
   const activateLine = options?.activate ? '\n  activate' : '';
@@ -76,6 +90,15 @@ export async function writeAppleScript(
       `tell application "Adobe Illustrator"${activateLine}`,
       jsxLine,
       'end tell',
+    ].join('\n');
+  }
+
+  const timeoutMs = options?.timeoutMs;
+  if (typeof timeoutMs === 'number' && Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    script = [
+      `with timeout of ${appleEventTimeoutSeconds(timeoutMs)} seconds`,
+      script,
+      'end timeout',
     ].join('\n');
   }
 

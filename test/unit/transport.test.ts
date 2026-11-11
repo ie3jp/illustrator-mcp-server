@@ -5,7 +5,7 @@ import * as path from 'path';
 import { execFile } from 'child_process';
 import type { ExecFileException } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
+import { appleEventTimeoutSeconds, writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
 import { getExecFailureMessage, getAppPath, setAppVersion, getAppVersion, resolveVersionToPath, resolveTransport, resolveTimeout } from '../../src/executor/jsx-runner.js';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
@@ -191,6 +191,47 @@ describe('writeAppleScript', () => {
     await writeAppleScript(scpt, '/tmp/script.jsx', { activate: true });
     const content = await fs.readFile(scpt, 'utf-8');
     expect(content).toContain('activate');
+  });
+
+  // AppleScript の Apple Event 既定タイムアウトは 120 秒で、包まないと
+  // ILLUSTRATOR_MCP_TIMEOUT_* を 120 秒以上にしても -1712 で死ぬ
+  it('timeoutMs を渡すと tell ブロックを with timeout で包む', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx', { timeoutMs: 300_000 });
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).toContain(`with timeout of ${appleEventTimeoutSeconds(300_000)} seconds`);
+    expect(content).toContain('end timeout');
+    // 包んだ後も tell が内側に残っている
+    expect(content.indexOf('with timeout of')).toBeLessThan(content.indexOf('tell application'));
+    expect(content.indexOf('end tell')).toBeLessThan(content.indexOf('end timeout'));
+  });
+
+  it('timeoutMs 未指定なら with timeout を付けない（既定 120 秒のまま）', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx');
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).not.toContain('with timeout');
+  });
+});
+
+// ─── appleEventTimeoutSeconds ────────────────────────────────────────────────
+
+describe('appleEventTimeoutSeconds', () => {
+  // execFile 側のタイムアウトを先に発火させたいので、AppleScript 側は必ず長くする
+  it('execFile のタイムアウトより長い秒数を返す', () => {
+    expect(appleEventTimeoutSeconds(30_000)).toBeGreaterThan(30);
+    expect(appleEventTimeoutSeconds(300_000)).toBeGreaterThan(300);
+  });
+
+  // 包む前は AppleScript の既定 120 秒が上限で、環境変数をそれ以上に上げても -1712 で死んでいた。
+  // 120 秒より長い指定が素通りすることがこの修正の本体。
+  it('120 秒より長い指定がそのまま効く', () => {
+    expect(appleEventTimeoutSeconds(180_000)).toBeGreaterThan(120);
+    expect(appleEventTimeoutSeconds(600_000)).toBeGreaterThan(600);
+  });
+
+  it('ミリ秒を秒に切り上げる', () => {
+    expect(appleEventTimeoutSeconds(1_500)).toBe(2 + 60);
   });
 });
 
