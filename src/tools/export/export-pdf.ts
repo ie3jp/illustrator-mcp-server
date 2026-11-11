@@ -1,4 +1,5 @@
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { PDFDocument } from 'pdf-lib';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsxHeavy } from '../../executor/jsx-runner.js';
@@ -6,6 +7,46 @@ import { formatToolResult } from '../tool-executor.js';
 import { DESTRUCTIVE_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 import { CROP_MARKS_JSX } from '../crop-marks-shared.js';
 import { checkAbsoluteOutputPath, normalizeOutputExtension, resolveOutputPath } from '../../utils/output-path.js';
+
+/** 2 つの box の差がこの値（pt）未満なら同じとみなす */
+const BOX_EPSILON = 0.01;
+
+/**
+ * 書き出した PDF の TrimBox / BleedBox を整える。
+ * - "artboard": アートボードを塗り足し分拡張して書き出したので、各ページの MediaBox から bleedPt 内側を TrimBox、
+ *   MediaBox 全体を BleedBox にする
+ * - "pdf_options": bleedOffsetRect に任せたので、実際に塗り足しが付いたかを検証するだけ
+ * 戻り値は結果に追加するフィールド（警告など）
+ */
+export async function fixPdfBleedBoxes(
+  pdfPath: string,
+  method: 'artboard' | 'pdf_options',
+  bleedPt: number,
+): Promise<Record<string, unknown>> {
+  const pdf = await PDFDocument.load(readFileSync(pdfPath), { updateMetadata: false });
+  const pages = pdf.getPages();
+  if (method === 'pdf_options') {
+    const missing = pages.filter((p) => {
+      const t = p.getTrimBox();
+      const b = p.getBleedBox();
+      return b.width - t.width < BOX_EPSILON && b.height - t.height < BOX_EPSILON;
+    }).length;
+    if (missing === 0) return {};
+    return {
+      bleed_warning:
+        `Bleed was requested but ${missing} of ${pages.length} page(s) have no bleed (BleedBox = TrimBox). ` +
+        'Illustrator ignores the scripted bleed setting together with printer marks on some versions. ' +
+        'Export without marks (bleed is then added by enlarging the artboards), or use a preset that includes bleed.',
+    };
+  }
+  for (const page of pages) {
+    const m = page.getMediaBox();
+    page.setBleedBox(m.x, m.y, m.width, m.height);
+    page.setTrimBox(m.x + bleedPt, m.y + bleedPt, m.width - 2 * bleedPt, m.height - 2 * bleedPt);
+  }
+  writeFileSync(pdfPath, await pdf.save({ updateFieldAppearances: false }));
+  return {};
+}
 
 function requiresMenuCommandActivation(params: {
   options?: { marks_style?: string; trim_marks?: boolean };
@@ -31,6 +72,8 @@ if (preflight) {
   var trimMarkGroups = [];
   var expandedAbIdx = -1;
   var origAbRect = null;
+  // bleed 用に拡張した全アートボードの元の矩形（finally で復元）
+  var bleedOrigRects = [];
   try {
     var params = readParamsFile(PARAMS_PATH);
     doc = app.activeDocument;
@@ -164,12 +207,13 @@ if (preflight) {
       }
 
       // 日本式トンボ（PDFSaveOptions フォールバック時）の必須設定を自動適用
+      // 塗り足し量（pt）。bleed_mm 未指定時は 3mm
+      var bleedPt = (typeof options.bleed_mm === "number") ? (options.bleed_mm * 72 / 25.4) : 8.504;
       if (wantsJapaneseDocMarks && !usedDocumentMarks) {
         if (typeof options.registration_marks === "undefined") {
           pdfOpts.registrationMarks = true;
         }
         if (options.bleed !== true) {
-          var bleedPt = 8.504; // 3mm
           pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
         }
       }
@@ -204,9 +248,31 @@ if (preflight) {
       }
 
       // Bleed — ドキュメントマーク時はアートボード拡張済みなので bleed 不要
+      // Illustrator 29.x では PDFSaveOptions.bleedOffsetRect が多くの場合無視される（プリセットなし・
+      // デフォルトプリセット・トンボ ON で塗り足しなし。効くプリセットでも整数 pt に丸められる。実機確認）。
+      // PDF のマークが無いときは全アートボードを塗り足し分だけ一時拡張して書き出し、
+      // TrimBox / BleedBox は Node 側で設定する（bleed_method: "artboard"）。
+      // マークありだとマークが拡張後の縁に付いてしまうため、従来どおり bleedOffsetRect を使い Node 側で結果を検証する
+      var bleedMethod = null;
       if (options.bleed === true && !usedDocumentMarks) {
-        var bleedPt = 8.504; // 3mm
-        pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
+        var pdfHasMarks = false;
+        try {
+          pdfHasMarks = (pdfOpts.trimMarks === true || pdfOpts.registrationMarks === true ||
+            pdfOpts.colorBars === true || pdfOpts.pageInformation === true);
+        } catch (marksErr) { pdfHasMarks = false; }
+        if (pdfHasMarks) {
+          pdfOpts.bleedOffsetRect = [bleedPt, bleedPt, bleedPt, bleedPt];
+          bleedMethod = "pdf_options";
+        } else {
+          // プリセット側の塗り足しと二重にならないようにする
+          pdfOpts.bleedOffsetRect = [0, 0, 0, 0];
+          for (var bi = 0; bi < doc.artboards.length; bi++) {
+            var bRect = doc.artboards[bi].artboardRect.slice();
+            bleedOrigRects.push(bRect);
+            doc.artboards[bi].artboardRect = [bRect[0] - bleedPt, bRect[1] + bleedPt, bRect[2] + bleedPt, bRect[3] - bleedPt];
+          }
+          bleedMethod = "artboard";
+        }
       }
 
       // Downsample images
@@ -271,6 +337,10 @@ if (preflight) {
           writeResultFile(RESULT_PATH, { error: true, message: "PDF export completed but output file was not created. The path may not be writable: " + outputPath });
         } else {
           var result = { success: true, output_path: outputPath };
+          if (bleedMethod) {
+            result.bleed_method = bleedMethod;
+            result.bleed_pt = bleedPt;
+          }
           if (usedDocumentMarks) {
             result.japanese_marks_method = "document_trimmark";
             result.japanese_marks_note = "Japanese crop marks were generated as document paths via TrimMark command for reliable rendering, then removed after export.";
@@ -287,6 +357,9 @@ if (preflight) {
   } finally {
     // ドキュメントを元の状態に復元（生成したトンボだけを削除し、アートボード・環境設定・選択を戻す）
     cropMarksRemove(trimMarkGroups);
+    for (var rb = 0; rb < bleedOrigRects.length; rb++) {
+      try { doc.artboards[rb].artboardRect = bleedOrigRects[rb]; } catch (restoreErr) {}
+    }
     if (origAbRect && expandedAbIdx >= 0) {
       try { doc.artboards[expandedAbIdx].artboardRect = origAbRect; } catch (restoreErr) {}
     }
@@ -322,7 +395,8 @@ export function register(server: McpServer): void {
             registration_marks: coerceBoolean.optional().describe('Registration marks'),
             color_bars: coerceBoolean.optional().describe('Color bars'),
             page_information: coerceBoolean.optional().describe('Page information'),
-            bleed: coerceBoolean.optional().describe('Include bleed (3mm)'),
+            bleed: coerceBoolean.optional().describe('Include bleed (default 3mm, see bleed_mm). Pages get TrimBox = artboard and BleedBox = MediaBox.'),
+            bleed_mm: z.number().min(0).max(25.4).optional().describe('Bleed amount in mm when bleed is true (default 3; US printers usually want 3.175 = 0.125in)'),
             downsample: coerceBoolean.optional().describe('Downsample all images (shorthand: color 300dpi, grayscale 300dpi, monochrome 1200dpi)'),
             color_downsample_dpi: z.number().int().min(72).optional().describe('Color image downsample target DPI (overrides downsample)'),
             grayscale_downsample_dpi: z.number().int().min(72).optional().describe('Grayscale image downsample target DPI (overrides downsample)'),
@@ -357,8 +431,21 @@ export function register(server: McpServer): void {
       const result = await executeJsxHeavy(CROP_MARKS_JSX + jsxCode, resolvedParams, {
         activate: requiresMenuCommandActivation(params),
       });
+      const r = result as Record<string, unknown>;
+      let bleedExtra: Record<string, unknown> = {};
+      if (r && r.success === true && (r.bleed_method === 'artboard' || r.bleed_method === 'pdf_options')) {
+        try {
+          bleedExtra = await fixPdfBleedBoxes(String(r.output_path), r.bleed_method, Number(r.bleed_pt));
+        } catch (e) {
+          bleedExtra = {
+            bleed_warning: `PDF was exported with bleed, but its TrimBox/BleedBox could not be set: ${(e as Error).message}. ` +
+              'The page includes the bleed area; set the trim size in your print workflow.',
+          };
+        }
+      }
       const output = {
         ...result,
+        ...bleedExtra,
         _note: 'PDF exported. This file should be verified by a human before final print submission — automated checks cannot catch all print-critical issues.',
       };
       return formatToolResult(output);
