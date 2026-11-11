@@ -112,6 +112,12 @@ function runJsx(code: string, params: Record<string, unknown>, globals: Globals)
     ...commonLayerHelpers,
     ...globals,
   };
+  // 実機の verifyItemDefault は verifyItem に委譲する（座標系を取らないツール用）。
+  // 差し替えられた verifyItem を使うよう、マージ後に定義する
+  if (!base['verifyItemDefault']) {
+    const effectiveVerifyItem = base['verifyItem'] as (item: unknown) => Record<string, unknown>;
+    base['verifyItemDefault'] = (item: unknown) => effectiveVerifyItem(item);
+  }
   const names = Object.keys(base);
   // eslint-disable-next-line no-new-func -- test-only: executing embedded ES3 JSX against fakes
   const fn = new Function(...names, code); // NOSONAR
@@ -199,7 +205,7 @@ describe('convert_to_outlines: 失敗を隠さない', () => {
     expect(result.convertedCount).toBe(1);
     expect(result.failedCount).toBe(1);
     expect(result.failed).toEqual([
-      { uuid: UUID_B, name: 'locked text', layer: 'Layer 1', reason: 'Target layer cannot be modified' },
+      { uuid: UUID_B, name: 'locked text', layer: 'Layer 1', message: 'Target layer cannot be modified' },
     ]);
   });
 
@@ -315,7 +321,7 @@ describe('複数 UUID 操作の欠落報告', () => {
     expect(result.success).toBe(false);
     expect(result.movedCount).toBe(1);
     expect(result.notFound).toEqual([UUID_MISSING]);
-    expect(result.errors).toEqual([{ uuid: UUID_B, message: 'locked' }]);
+    expect(result.failed).toEqual([{ uuid: UUID_B, message: 'locked' }]);
     expect(result.verified).toEqual([{ uuid: UUID_A }]);
     expect(result.warnings).toBeUndefined();
   });

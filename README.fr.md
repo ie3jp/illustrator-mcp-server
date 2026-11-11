@@ -137,7 +137,7 @@ Le serveur est ajouté à `~/.codex/config.toml`. Si le délai d’attente est d
 > **macOS :** au premier lancement, autorisez l'accès à l'automatisation dans Réglages Système > Confidentialité et sécurité > Automatisation.
 
 > [!NOTE]
-> La plupart des outils de modification mettent Illustrator au premier plan pendant leur exécution. Les outils de lecture et `export` s'exécutent sans changer d'application ; `export_pdf` ne met Illustrator au premier plan que pour tracer des traits de coupe japonais.
+> La plupart des outils s'exécutent sans changer d'application : vous pouvez continuer à travailler pendant qu'Illustrator est piloté en arrière-plan. Les outils qui écrivent du texte (`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `modify_object` avec `contents`, `manage_datasets` avec `import_csv` / `apply_dataset`) mettent en revanche Illustrator au premier plan : créer ou modifier du texte en arrière-plan a été mesuré comme bloquant environ quatre minutes par appel. `create_crop_marks` et `export_pdf` avec des traits de coupe japonais nécessitent aussi le premier plan, car ils exécutent une commande de menu.
 
 > [!NOTE]
 > **Vos fichiers sont protégés par défaut.** `close_document` n'abandonne pas les modifications non enregistrées sauf si vous le demandez explicitement (`save: false`), et `export`, `export_pdf`, `save_document` (enregistrer sous) et `extract_design_tokens` ne remplacent pas un fichier existant sans `overwrite: true`. Si c'est bien ce que vous voulez, demandez simplement à Claude de « fermer sans enregistrer » ou d'« écraser le fichier ».
@@ -371,7 +371,7 @@ Des modèles de workflow prédéfinis sont disponibles dans le sélecteur de pro
 
 </details>
 
-### Outils de modification (39)
+### Outils de modification (41)
 
 <details>
 <summary>Cliquez pour déployer</summary>
@@ -416,6 +416,8 @@ Des modèles de workflow prédéfinis sont disponibles dans le sélecteur de pro
 | `select_objects` | Sélectionne des objets par UUID (sélection multiple prise en charge) |
 | `create_crop_marks` | Crée des traits de coupe (repères de rognage) avec détection automatique du style selon la locale (double filet japonais / filet simple occidental) |
 | `place_style_guide` | Place un guide de style visuel hors du plan de travail sur un calque non imprimable (couleurs, polices, espacements, marges, interstices des repères). Les annotations de mesure sur le plan de travail lui-même sont optionnelles (`annotate_artboard`) |
+| `make_trap_stroke` | Ajoute un grossi aux tracés avec fond : un contour de la couleur du fond, en surimpression, pour qu'un défaut de repérage sur presse ne laisse pas de filet blanc. Seuls les fonds en ton direct sont traités ; dégradés, motifs et objets verrouillés sont signalés dans `skipped` |
+| `toggle_prepress_view` | Bascule une vue ou un panneau de prépresse pour un contrôle visuel : aperçu de la surimpression, mosaïque d'impression, aperçu des séparations, aperçu de l'aplatissement, panneau Attributs |
 | `undo` | Opérations d'annulation/rétablissement (multi-étapes) |
 
 </details>

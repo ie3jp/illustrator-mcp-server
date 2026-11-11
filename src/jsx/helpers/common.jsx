@@ -377,7 +377,9 @@ function getBoundsWebCoord(item, artboardRect) {
       x: b[0] - abLeft,
       y: -(b[1] - abTop),  // Y 反転
       width: b[2] - b[0],
-      height: b[1] - b[3]  // top - bottom (Illustrator座標では top > bottom)
+      height: b[1] - b[3],  // top - bottom (Illustrator座標では top > bottom)
+      // false のときだけ付けると「付いていない＝相対である」と読ませることになるので常に出す
+      artboardRelative: true
     };
   }
   // アートボードなし: ドキュメント座標の Y だけ反転。どのアートボードにも属さないアイテムは
@@ -887,23 +889,27 @@ function collectTopLevelPageItems(doc) {
   return list;
 }
 
-// 間隔の集計用に、同じ親を持つ兄弟ごとの PageItem を集める。戻り値は { item, scope } の配列で、
-// scope が同じもの（同じレイヤー直下、または同じグループの直下）どうしだけを比べる。
-// グループは自分の親の scope に入り、その子は新しい scope に入る（親と子の bounds を比べない）。
-// 複合パスは 1 つの図形として扱い内部へ降りない。limit 件で打ち切る
-function collectSpacingItems(doc, limit) {
+// 間隔の集計用に PageItem を集める。戻り値は { item, scope } の配列で、scope が同じものどうしだけを比べる。
+// トップレベル（親が Layer）のアイテムは、レイヤーが違っても同じ scope にする。レイヤーごとに
+// 分けると「文字」「図形」「背景」のようにレイヤーを分けた文書で間隔が一切取れなくなるため
+// （#52 の修正で一度そうなった）。グループの子だけを別 scope にすることで、
+// 「親と子の bounds を混ぜない」という #52 の目的は保つ。
+// 複合パスは 1 つの図形として扱い内部へ降りない。limit 件で打ち切る。
+// skipLayerNames（レイヤー名 -> true のオブジェクト）に載っているレイヤーのアイテムは
+// 収集前に除外する。呼び出し側で後から捨てると、注釈レイヤーが limit を食い潰して
+// 後方のデザイン要素が一件も比較されない文書が出る（スタイルガイド自身の生成物で起きる）
+function collectSpacingItems(doc, limit, skipLayerNames) {
   var out = [];
-  var scopes = [];
-  function scopeOf(container) {
-    for (var s = 0; s < scopes.length; s++) {
-      if (scopes[s] == container) return s;
-    }
-    scopes.push(container);
-    return scopes.length - 1;
+  var TOP_SCOPE = 0;
+  var scopes = [null];
+  function isSkipped(item) {
+    if (!skipLayerNames) return false;
+    try { return skipLayerNames[item.layer.name] === true; } catch (eL) { return false; }
   }
   function visit(item, scope) {
     if (out.length >= limit) return;
-    out.push({ item: item, scope: scope });
+    // 除外対象は out に積まない（limit を消費させない）。ただしグループの子は見に行く
+    if (!isSkipped(item)) out.push({ item: item, scope: scope });
     var tn = "";
     try { tn = item.typename; } catch(e) {}
     if (tn !== "GroupItem") return;
@@ -917,9 +923,7 @@ function collectSpacingItems(doc, limit) {
   }
   var top = collectTopLevelPageItems(doc);
   for (var i = 0; i < top.length && out.length < limit; i++) {
-    var parent = null;
-    try { parent = top[i].parent; } catch(e) {}
-    visit(top[i], scopeOf(parent));
+    visit(top[i], TOP_SCOPE);
   }
   return out;
 }
@@ -1148,12 +1152,43 @@ function verifyItem(item, coordSystem, artboardRect) {
   return snap;
 }
 
-// アートボード上（中心座標で判定）の名前付きアイテム一覧。アートボード操作・バッチ操作の検証用
+// coordinate_system を引数に取らないツール用の verifyItem。
+// 座標系を渡さないと getBounds がドキュメント座標の Y 反転で返り、artboardRelative: false と
+// 「オブジェクトの中心がどのアートボードにも載っていない」という事実と違う注記が付き、
+// さらに artboardRect が無いためアートボード外のはみ出し警告も出なくなる。
+// スキーマの既定と同じ artboard-web で、アクティブアートボード基準に揃える
+function verifyItemDefault(item) {
+  // アイテムが載っているアートボードで検証する。アクティブアートボードで比べると、
+  // 別のアートボード上にある正常なオブジェクトを「どのアートボードにも載っていない」と
+  // 誤報する（AB0 がアクティブなまま AB1 のオブジェクトを動かした場合など）
+  var abRect = null;
+  try {
+    var abIdx = getArtboardIndexForItem(item);
+    if (abIdx >= 0) abRect = getArtboardRectByIndex(abIdx);
+  } catch (eIdx) {}
+  // どのアートボードにも載っていない場合はアクティブアートボード基準で報告する
+  // （「アートボードの外」という警告はこのときだけ正しい）
+  if (!abRect) {
+    try { abRect = getActiveArtboardRect(); } catch (eAb) {}
+  }
+  // アートボードが取れない文書では従来どおりドキュメント座標で返す（検証自体を壊さない）
+  if (!abRect) return verifyItem(item);
+  return verifyItem(item, "artboard-web", abRect);
+}
+
+// アートボード上（中心座標で判定）の名前付きアイテム一覧。アートボード操作・バッチ操作の検証用。
+// doc.pageItems は再帰的に子孫を含む（#52）ため、グループとその子の両方が並ぶ。
+// 子も検証には要る（CSV 差し込みでテキストの中身を確かめるのはこれ）ので列挙は維持し、
+// itemCount は「名前付きで、かつ親が Layer のアイテム」だけを数える。入れ子のものには
+// nested: true を付け、グループと子を合算した数を独立オブジェクト数と誤読させない。
+// 名前のないアイテムは従来どおり列挙も計数もしない（無名グループの中の名前付きテキストだけが
+// ある場合は itemCount 0 / nestedCount 1 になる）ので、総オブジェクト数ではない
 function verifyArtboardContents(artboardIndex) {
   var doc = app.activeDocument;
   var ab = doc.artboards[artboardIndex];
   var abRect = ab.artboardRect;
   var items = [];
+  var topLevelCount = 0;
 
   for (var i = 0; i < doc.pageItems.length; i++) {
     var item = doc.pageItems[i];
@@ -1163,6 +1198,10 @@ function verifyArtboardContents(artboardIndex) {
     if (cx >= abRect[0] && cx <= abRect[2] && cy <= abRect[1] && cy >= abRect[3]) {
       if (item.name && item.name !== "") {
         var entry = { name: item.name, type: getItemType(item) };
+        var isTopLevel = false;
+        try { isTopLevel = (item.parent && item.parent.typename === "Layer"); } catch(eP) {}
+        if (isTopLevel) topLevelCount++;
+        else entry.nested = true;
         if (item.typename === "TextFrame") {
           entry.contents = item.contents;
         }
@@ -1171,5 +1210,11 @@ function verifyArtboardContents(artboardIndex) {
     }
   }
 
-  return { artboard: ab.name, index: artboardIndex, itemCount: items.length, items: items };
+  return {
+    artboard: ab.name,
+    index: artboardIndex,
+    itemCount: topLevelCount,
+    nestedCount: items.length - topLevelCount,
+    items: items
+  };
 }

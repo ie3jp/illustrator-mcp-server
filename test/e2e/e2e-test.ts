@@ -77,6 +77,21 @@ async function main(): Promise<void> {
     assert(result.colorMode === 'RGB', `colorMode should be RGB, got ${result.colorMode}`);
   });
 
+  // Illustrator は最初のテキスト操作でテキストエンジンを初期化する。フォントが数千ある環境では
+  // これに数分かかる（実機で 480 秒を計測）。どのテストが最初にテキストに触ったかで結果が変わるのを
+  // 避けるため、捨てる 1 個で先にコストを払っておく
+  await test('warm up the text engine (first text frame can take minutes with many fonts)', async () => {
+    const created = await callTool(client, 'create_text_frame', {
+      x: 10,
+      y: 10,
+      contents: 'warmup',
+      name: '__e2e_warmup',
+    }) as any;
+    assert(created.success === true, 'warmup text frame should be created');
+    const removed = await callTool(client, 'delete_objects', { uuids: [created.uuid] }) as any;
+    assert(removed.success === true, 'warmup text frame should be deleted');
+  });
+
   // ── デザインパレット ──
   // Primary: Coral Red #FF6B6B — rect fill (must stay rgb 255,0,0 for replace_color test)
   // Secondary: Soft Teal #4ECDC4 — ellipse
@@ -1544,7 +1559,7 @@ async function main(): Promise<void> {
     assert(r1.deletedCount === 1, `should delete 1, got ${r1.deletedCount}`);
     assert(r1.deleted[0].name === '__e2e_delete_plain', 'deleted snapshot should carry name');
     assert(r1.notFound.length === 1 && r1.notFound[0] === 'not-a-real-uuid', 'unknown uuid goes to notFound');
-    assert(r1.errors.length === 1 && r1.errors[0].uuid === b.uuid, 'locked uuid goes to errors');
+    assert(r1.failed.length === 1 && r1.failed[0].uuid === b.uuid, 'locked uuid goes to failed');
 
     const r2 = await callTool(client, 'delete_objects', {
       uuids: [b.uuid],

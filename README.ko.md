@@ -137,7 +137,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS:** 처음 실행 시, 시스템 설정 > 개인정보 보호 및 보안 > 자동화에서 자동화 접근 권한을 허용하세요.
 
 > [!NOTE]
-> 대부분의 수정 도구는 실행 중에 Illustrator를 전면으로 가져옵니다. 읽기 도구와 `export`는 앱을 전환하지 않고 실행되며, `export_pdf`는 일본식 재단선을 그릴 때만 Illustrator를 전면으로 가져옵니다.
+> 대부분의 도구는 앱을 전환하지 않고 실행되므로, Illustrator가 백그라운드에서 동작하는 동안 다른 작업을 계속할 수 있습니다. 다만 텍스트를 쓰는 도구(`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `contents`를 지정한 `modify_object`, `import_csv` / `apply_dataset`의 `manage_datasets`)는 Illustrator를 전면으로 가져옵니다. 백그라운드 상태에서 텍스트를 만들거나 바꾸면 호출마다 약 4분 동안 멈추는 것이 실측되었기 때문입니다. `create_crop_marks`와 일본식 재단선을 그리는 `export_pdf`도 메뉴 명령을 실행하므로 전면이 필요합니다.
 
 > [!NOTE]
 > **파일은 기본적으로 보호됩니다.** `close_document`는 명시적으로 지정하지 않는 한(`save: false`) 저장하지 않은 변경 사항을 버리지 않으며, `export`, `export_pdf`, `save_document`(다른 이름으로 저장), `extract_design_tokens`는 `overwrite: true`를 지정하지 않는 한 기존 파일을 덮어쓰지 않습니다. 그렇게 하고 싶다면 Claude에게 "저장하지 않고 닫아줘" 또는 "파일을 덮어써줘"라고 말하면 됩니다.
@@ -371,7 +371,7 @@ Claude Desktop의 프롬프트 피커에서 사용할 수 있는 사전 구축�
 
 </details>
 
-### 수정 도구 (39)
+### 수정 도구 (41)
 
 <details>
 <summary>클릭하여 펼치기</summary>
@@ -416,6 +416,8 @@ Claude Desktop의 프롬프트 피커에서 사용할 수 있는 사전 구축�
 | `select_objects` | UUID로 객체 선택 (다중 선택 지원) |
 | `create_crop_marks` | 로케일 기반 스타일 자동 감지로 재단선(크롭 마크) 생성 (일본식 더블 라인 / 서양식 싱글 라인) |
 | `place_style_guide` | 비주얼 스타일 가이드를 아트보드 외부의 인쇄되지 않는 레이어에 배치 (컬러, 폰트, 간격, 여백, 가이드 간격). 아트보드 위 측정 표시는 `annotate_artboard` 지정 시에만 |
+| `make_trap_stroke` | 칠한 패스에 트랩을 추가: 칠과 같은 색의 선을 중복 인쇄로 설정해, 인쇄 시 핀이 맞지 않아도 흰 틈이 생기지 않게 합니다. 단색 칠만 대상이며 그라디언트·패턴·잠긴 개체는 `skipped`에 이유와 함께 보고합니다 |
+| `toggle_prepress_view` | 사람이 눈으로 확인하기 위한 출력 전 보기·패널 전환: 중복 인쇄 미리보기, 프린트 타일링, 분판 미리보기, 병합 미리보기, 특성 패널 |
 | `undo` | 실행 취소/재실행 (여러 단계) |
 
 </details>

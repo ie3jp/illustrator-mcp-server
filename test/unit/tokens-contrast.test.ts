@@ -136,6 +136,21 @@ describe('check_contrast', () => {
     vi.clearAllMocks();
   });
 
+  // 合否を丸めた比率で判定すると、真の比率 4.4996 が 4.50 になって AA 合格になる。
+  // 表示は 4.5 に丸めつつ、判定は丸める前の値で行う
+  it('表示用に丸めた比率ではなく、丸める前の値で合否を判定する', async () => {
+    const res = parse(await contrast({
+      color1: { type: 'rgb', r: 87, g: 87, b: 87 },
+      color2: { type: 'rgb', r: 204, g: 204, b: 204 },
+    }));
+    // 真の比率は 4.499613…（4.5 未満）
+    expect(res.contrastRatio).toBe(4.5);
+    expect(res.approximate).toBe(false);
+    expect(res.wcagAA_normal).toBe(false);
+    expect(res.wcagAA_large).toBe(true);
+    expect(res.wcagAAA).toBe(false);
+  });
+
   it('CMYK を含む比較は近似扱いにして AA/AAA を断定しない', async () => {
     const res = parse(await contrast({
       color1: { type: 'cmyk', c: 0, m: 0, y: 0, k: 100 },

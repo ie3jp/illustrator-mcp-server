@@ -1,5 +1,8 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { dirname, join, relative, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 vi.mock('../../src/executor/jsx-runner.js', () => ({
   executeJsx: vi.fn(),
@@ -29,6 +32,16 @@ import { register as registerExport } from '../../src/tools/export/export.js';
 import { register as registerCheckContrast } from '../../src/tools/read/check-contrast.js';
 import { register as registerExtractDesignTokens } from '../../src/tools/read/extract-design-tokens.js';
 import { register as registerCheckTextConsistency } from '../../src/tools/utility/check-text-consistency.js';
+import { register as registerCreateRectangle } from '../../src/tools/modify/create-rectangle.js';
+import { register as registerCreateTextFrame } from '../../src/tools/modify/create-text-frame.js';
+import { register as registerModifyObject } from '../../src/tools/modify/modify-object.js';
+import { register as registerCreateDocument } from '../../src/tools/modify/create-document.js';
+import { register as registerPlaceImage } from '../../src/tools/modify/place-image.js';
+import { register as registerCreateCropMarks } from '../../src/tools/modify/create-crop-marks.js';
+import { register as registerCreatePathText } from '../../src/tools/modify/create-path-text.js';
+import { register as registerPlaceColorChips } from '../../src/tools/modify/place-color-chips.js';
+import { register as registerPlaceStyleGuide } from '../../src/tools/modify/place-style-guide.js';
+import { register as registerManageDatasets } from '../../src/tools/modify/manage-datasets.js';
 
 type ToolResponse = { content: Array<{ type: string; text?: string }> };
 type ToolHandler = (params: Record<string, unknown>) => Promise<ToolResponse>;
@@ -170,5 +183,154 @@ describe('export tool activation', () => {
       params,
       { activate },
     );
+  });
+});
+
+describe('DOM tool activation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockExecuteJsx.mockResolvedValue({ success: true });
+    mockExecuteJsxHeavy.mockResolvedValue({ success: true });
+  });
+
+  // 背面でも 0.3〜4 秒で終わるツールは前面化しない（実測）
+  it.each([
+    [registerCreateRectangle, { x: 10, y: 20, width: 30, height: 40 }],
+    [registerCreateDocument, {}],
+    [registerPlaceImage, { file_path: '/tmp/test.png' }],
+  ])('DOM handler %s does not request activation', async (register, params) => {
+    await captureToolHandler(register)(params);
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]?.activate ?? false).toBe(false);
+  });
+
+  // テキスト作成は背面だと 1 API あたり 240 秒待たされる（実測 2026-11:
+  // 背面 480014 / 480040 / 480009 ms、前面 0〜2 ms）。前面化は速度のために必要
+  it('create_text_frame は前面化を要求する（背面だと 480 秒かかる）', async () => {
+    await captureToolHandler(registerCreateTextFrame)({ x: 10, y: 20, contents: 'Test' });
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]?.activate).toBe(true);
+  });
+
+  // modify_object は contents を書くときだけ前面化する（位置や色の変更では奪わない）
+  it('modify_object は contents 指定時だけ前面化する', async () => {
+    const handler = captureToolHandler(registerModifyObject);
+    await handler({ uuid: 'test', properties: { position: { x: 10, y: 20 } } });
+    let calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls[0][2]?.activate).toBe(false);
+
+    vi.clearAllMocks();
+    mockExecuteJsx.mockResolvedValue({ success: true });
+    mockExecuteJsxHeavy.mockResolvedValue({ success: true });
+    await handler({ uuid: 'test', properties: { contents: 'new text' } });
+    calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls[0][2]?.activate).toBe(true);
+  });
+
+  // allowlist（単語の有無）では activate: false への書き換えを検出できない。
+  // 前面化が必要なツールは、ハンドラが実際に activate: true を渡すことを 1 本ずつ検証する
+  it.each([
+    ['create_text_frame', registerCreateTextFrame, { x: 10, y: 20, contents: 'T' }],
+    ['create_path_text', registerCreatePathText, { uuid: 'u', contents: 'T' }],
+    ['place_color_chips', registerPlaceColorChips, {}],
+    ['place_style_guide', registerPlaceStyleGuide, {}],
+  ])('%s は前面化を要求する（背面だとテキスト API が 240 秒待つ）', async (_name, register, params) => {
+    await captureToolHandler(register)(params as Record<string, unknown>);
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]?.activate).toBe(true);
+  });
+
+  // 条件付きのものは、対象 action と非対象 action の両方を押さえる
+  it.each([
+    ['import_csv', true],
+    ['apply_dataset', true],
+    ['list_variables', false],
+    ['export', false],
+  ])('manage_datasets は action=%s のとき activate=%s', async (action, expected) => {
+    await captureToolHandler(registerManageDatasets)({ action, file_path: '/tmp/x.csv', dataset_name: 'd' });
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls[0][2]?.activate ?? false).toBe(expected);
+  });
+
+  it('crop marks still request activation', async () => {
+    await captureToolHandler(registerCreateCropMarks)({ style: 'japanese' });
+    expect(mockExecuteJsx).toHaveBeenCalledWith(expect.any(String), expect.any(Object), {
+      activate: true,
+    });
+  });
+});
+
+/**
+ * activate: true は executeMenuCommand を使うツールだけが指定する（前面でないと失敗するため）。
+ * 上のハンドラテストは代表例しか押さえられないので、src/tools 全体を走査して
+ * 前面化の再混入を検出する。
+ */
+describe('activation is confined to menu-command tools', () => {
+  const SRC_TOOLS_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../src/tools');
+
+  function collectTsFiles(dir: string): string[] {
+    return readdirSync(dir).flatMap((entry) => {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) return collectTsFiles(full);
+      return entry.endsWith('.ts') ? [full] : [];
+    });
+  }
+
+  /** Windows の path.relative は \\ 区切りを返すので、比較できるよう / に正規化する */
+  function toolPath(file: string): string {
+    return relative(SRC_TOOLS_DIR, file).split(sep).join('/');
+  }
+
+  // activate: true のリテラルだけを見ると activate: cond や { ...opts, activate } をすり抜ける。
+  // 「activate という語が出るファイル」の allowlist にして、式・変数・短縮形も拾う
+  it('only the menu-command tools mention activate at all', () => {
+    const offenders = collectTsFiles(SRC_TOOLS_DIR)
+      .filter((file) => /\bactivate\b/.test(readFileSync(file, 'utf8')))
+      .map(toolPath)
+      .sort();
+    // 前面化するのは (1) executeMenuCommand を使うツール (2) テキストフレームを作る、
+    // または contents を代入するツール。後者は背面だと 1 API あたり 240 秒待たされる（実測）
+    expect(offenders).toEqual([
+      'export/export-pdf.ts',
+      'modify/create-crop-marks.ts',
+      'modify/create-path-text.ts',
+      'modify/create-text-frame.ts',
+      'modify/manage-datasets.ts',
+      'modify/modify-object.ts',
+      'modify/place-color-chips.ts',
+      'modify/place-style-guide.ts',
+      // メニューコマンドを使うため前面でないと失敗する
+      'modify/toggle-prepress-view.ts',
+      'tool-executor.ts',
+    ]);
+  });
+
+  it('export_pdf activates only when it needs the trim-mark menu command', () => {
+    const src = readFileSync(join(SRC_TOOLS_DIR, 'export/export-pdf.ts'), 'utf8');
+    expect(src).toContain('activate: requiresMenuCommandActivation(params)');
+  });
+
+  it('前面化する旧文面が残っていない（前面化するツールは新しい文面で説明する）', () => {
+    const offenders = collectTsFiles(SRC_TOOLS_DIR)
+      .filter((file) => /Illustrator will be activated/.test(readFileSync(file, 'utf8')))
+      .map(toolPath)
+      .sort();
+    // メニューコマンドを使うツールは、前面化することを従来と同じ文面で説明する
+    expect(offenders).toEqual([
+      'export/export-pdf.ts',
+      'modify/create-crop-marks.ts',
+      'modify/toggle-prepress-view.ts',
+    ]);
+  });
+
+  // 前面化するツールは、なぜ前面化するのかを説明文に書く（利用者が驚かないため）
+  it('テキスト作成ツールは前面化することを説明文に書いている', () => {
+    for (const f of ['modify/create-text-frame.ts', 'modify/create-path-text.ts']) {
+      const src = readFileSync(join(SRC_TOOLS_DIR, f), 'utf8');
+      expect(src).toContain('brought to the foreground');
+    }
   });
 });

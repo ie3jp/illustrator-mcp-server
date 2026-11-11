@@ -110,6 +110,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(tf);
+<<<<<<< HEAD
     var resultData = { uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) };
     // 文字属性を読み返せなければ指定どおりか確かめられない。作成済みであることを添えて失敗にする
     if (resultData.verified.textReadError) {
@@ -117,6 +118,9 @@ if (preflight) {
       resultData.created = true;
       resultData.message = "The text frame was created (uuid " + uuid + "), but its character attributes could not be read back to verify them.";
     }
+=======
+    var resultData = { success: true, uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) };
+>>>>>>> main
     writeResultFile(RESULT_PATH, appendColorSpaceWarnings(resultData));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create text frame: " + e.message, line: e.line });
@@ -130,7 +134,7 @@ export function register(server: McpServer): void {
     {
       title: 'Create Text Frame',
       description:
-        'Create a text frame. Positioning differs by kind: for point text (x, y) is the text ANCHOR — y is the BASELINE of the first line (glyphs extend above it), and x is the left edge, center, or right edge depending on justification (so right-aligned text only needs justification: "right" with x at the right edge). For area text (x, y) is the top-left of the text area. verified.bounds always reports the resulting bounding box (top-left, width, height) — that box is what modify_object position moves. If font_name is not found, nothing is created and an error with font_candidates is returned. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Create a text frame. Positioning differs by kind: for point text (x, y) is the text ANCHOR — y is the BASELINE of the first line (glyphs extend above it), and x is the left edge, center, or right edge depending on justification (so right-aligned text only needs justification: "right" with x at the right edge). For area text (x, y) is the top-left of the text area. verified.bounds always reports the resulting bounding box (top-left, width, height) — that box is what modify_object position moves. If font_name is not found, nothing is created and an error with font_candidates is returned. Note: Illustrator is brought to the foreground for this tool — creating text while it is in the background blocks for minutes.',
       inputSchema: {
         x: z.number().describe('X coordinate. Point text: anchor x (left/center/right edge per justification). Area text: left edge.'),
         y: z.number().describe('Y coordinate. Point text: BASELINE of the first line, not the top of the glyphs. Area text: top edge.'),
@@ -169,6 +173,8 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
+      // 背面だと pointText と contents 代入がそれぞれ 240 秒待たされる（実測）。
+      // 一瞬フォーカスが移る代償で 480 秒を 0 秒にする
       return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
     },
   );

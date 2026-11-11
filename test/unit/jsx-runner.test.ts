@@ -64,7 +64,8 @@ describe('JSX runner result validation and heavy options', () => {
     expect(mocks.writeAppleScript).toHaveBeenCalledWith(
       '/tmp/run.scpt',
       '/tmp/script.jsx',
-      { activate: true, appPath: undefined },
+      // AppleScript 側の with timeout を execFile のタイムアウトから作るため timeoutMs も渡す
+      { activate: true, appPath: undefined, timeoutMs: 60_000 },
     );
     expect(mocks.execFile).toHaveBeenCalledWith(
       'osascript',

@@ -35,7 +35,7 @@ if (preflight) {
       // アイテムごとに独立した操作なので見つかったものには適用し、欠落・失敗は結果で報告する
       var applied = [];
       var notFound = [];
-      var errors = [];
+      var failed = [];
       for (var i = 0; i < params.uuids.length; i++) {
         var item = findItemByUUID(params.uuids[i]);
         if (!item) {
@@ -50,21 +50,22 @@ if (preflight) {
           }
           applied.push(item);
         } catch (applyErr) {
-          errors.push({ uuid: params.uuids[i], message: applyErr.message });
+          failed.push({ uuid: params.uuids[i], message: applyErr.message });
         }
       }
       var verifiedItems = [];
       for (var vi = 0; vi < applied.length; vi++) {
-        verifiedItems.push(verifyItem(applied[vi]));
+        verifiedItems.push(verifyItemDefault(applied[vi]));
       }
       writeResultFile(RESULT_PATH, {
-        success: notFound.length === 0 && errors.length === 0,
+        success: notFound.length === 0 && failed.length === 0,
         styleName: params.style_name,
         appliedCount: applied.length,
         merge: params.merge === true,
         notFound: notFound,
-        errors: errors,
-        verified: verifiedItems
+        failed: failed,
+        verified: verifiedItems,
+        coordinateSystem: "artboard-web"
       });
     }
   } catch (e) {
@@ -97,7 +98,7 @@ export function register(server: McpServer): void {
     {
       title: 'Apply Graphic Style',
       description:
-        'Apply a graphic style to objects. Objects that are found are styled; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Apply a graphic style to objects. Objects that are found are styled; missing UUIDs are listed in notFound and per-object failures in failed (success is false if either is non-empty).',
       inputSchema: {
         style_name: z.string().describe('Name of the graphic style to apply'),
         uuids: z.array(z.string()).min(1).describe('UUIDs of target objects'),
@@ -110,7 +111,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(applyJsxCode, params, { activate: true });
+      const result = await executeJsx(applyJsxCode, params);
       return formatToolResult(result);
     },
   );

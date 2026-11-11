@@ -13,7 +13,7 @@ import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
  * - レイヤー単位の削除は manage_layers(delete) が担うので、ここは PageItem 単位のみ
  * - ロック中のオブジェクトは remove() が失敗するため、force_unlock 指定時のみ解除して削除する
  * - グループとその子を同時に指定した場合、親を先に消すと子の参照が無効になる。
- *   per-item の try/catch で「既に削除済み」として errors に積む
+ *   per-item の try/catch で「既に削除済み」として failed に積む
  * - 削除後は _uuidIndex から該当エントリを落とし、同一実行内で stale 参照を返さないようにする
  */
 const jsxCode = `
@@ -28,7 +28,7 @@ if (preflight) {
 
     var deleted = [];
     var notFound = [];
-    var errors = [];
+    var failed = [];
 
     for (var i = 0; i < params.uuids.length; i++) {
       var uuid = params.uuids[i];
@@ -45,7 +45,7 @@ if (preflight) {
           if (forceUnlock) {
             item.locked = false;
           } else {
-            errors.push({ uuid: uuid, message: "Object is locked. Set force_unlock: true to delete it." });
+            failed.push({ uuid: uuid, message: "Object is locked. Set force_unlock: true to delete it." });
             continue;
           }
         }
@@ -54,17 +54,17 @@ if (preflight) {
         if (_uuidIndex) { delete _uuidIndex[uuid]; }
         deleted.push(snap);
       } catch (itemErr) {
-        errors.push({ uuid: uuid, message: itemErr.message });
+        failed.push({ uuid: uuid, message: itemErr.message });
       }
     }
 
     // 見つからなかった UUID も失敗扱い（全 UUID 不存在で success: true を返さない）
     writeResultFile(RESULT_PATH, {
-      success: errors.length === 0 && notFound.length === 0,
+      success: failed.length === 0 && notFound.length === 0,
       deletedCount: deleted.length,
       deleted: deleted,
       notFound: notFound,
-      errors: errors
+      failed: failed
     });
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "delete_objects failed: " + e.message, line: e.line });
@@ -79,10 +79,9 @@ export function register(server: McpServer): void {
       title: 'Delete Objects',
       description:
         'Delete one or more objects by UUID (get UUIDs from find_objects / get_layers / get_selection). ' +
-        'Locked objects are skipped unless force_unlock is true. success is false if any UUID was not found or could not be deleted (see notFound / errors). ' +
+        'Locked objects are skipped unless force_unlock is true. success is false if any UUID was not found or could not be deleted (see notFound / failed). ' +
         'The undo tool may revert it, but undo steps are Illustrator history steps, not tied to MCP calls. ' +
-        'To delete a whole layer use manage_layers instead. ' +
-        'Note: Illustrator will be activated (brought to foreground) during execution.',
+        'To delete a whole layer use manage_layers instead.',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to delete'),
         force_unlock: z
@@ -94,7 +93,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

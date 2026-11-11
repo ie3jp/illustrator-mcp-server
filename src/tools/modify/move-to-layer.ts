@@ -38,7 +38,7 @@ if (preflight) {
       // アイテムごとに独立した操作なので見つかったものは移動し、欠落・失敗は結果で報告する
       var moved = [];
       var notFound = [];
-      var errors = [];
+      var failed = [];
       for (var i = 0; i < params.uuids.length; i++) {
         var item = findItemByUUID(params.uuids[i]);
         if (!item) {
@@ -49,21 +49,22 @@ if (preflight) {
           item.move(targetLayer, placement);
           moved.push(item);
         } catch (moveErr) {
-          errors.push({ uuid: params.uuids[i], message: moveErr.message });
+          failed.push({ uuid: params.uuids[i], message: moveErr.message });
         }
       }
 
       var verifiedItems = [];
       for (var vi = 0; vi < moved.length; vi++) {
-        verifiedItems.push(verifyItem(moved[vi]));
+        verifiedItems.push(verifyItemDefault(moved[vi]));
       }
       var moveResult = {
-        success: notFound.length === 0 && errors.length === 0,
+        success: notFound.length === 0 && failed.length === 0,
         movedCount: moved.length,
         targetLayer: params.target_layer,
         notFound: notFound,
-        errors: errors,
-        verified: verifiedItems
+        failed: failed,
+        verified: verifiedItems,
+        coordinateSystem: "artboard-web"
       };
       if (warnings.length > 0) moveResult.warnings = warnings;
       writeResultFile(RESULT_PATH, moveResult);
@@ -80,7 +81,7 @@ export function register(server: McpServer): void {
     {
       title: 'Move to Layer',
       description:
-        'Move one or more objects to a different layer. Objects that are found are moved; missing UUIDs are listed in notFound and per-object failures in errors (success is false if either is non-empty). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Move one or more objects to a different layer. Objects that are found are moved; missing UUIDs are listed in notFound and per-object failures in failed (success is false if either is non-empty).',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to move'),
         target_layer: z.string().describe('Target top-level layer name. If several layers share the name, the topmost one is used and a warning is returned'),
@@ -93,7 +94,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

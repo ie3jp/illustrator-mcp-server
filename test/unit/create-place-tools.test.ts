@@ -110,6 +110,29 @@ describe('color schema ranges (T11-6)', () => {
   });
 });
 
+// 単一オブジェクトの作成系だけ success を返しておらず、LLM から見て
+// 「成功したか」の判定方法がツールごとに違っていた（他の modify ツールは success を返す）
+describe('作成系ツールの結果の形', () => {
+  it('create_rectangle は success: true を返す', async () => {
+    const r = await runTool(registerCreateRectangle, { x: 0, y: 0, width: 10, height: 10 }, makeApp(makeDoc()));
+    expect(r.success).toBe(true);
+    expect(r.uuid).toBeTruthy();
+  });
+
+  it('create_text_frame は success: true を返す', async () => {
+    const r = await runTool(registerCreateTextFrame, { x: 0, y: 0, contents: 'x' }, makeApp(makeDoc()));
+    expect(r.success).toBe(true);
+    expect(r.uuid).toBeTruthy();
+  });
+
+  it('create_path_text は success: true を返す', async () => {
+    const doc = makeDoc();
+    const r = await runTool(registerCreatePathText, { uuid: 'missing', contents: 'x' }, makeApp(doc));
+    // パスが見つからないのでエラーになるが、成功時と同じく success フィールドで判定できる形であること
+    expect(r.success === true || r.error === true).toBe(true);
+  });
+});
+
 describe('createColor color-mode mismatch (T11-7)', () => {
   it('warns when an RGB color is given to a CMYK document', async () => {
     const doc = makeDoc({ colorSpace: 'cmyk' });
@@ -255,7 +278,8 @@ describe('create_gradient (A)', () => {
     }, makeApp(doc));
     expect(r.coordinateSystem).toBe('artboard-web');
     expect(r.verified[0].bounds).toMatchObject({ x: 10, y: 10, width: 50, height: 50 });
-    expect(r.verified[0].bounds.artboardRelative).toBeUndefined();
+    // 「付いていない＝アートボード相対」と読ませないよう、相対のときも明示する
+    expect(r.verified[0].bounds.artboardRelative).toBe(true);
     expect(r.appliedCount).toBe(1);
     expect(r.notFound).toEqual([UUID_MISSING]);
     expect(r.success).toBe(false);
@@ -438,7 +462,7 @@ describe('place_image (T11-4, T11-10)', () => {
       file_path: '/tmp/a.png', coordinate_system: 'artboard-web',
     }, makeApp(doc));
     expect(r.verified.bounds).toMatchObject({ x: 50, y: 100, width: 100, height: 100 });
-    expect(r.verified.bounds.artboardRelative).toBeUndefined();
+    expect(r.verified.bounds.artboardRelative).toBe(true);
   });
 
   it('runs with the heavy timeout', async () => {

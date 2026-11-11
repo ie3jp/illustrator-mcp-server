@@ -29,11 +29,13 @@ const READ = [
   'preflight_check',
 ];
 
-// 足すだけ、または中身を変えずに配置だけ変えるもの
+// 足すだけ、または中身を変えずに配置だけ変えるもの。
+// 画面表示だけを切り替える toggle_prepress_view もここ（トグルなので冪等ではない）
 const ADDITIVE = [
   'align_objects', 'create_document', 'create_ellipse', 'create_line', 'create_path', 'create_path_text',
   'create_rectangle', 'create_text_frame', 'duplicate_objects', 'import_svg_as_editable', 'move_to_layer',
   'open_document', 'place_color_chips', 'place_image', 'place_style_guide', 'resize_for_variation', 'set_z_order',
+  'toggle_prepress_view',
 ];
 
 // 選択・セッション設定だけを変え、同じ引数で何度呼んでも同じ状態になるもの
@@ -44,7 +46,8 @@ const DESTRUCTIVE = [
   'apply_graphic_style', 'apply_text_style', 'close_document', 'convert_to_outlines',
   'create_crop_marks', 'create_gradient', 'delete_objects', 'export', 'export_pdf', 'extract_design_tokens',
   'group_objects', 'manage_artboards', 'manage_datasets', 'manage_layers', 'manage_linked_images',
-  'manage_swatches', 'modify_object', 'place_symbol', 'replace_color', 'save_document', 'undo', 'ungroup_objects',
+  'make_trap_stroke', 'manage_swatches', 'modify_object', 'place_symbol', 'replace_color', 'save_document',
+  'undo', 'ungroup_objects',
 ];
 
 describe('tool annotations (T12)', () => {

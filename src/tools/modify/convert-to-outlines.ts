@@ -30,7 +30,7 @@ if (preflight) {
         tf.createOutline();
         count++;
       } catch (convErr) {
-        var info = { uuid: null, name: "", layer: "", reason: convErr.message };
+        var info = { uuid: null, name: "", layer: "", message: convErr.message };
         try { info.uuid = extractUUIDFromNote(tf.note) || null; } catch (e1) {}
         try { info.name = tf.name || ""; } catch (e2) {}
         try { info.layer = getParentLayerName(tf); } catch (e3) {}
@@ -94,8 +94,7 @@ export function register(server: McpServer): void {
     {
       title: 'Convert to Outlines',
       description:
-        'Convert text to outlines (irreversible except via undo). Text frames that cannot be converted (e.g. locked) are left as-is and listed in "failed" with the reason; success is false if any failed. ' +
-        'Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Convert text to outlines (irreversible except via undo). Text frames that cannot be converted (e.g. locked) are left as-is and listed in "failed" with the message; success is false if any failed.',
       inputSchema: {
         target: z
           .string()
@@ -104,7 +103,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

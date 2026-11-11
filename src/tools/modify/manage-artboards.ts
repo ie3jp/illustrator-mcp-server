@@ -123,7 +123,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Artboards',
       description:
-        'Add, remove, resize, rename, fit, or rearrange artboards. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Add, remove, resize, rename, fit, or rearrange artboards.',
       inputSchema: {
         action: z
           .enum(['add', 'remove', 'resize', 'rename', 'fit_to_art', 'rearrange'])
@@ -159,7 +159,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

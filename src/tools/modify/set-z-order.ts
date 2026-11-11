@@ -37,7 +37,8 @@ if (preflight) {
         uuid: params.uuid,
         command: params.command,
         newZIndex: getZIndex(item),
-        verified: verifyItem(item)
+        verified: verifyItemDefault(item),
+        coordinateSystem: "artboard-web"
       });
     }
   } catch (e) {
@@ -52,7 +53,7 @@ export function register(server: McpServer): void {
     {
       title: 'Set Z-Order',
       description:
-        'Change the stacking order of an object. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Change the stacking order of an object.',
       inputSchema: {
         uuid: z.string().describe('UUID of the object'),
         command: z
@@ -62,7 +63,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

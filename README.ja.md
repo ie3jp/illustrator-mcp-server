@@ -135,7 +135,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
 
 > [!NOTE]
-> ほとんどの操作系ツールの実行時、Illustrator がフォアグラウンドに切り替わります。読み取り系ツールと `export` はアプリを切り替えずに実行します（`export_pdf` は日本式トンボを描くときだけ前面に出します）。
+> ほとんどのツールはアプリを切り替えずに実行するので、Illustrator を裏で動かしながら別の作業を続けられます。ただしテキストを書くツール（`create_text_frame`・`create_path_text`・`place_style_guide`・`place_color_chips`・`contents` を指定した `modify_object`・`import_csv` / `apply_dataset` の `manage_datasets`）は Illustrator を前面に出します。背面のままテキストを作成・変更すると、1 回あたり約 4 分待たされることを実測したためです。`create_crop_marks` と日本式トンボを描く `export_pdf` も、メニューコマンドを使うため前面化が必要です。
 
 > [!NOTE]
 > **ファイルは既定で保護されます。** `close_document` は、明示的に指定しない限り（`save: false`）未保存の変更を破棄しません。`export`・`export_pdf`・`save_document`（別名保存）・`extract_design_tokens` は、`overwrite: true` を指定しない限り既存ファイルを上書きしません。破棄・上書きしたいときは「保存せずに閉じて」「上書きして」と伝えてください。
@@ -370,7 +370,7 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 
 </details>
 
-### 操作系 (39)
+### 操作系 (41)
 
 <details>
 <summary>クリックして展開</summary>
@@ -415,6 +415,8 @@ Claude Desktop のプロンプト一覧から選択できるワークフロー�
 | `select_objects` | UUID指定でオブジェクトを選択（複数選択対応） |
 | `create_crop_marks` | トンボ（トリムマーク）の作成。ロケールに応じた自動スタイル選択（日本式ダブルライン / 西洋式シングルライン） |
 | `place_style_guide` | アートボード外にビジュアルスタイルガイドを非印刷レイヤーで配置（カラー・フォント・スペーシング・マージン・ガイド間隔）。アートボード上への計測表示は `annotate_artboard` 指定時のみ |
+| `make_trap_stroke` | 塗りと同じ色の線をオーバープリントで引き、版ズレによる白抜けを防ぐ（トラップ）。単色の塗りのみ対象で、グラデーション・パターン・ロックは理由つきで `skipped` に返す |
+| `toggle_prepress_view` | 入稿前に目で確かめるための表示切替。オーバープリントプレビュー、プリント分割表示、分版プレビュー、分割・統合プレビュー、属性パネル |
 | `undo` | 操作の取り消し/やり直し（複数ステップ対応） |
 
 </details>

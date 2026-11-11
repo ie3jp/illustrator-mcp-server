@@ -336,8 +336,14 @@ if (preflight) {
         success: true,
         uuid: uuid,
         childCount: group.pageItems.length,
-        verified: verifyItem(group)
+        verified: verifyItemDefault(group),
+        coordinateSystem: "artboard-web"
       };
+      // クリップパスになったパスは自分の塗り/線を失う（UI のクリッピングマスクと同じ）。
+      // 結果から気づけないため明示する
+      if (params.clipped === true) {
+        okResult.warnings = ["The clip path (last UUID) lost its own fill and stroke, as it does when you make a clipping mask in the UI."];
+      }
       writeResultFile(RESULT_PATH, okResult);
       committed = true;
     }
@@ -360,20 +366,20 @@ export function register(server: McpServer): void {
     {
       title: 'Group Objects',
       description:
-        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. All objects must be directly in the same parent (layer or group); objects on different layers or in different groups are rejected (use move_to_layer / ungroup_objects first). The new group takes the stacking position of the frontmost object. Nothing is changed and an error is returned if any UUID is not found (notFound), any object is locked or on a hidden layer, or clipped: true is given with fewer than 2 objects or a last object that is not a path or compound path (convert text to outlines first). If grouping fails midway, the objects are moved back and the empty group is removed (see rollback in the error). Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Group multiple objects into a single group. The first UUID in the array becomes the bottommost item, the last becomes the topmost. All objects must be directly in the same parent (layer or group); objects on different layers or in different groups are rejected (use move_to_layer / ungroup_objects first). The new group takes the stacking position of the frontmost object. Nothing is changed and an error is returned if any UUID is not found (notFound), any object is locked or on a hidden layer, or clipped: true is given with fewer than 2 objects or a last object that is not a path or compound path (convert text to outlines first). If grouping fails midway, the objects are moved back and the empty group is removed (see rollback in the error).',
       inputSchema: {
         uuids: z.array(z.string()).min(1).describe('UUIDs of objects to group, all with the same parent. Order matters: first=bottom, last=top in layer panel.'),
         name: z.string().optional().describe('Name for the new group'),
         clipped: coerceBoolean
           .optional()
           .default(false)
-          .describe('Create as clipping group. Needs at least 2 objects; the last UUID becomes the clip path (topmost) and must be a path or compound path. Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
+          .describe('Create as clipping group. Needs at least 2 objects; the last UUID becomes the clip path (topmost) and must be a path or compound path. Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid. The object that becomes the clip path LOSES its own fill and stroke (same as making a clipping mask in the UI), so do not pass an object whose own paint you want to keep.'),
       },
       // clipped: true ではクリップパスになるパスの塗り/線が失われる（UI のクリッピングマスクと同じ）
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

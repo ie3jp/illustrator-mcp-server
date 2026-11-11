@@ -61,10 +61,10 @@ if (preflight) {
       return null;
     }
 
-    // fill / stroke を末端へ適用して読み返す。report には件数、errors / warnings に失敗・スキップを積む
-    function applyPaint(kind, targets, skipped, value, errors, warnings) {
+    // fill / stroke を末端へ適用して読み返す。report には件数、failed / warnings に失敗・スキップを積む
+    function applyPaint(kind, targets, skipped, value, failed, warnings) {
       var report = { targets: targets.length, changed: 0 };
-      var failed = [];
+      var targetErrors = [];
       var mismatched = 0;
       var converted = 0;
       for (var ti = 0; ti < targets.length; ti++) {
@@ -100,17 +100,17 @@ if (preflight) {
             report.changed++;
           }
         } catch(eT) {
-          failed.push(eT.message);
+          targetErrors.push(eT.message);
         }
       }
       if (targets.length === 0) {
-        errors.push(kind + ": no path or text object to paint in this " + getItemType(item));
+        failed.push({ property: kind, message: "no path or text object to paint in this " + getItemType(item) });
       }
-      if (failed.length > 0) {
-        errors.push(kind + ": failed on " + failed.length + " of " + targets.length + " objects (e.g. " + failed[0] + ")");
+      if (targetErrors.length > 0) {
+        failed.push({ property: kind, message: "failed on " + targetErrors.length + " of " + targets.length + " objects (e.g. " + targetErrors[0] + ")" });
       }
       if (mismatched > 0) {
-        errors.push(kind + ": " + mismatched + " of " + targets.length + " objects did not take the requested value when read back (unchanged or different)");
+        failed.push({ property: kind, message: mismatched + " of " + targets.length + " objects did not take the requested value when read back (unchanged or different)" });
       }
       if (converted > 0) {
         warnings.push(kind + ": " + converted + " objects read back in a different color space (converted to the document color mode)");
@@ -134,26 +134,26 @@ if (preflight) {
       writeResultFile(RESULT_PATH, fontNotFoundResult(params.properties.font_name, true));
     } else {
       var props = params.properties;
-      var errors = [];
+      var failed = [];
       var warnings = [];
       var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
 
       // locked=false は他のプロパティ変更が弾かれないよう最初に適用する
       if (props.locked === false) {
         try { item.locked = false; }
-        catch(e) { errors.push("locked: " + e.message); }
+        catch(e) { failed.push({ property: "locked", message: e.message }); }
       }
 
       if (typeof props.hidden === "boolean") {
         try { item.hidden = props.hidden; }
-        catch(e) { errors.push("hidden: " + e.message); }
+        catch(e) { failed.push({ property: "hidden", message: e.message }); }
       }
 
       if (props.position) {
         try {
           var pos = webToAiPoint(props.position.x, props.position.y, coordSystem, abRect);
           item.position = pos;
-        } catch(e) { errors.push("position: " + e.message); }
+        } catch(e) { failed.push({ property: "position", message: e.message }); }
       }
 
       if (props.size) {
@@ -164,7 +164,7 @@ if (preflight) {
           if (typeof props.size.height === "number") {
             item.height = props.size.height;
           }
-        } catch(e) { errors.push("size: " + e.message); }
+        } catch(e) { failed.push({ property: "size", message: e.message }); }
       }
 
       var isContainer = isPaintContainer(item);
@@ -177,19 +177,19 @@ if (preflight) {
 
       if (typeof props.fill !== "undefined") {
         try {
-          paintReport.fill = applyPaint("fill", paintTargets, paintSkipped, props.fill, errors, warnings);
-        } catch(e) { errors.push("fill: " + e.message); }
+          paintReport.fill = applyPaint("fill", paintTargets, paintSkipped, props.fill, failed, warnings);
+        } catch(e) { failed.push({ property: "fill", message: e.message }); }
       }
 
       if (props.stroke) {
         try {
-          paintReport.stroke = applyPaint("stroke", paintTargets, paintSkipped, props.stroke, errors, warnings);
-        } catch(e) { errors.push("stroke: " + e.message); }
+          paintReport.stroke = applyPaint("stroke", paintTargets, paintSkipped, props.stroke, failed, warnings);
+        } catch(e) { failed.push({ property: "stroke", message: e.message }); }
       }
 
       if (typeof props.opacity === "number") {
         try { item.opacity = props.opacity; }
-        catch(e) { errors.push("opacity: " + e.message); }
+        catch(e) { failed.push({ property: "opacity", message: e.message }); }
       }
 
       if (typeof props.rotation === "number") {
@@ -212,36 +212,36 @@ if (preflight) {
             setNoteMeta(item, "rot", String(Math.round((prevDeg + props.rotation) * 1000) / 1000));
           }
         }
-        catch(e) { errors.push("rotation: " + e.message + " (line: " + (e.line || "?") + ")"); }
+        catch(e) { failed.push({ property: "rotation", message: e.message + " (line: " + (e.line || "?") + ")" }); }
       }
 
       if (typeof props.name === "string") {
         try { item.name = props.name; }
-        catch(e) { errors.push("name: " + e.message); }
+        catch(e) { failed.push({ property: "name", message: e.message }); }
       }
 
       if (typeof props.contents === "string") {
         try { item.contents = props.contents.split(String.fromCharCode(10)).join(String.fromCharCode(13)); }
-        catch(e) { errors.push("contents: " + e.message); }
+        catch(e) { failed.push({ property: "contents", message: e.message }); }
       }
 
       if (resolvedFont) {
         try {
           // textRanges を回しながら書くと範囲が結合してインデックスがずれ MRAP になる（実機確認）ため全体に一度で設定する
           item.textRange.characterAttributes.textFont = resolvedFont;
-        } catch(e) { errors.push("font_name: " + e.message); }
+        } catch(e) { failed.push({ property: "font_name", message: e.message }); }
       }
 
       if (typeof props.font_size === "number") {
         try {
           item.textRange.characterAttributes.size = props.font_size;
-        } catch(e) { errors.push("font_size: " + e.message); }
+        } catch(e) { failed.push({ property: "font_size", message: e.message }); }
       }
 
       if (typeof props.tracking === "number") {
         try {
           item.textRange.characterAttributes.tracking = props.tracking;
-        } catch(e) { errors.push("tracking: " + e.message); }
+        } catch(e) { failed.push({ property: "tracking", message: e.message }); }
       }
 
       if (typeof props.leading !== "undefined") {
@@ -253,20 +253,20 @@ if (preflight) {
             lca.autoLeading = false;
             lca.leading = props.leading;
           }
-        } catch(e) { errors.push("leading: " + e.message); }
+        } catch(e) { failed.push({ property: "leading", message: e.message }); }
       }
 
       if (props.justification) {
         try {
           var justMap = { left: Justification.LEFT, center: Justification.CENTER, right: Justification.RIGHT };
           item.textRange.paragraphAttributes.justification = justMap[props.justification];
-        } catch(e) { errors.push("justification: " + e.message); }
+        } catch(e) { failed.push({ property: "justification", message: e.message }); }
       }
 
       // locked=true は他の変更を全て終えてから最後に適用する
       if (props.locked === true) {
         try { item.locked = true; }
-        catch(e) { errors.push("locked: " + e.message); }
+        catch(e) { failed.push({ property: "locked", message: e.message }); }
       }
 
       var verifiedState = verifyItem(item, coordSystem, abRect);
@@ -299,8 +299,8 @@ if (preflight) {
         }
       }
 
-      var result = { success: errors.length === 0, uuid: params.uuid, coordinateSystem: coordSystem };
-      if (errors.length > 0) result.errors = errors;
+      var result = { success: failed.length === 0, uuid: params.uuid, coordinateSystem: coordSystem };
+      if (failed.length > 0) result.failed = failed;
       if (warnings.length > 0) result.warnings = warnings;
       if (paintReport.fill || paintReport.stroke) result.painted = paintReport;
       result.verified = verifiedState;
@@ -318,7 +318,7 @@ export function register(server: McpServer): void {
     {
       title: 'Modify Object',
       description:
-        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted. Per-property failures are listed in failed as { property, message }. Note: when properties.contents is given, Illustrator is brought to the foreground, because assigning text contents while it is in the background blocks for minutes.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target object'),
         properties: z
@@ -371,7 +371,10 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      // テキストの contents 代入は背面だと 240 秒待たされる（実測）。その指定があるときだけ前面化する。
+      // 位置・色・サイズなどの変更は背面でも瞬時なのでフォーカスを奪わない
+      const changesText = typeof (params as { properties?: { contents?: unknown } }).properties?.contents === 'string';
+      return executeToolJsx(jsxCode, params, { activate: changesText, resolveCoordinate: true });
     },
   );
 }

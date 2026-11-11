@@ -30,6 +30,7 @@ import {
   printPhase,
   printStatus,
   printResults,
+  E2E_TIMEOUT_SEC,
 } from './helpers.js';
 
 const TMP = '/tmp/illustrator-mcp-e2e-behaviors';
@@ -114,7 +115,7 @@ ${body}
   const file = `${TMP}/fixture-${process.pid}.jsx`;
   writeFileSync(file, script, 'utf-8');
   const out = execFileSync('osascript', [
-    '-e', 'with timeout of 120 seconds',
+    '-e', `with timeout of ${E2E_TIMEOUT_SEC} seconds`,
     '-e', `tell application ${J(ILLUSTRATOR_APP)} to do javascript of file (POSIX file ${J(file)})`,
     '-e', 'end timeout',
   ], { encoding: 'utf-8' }).trim();
@@ -148,7 +149,7 @@ function closeLeftoverTestDocs(): void {
 })();`, 'utf-8');
   try {
     const out = execFileSync('osascript', [
-      '-e', 'with timeout of 60 seconds',
+      '-e', `with timeout of ${E2E_TIMEOUT_SEC} seconds`,
       '-e', `tell application ${J(ILLUSTRATOR_APP)} to do javascript of file (POSIX file ${J(file)})`,
       '-e', 'end timeout',
     ], { encoding: 'utf-8' }).trim();
@@ -510,6 +511,7 @@ async function runPhases(): Promise<void> {
       });
 
       await t('group_objects across layers / nesting levels → error with differentParents, nothing changed', async () => {
+        assert(g1 !== '' && g2 !== '' && g3 !== '', 'precondition: the group_objects setup test did not run (see the failure above)');
         await call('manage_layers', { action: 'add', layer_name: '__t3_grp_other' });
         const other = await rect({ x: 300, y: 650, width: 40, height: 40, layer_name: '__t3_grp_other' });
         const before = (await call('get_groups', {})).count;
@@ -525,6 +527,7 @@ async function runPhases(): Promise<void> {
       });
 
       await t('group_objects with a locked object / locked layer / hidden layer → error, nothing changed', async () => {
+        assert(g1 !== '' && g2 !== '' && g3 !== '', 'precondition: the group_objects setup test did not run (see the failure above)');
         const before = J(layerOrder());
         const lock = await call('modify_object', { uuid: g3, properties: { locked: true } });
         assert(lock.success === true, `lock failed: ${brief(lock)}`);
@@ -552,6 +555,7 @@ async function runPhases(): Promise<void> {
       });
 
       await t('group_objects clipped: true with 1 object or a group as the last object → error, nothing changed', async () => {
+        assert(g1 !== '' && g2 !== '' && g3 !== '', 'precondition: the group_objects setup test did not run (see the failure above)');
         const before = J(layerOrder());
         const one = await call('group_objects', { uuids: [g1], clipped: true });
         assert(one.error === true, `1 object should be rejected: ${brief(one)}`);
@@ -561,6 +565,7 @@ async function runPhases(): Promise<void> {
       });
 
       await t('group_objects clipped: true → last path becomes the clipping path', async () => {
+        assert(g1 !== '' && g2 !== '' && g3 !== '', 'precondition: the group_objects setup test did not run (see the failure above)');
         const content = await gRect(6, { width: 80 });
         const mask = await gRect(7, { width: 30 });
         const r = await call('group_objects', { uuids: [content, mask], clipped: true, name: '__t3_clip_path' });
@@ -573,6 +578,7 @@ async function runPhases(): Promise<void> {
       });
 
       await t('group_objects clipped: true with text as the last object → rejected with an outline hint, nothing changed', async () => {
+        assert(g1 !== '' && g2 !== '' && g3 !== '', 'precondition: the group_objects setup test did not run (see the failure above)');
         // スクリプトの group.clipped = true はテキストを受け付けない（2026 / macOS 実機で確認）
         const content = await gRect(8, { width: 120, height: 60 });
         const tf = await call('create_text_frame', { x: 20 + 8 * 45, y: 600, contents: 'CLIP', font_size: 48, layer_name: G_LAYER });

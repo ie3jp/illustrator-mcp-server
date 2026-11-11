@@ -199,7 +199,9 @@ describe('modify_object fill/stroke on containers', () => {
     );
 
     expect(r.success).toBe(false);
-    expect(r.errors.join(' ')).toMatch(/fill: 1 of 2 objects did not take the requested value/);
+    // 失敗は {property, message} で返る（"fill: ..." の文字列連結ではない）
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed.some((f) => f.property === 'fill' && /1 of 2 objects did not take the requested value/.test(f.message))).toBe(true);
     expect(r.painted.fill.changed).toBe(1);
     expect(r.verified.descendantFills).toHaveLength(2);
   });
@@ -218,7 +220,9 @@ describe('modify_object fill/stroke on containers', () => {
       { findItem: () => makeGroup([locked]) },
     );
     expect(r.success).toBe(false);
-    expect(r.errors[0]).toMatch(/fill: failed on 1 of 1 objects \(e\.g\. Target layer cannot be modified\)/);
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed[0].property).toBe('fill');
+    expect(failed[0].message).toMatch(/failed on 1 of 1 objects \(e\.g\. Target layer cannot be modified\)/);
   });
 
   it('applies stroke recursively to group descendants', async () => {
@@ -244,7 +248,8 @@ describe('modify_object fill/stroke on containers', () => {
       { findItem: () => placed },
     );
     expect(r.success).toBe(false);
-    expect(r.errors[0]).toMatch(/no path or text object to paint/);
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed[0].message).toMatch(/no path or text object to paint/);
     expect((placed as Record<string, unknown>).fillColor).toBeUndefined();
   });
 
@@ -445,7 +450,52 @@ describe('replace_color', () => {
     expect(r.success).toBe(false);
     expect(r.failedCount).toBe(1);
     expect(r.failed[0]).toMatchObject({ attribute: 'text' });
-    expect(r.failed[0].reason).toContain('MRAP');
+    expect(r.failed[0].message).toContain('MRAP');
+  // target: "both" で塗りを書いた直後に同じ characterAttributes から線を読むと、
+  // 結合で無効になった範囲を触って MRAP になる。属性ごとにパスを分けたことの回帰テスト。
+  // 実機では結合すると範囲オブジェクトが差し替わるため、取り直せば有効なものが得られる
+  it('does not read back a characterAttributes it just wrote to (target: both)', async () => {
+    const ranges: Array<{ characterAttributes: Record<string, unknown> }> = [];
+    const dead = new Set<unknown>();
+    // 塗りと線の両方を置換対象にし、どちらを書いても参照が無効になるようにする。
+    // 線側を NoColor にしていると「線を書いた後に参照を使い回す」退行を検出できない
+    const makeRange = (
+      fill: unknown,
+      stroke: unknown,
+      strokeWeight: number,
+    ): { characterAttributes: Record<string, unknown> } => {
+      const attrs: Record<string, unknown> = {};
+      const guard = (): void => {
+        if (dead.has(attrs)) throw new Error("an Illustrator error occurred: 1346458189 ('MRAP')");
+      };
+      const replaceSelf = (nextFill: unknown, nextStroke: unknown): void => {
+        dead.add(attrs);
+        const idx = ranges.findIndex((r) => r.characterAttributes === attrs);
+        ranges[idx] = makeRange(nextFill, nextStroke, strokeWeight);
+      };
+      Object.defineProperty(attrs, 'fillColor', {
+        get: () => { guard(); return fill; },
+        // 書いた時点でこの範囲オブジェクトは無効になり、コレクション上は別オブジェクトに差し替わる
+        set: (v) => { guard(); replaceSelf(v, stroke); },
+      });
+      Object.defineProperty(attrs, 'strokeColor', {
+        get: () => { guard(); return stroke; },
+        set: (v) => { guard(); replaceSelf(fill, v); },
+      });
+      Object.defineProperty(attrs, 'strokeWeight', { get: () => { guard(); return strokeWeight; } });
+      return { characterAttributes: attrs };
+    };
+    ranges.push(makeRange(cmyk(0, 100, 100, 0), cmyk(0, 100, 100, 0), 1));
+    const tf = { typename: 'TextFrame', textRanges: ranges };
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [], textFrames: [tf] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 }, target: 'both' },
+      { doc },
+    );
+    // 書いた範囲を読み直さないので MRAP にならず、置換が成立する
+    expect(r.error).toBeUndefined();
+    expect(r.textFramesChanged).toBe(1);
   });
 
   it('survives ranges merging as colors change (textRanges is a live collection)', async () => {

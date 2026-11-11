@@ -202,16 +202,19 @@ function evaluateContrast(
   rgb2: { r: number; g: number; b: number },
   approximate: boolean,
 ) {
-  const ratio =
-    Math.round(
-      contrastRatio(relativeLuminance(rgb1.r, rgb1.g, rgb1.b), relativeLuminance(rgb2.r, rgb2.g, rgb2.b)) * 100,
-    ) / 100;
+  // 合否は丸める前の値で判定する。丸めてから比べると、真の比率 4.495 が 4.50 になって
+  // AA 通常文字を合格扱いにしてしまう（3 と 7 の境界も同様）。表示だけ小数 2 桁に丸める
+  const raw = contrastRatio(
+    relativeLuminance(rgb1.r, rgb1.g, rgb1.b),
+    relativeLuminance(rgb2.r, rgb2.g, rgb2.b),
+  );
+  const ratio = Math.round(raw * 100) / 100;
   return {
     contrastRatio: ratio,
     approximate,
-    wcagAA_normal: approximate ? null : ratio >= 4.5,
-    wcagAA_large: approximate ? null : ratio >= 3,
-    wcagAAA: approximate ? null : ratio >= 7,
+    wcagAA_normal: approximate ? null : raw >= 4.5,
+    wcagAA_large: approximate ? null : raw >= 3,
+    wcagAAA: approximate ? null : raw >= 7,
   };
 }
 

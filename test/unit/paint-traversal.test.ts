@@ -151,8 +151,11 @@ describe('create_gradient: グループ・複合パスは末端に塗って末�
     });
     expect(r.success).toBe(false);
     expect(r.appliedCount).toBe(0);
-    expect(r.errors.join(' ')).toMatch(/failed on 1 of 3/);
-    expect(r.errors.join(' ')).toMatch(/1 of 3 objects did not take the gradient/);
+    // 失敗は {uuid, type, message} で返る（説明文字列に uuid を埋め込まない）
+    const messages = (r.failed as Array<{ uuid: string; message: string }>).map((f) => f.message).join(' ');
+    expect(messages).toMatch(/failed on 1 of 3/);
+    expect(messages).toMatch(/1 of 3 objects did not take the gradient/);
+    expect((r.failed as Array<{ uuid: string }>).every((f) => typeof f.uuid === 'string')).toBe(true);
   });
 });
 

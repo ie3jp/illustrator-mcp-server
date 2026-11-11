@@ -44,7 +44,8 @@ if (preflight) {
               action: "relink",
               uuid: params.uuid,
               newPath: params.new_path,
-              verified: verifyItem(item)
+              verified: verifyItemDefault(item),
+              coordinateSystem: "artboard-web"
             });
           }
         }
@@ -73,7 +74,8 @@ if (preflight) {
             action: "embed",
             previousUuid: params.uuid,
             newUuid: resultUuid,
-            verified: embeddedItem ? verifyItem(embeddedItem) : null
+            verified: embeddedItem ? verifyItemDefault(embeddedItem) : null,
+            coordinateSystem: "artboard-web"
           });
         } else {
           writeResultFile(RESULT_PATH, {
@@ -97,7 +99,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Linked Images',
       description:
-        'Relink or embed a placed (linked) image. embed converts PlacedItem to RasterItem — the original UUID becomes invalid and a new UUID for the RasterItem is returned. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Relink or embed a placed (linked) image. embed converts PlacedItem to RasterItem — the original UUID becomes invalid and a new UUID for the RasterItem is returned.',
       inputSchema: {
         uuid: z.string().describe('UUID of the placed (linked) image'),
         action: z.enum(['relink', 'embed']).describe('Action to perform'),
@@ -106,7 +108,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

@@ -76,7 +76,7 @@ export function register(server: McpServer): void {
     {
       title: 'Place Symbol',
       description:
-        'Place a new symbol instance or replace the symbol definition of an existing instance. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Place a new symbol instance or replace the symbol definition of an existing instance.',
       inputSchema: {
         action: z
           .enum(['place', 'replace'])
@@ -96,7 +96,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

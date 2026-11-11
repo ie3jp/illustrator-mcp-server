@@ -3,7 +3,7 @@
   "name": "Illustrator MCP",
   "version": "1.2.10",
   "display_name": "Design Bridge by IE3",
-  "description": "Work with Adobe Illustrator from Claude — read, create, edit and export Illustrator documents (SVG, PNG, JPG, PDF) and run pre-press checks. 66 tools. Not affiliated with Adobe.",
+  "description": "Work with Adobe Illustrator from Claude — read, create, edit and export Illustrator documents (SVG, PNG, JPG, PDF) and run pre-press checks. 68 tools. Not affiliated with Adobe.",
   "long_description": "Design Bridge by IE3 connects Claude to Adobe Illustrator running on your Mac or Windows PC (Illustrator 2020 or later; tested on 2024 and later).\n\n- **Understand documents**: layers, artboards, colors and swatches, text with font details, placed images with effective resolution, overprint and separations.\n- **Create and edit artwork**: shapes, paths, text with tracking, alignment and leading, gradients, symbols and images; align, group, recolor and restyle; size variations and style guides.\n- **Export**: SVG, PNG and JPG by artboard, selection or object, and print-ready PDF with presets and trim marks.\n- **Pre-press checks**: RGB in CMYK, broken links, low-resolution images, white overprint, missing fonts and PDF/X issues.\n\nFiles are never overwritten and unsaved changes are never discarded unless you ask. Everything runs locally with no network access. Not affiliated with or endorsed by Adobe.",
   "author": {
     "name": "cyocun(IE3)",

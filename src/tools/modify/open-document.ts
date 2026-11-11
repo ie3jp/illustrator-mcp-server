@@ -63,7 +63,7 @@ export function register(server: McpServer): void {
     {
       title: 'Open Document',
       description:
-        'Open an Illustrator document from a file path. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Open an Illustrator document from a file path.',
       inputSchema: {
         path: z.string().describe('Absolute file path to open (.ai, .eps, .pdf, .svg, etc.)'),
         color_space: z
@@ -74,7 +74,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       invalidateAutoDetectCache();
       return formatToolResult(result);
     },

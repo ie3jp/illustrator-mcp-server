@@ -73,7 +73,7 @@ if (preflight) {
     function noteFailure(item, attribute, reason) {
       failedCount++;
       if (failed.length >= MAX_FAILED_LISTED) return;
-      var info = { uuid: null, type: "", name: "", layer: "", attribute: attribute, reason: reason };
+      var info = { uuid: null, type: "", name: "", layer: "", attribute: attribute, message: reason };
       try { info.uuid = extractUUIDFromNote(item.note) || null; } catch(e1) {}
       try { info.type = getItemType(item); } catch(e2) {}
       try { info.name = item.name || ""; } catch(e3) {}
@@ -108,18 +108,30 @@ if (preflight) {
       var attempted = { fill: false, stroke: false };
       var doFill = (target === "fill" || target === "both");
       var doStroke = (target === "stroke" || target === "both");
-      for (var ri = tf.textRanges.length - 1; ri >= 0; ri--) {
-        if (ri >= tf.textRanges.length) continue;
-        var ca = tf.textRanges[ri].characterAttributes;
-        if (doFill && colorsMatch(ca.fillColor, fromColor, tolerance)) {
-          try { ca.fillColor = newColorObj; attempted.fill = true; }
-          catch(eF) { noteFailure(tf, "text_fill", eF.message); }
+      // 1 つの characterAttributes には 1 回だけ書く。書いた直後の同じ参照から別の属性を
+      // 読むと（target: "both" で塗りを書いてから線幅を読む等）結合で無効になった範囲を
+      // 触ることになり MRAP になる。属性ごとにパスを分け、各パスで取り直す
+      function replaceAttrInRanges(which) {
+        var changed = false;
+        for (var ri = tf.textRanges.length - 1; ri >= 0; ri--) {
+          if (ri >= tf.textRanges.length) continue;
+          var ca = tf.textRanges[ri].characterAttributes;
+          if (which === "fill") {
+            if (colorsMatch(ca.fillColor, fromColor, tolerance)) {
+              try { ca.fillColor = newColorObj; changed = true; }
+              catch(eF) { noteFailure(tf, "text_fill", eF.message); }
+            }
+          } else {
+            if (ca.strokeWeight > 0 && colorsMatch(ca.strokeColor, fromColor, tolerance)) {
+              try { ca.strokeColor = newColorObj; changed = true; }
+              catch(eS) { noteFailure(tf, "text_stroke", eS.message); }
+            }
+          }
         }
-        if (doStroke && ca.strokeWeight > 0 && colorsMatch(ca.strokeColor, fromColor, tolerance)) {
-          try { ca.strokeColor = newColorObj; attempted.stroke = true; }
-          catch(eS) { noteFailure(tf, "text_stroke", eS.message); }
-        }
+        return changed;
       }
+      if (doStroke) attempted.stroke = replaceAttrInRanges("stroke");
+      if (doFill) attempted.fill = replaceAttrInRanges("fill");
       if (!attempted.fill && !attempted.stroke) return;
       var left = { fill: 0, stroke: 0 };
       for (var vi = 0; vi < tf.textRanges.length; vi++) {

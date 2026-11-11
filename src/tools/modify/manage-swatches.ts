@@ -70,7 +70,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Swatches',
       description:
-        'Add, update, or delete swatches in the active document. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Add, update, or delete swatches in the active document.',
       inputSchema: {
         action: z.enum(['add', 'update', 'delete']).describe('Action to perform'),
         name: z.string().describe('Swatch name'),
@@ -79,7 +79,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       return formatToolResult(result);
     },
   );

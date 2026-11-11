@@ -59,7 +59,7 @@ if (preflight) {
     var gradName = grad.name;
     var appliedCount = 0;
     var notFound = [];
-    var errors = [];
+    var failed = [];
     var warnings = [];
     var verifiedItems = [];
 
@@ -75,7 +75,7 @@ if (preflight) {
       var skipped = {};
       var targets = collectPaintLeaves(item, skipped);
       var changed = 0;
-      var failed = [];
+      var targetErrors = [];
       var mismatched = 0;
       for (var ti = 0; ti < targets.length; ti++) {
         var t = targets[ti];
@@ -93,19 +93,23 @@ if (preflight) {
             mismatched++;
           }
         } catch(eT) {
-          failed.push(eT.message);
+          targetErrors.push(eT.message);
         }
       }
-      var label = uuid + " (" + getItemType(item) + ")";
-      if (targets.length === 0) errors.push(label + ": no path or text object to paint");
-      if (failed.length > 0) {
-        errors.push(label + ": failed on " + failed.length + " of " + targets.length + " objects (e.g. " + failed[0] + ")");
+      // 失敗は {uuid, type, message} で返す。説明文字列に uuid を埋め込むと対象を機械的に辿れない
+      var itemType = getItemType(item);
+      function noteFailed(message) {
+        failed.push({ uuid: uuid, type: itemType, message: message });
+      }
+      if (targets.length === 0) noteFailed("no path or text object to paint");
+      if (targetErrors.length > 0) {
+        noteFailed("failed on " + targetErrors.length + " of " + targets.length + " objects (e.g. " + targetErrors[0] + ")");
       }
       if (mismatched > 0) {
-        errors.push(label + ": " + mismatched + " of " + targets.length + " objects did not take the gradient when read back");
+        noteFailed(mismatched + " of " + targets.length + " objects did not take the gradient when read back");
       }
       var skippedText = describeSkippedPaint(skipped);
-      if (skippedText) warnings.push(label + ": skipped " + skippedText);
+      if (skippedText) warnings.push(uuid + " (" + itemType + "): skipped " + skippedText);
       if (targets.length > 0 && changed === targets.length) appliedCount++;
     }
 
@@ -123,7 +127,7 @@ if (preflight) {
       }
     }
     var result = {
-      success: notFound.length === 0 && errors.length === 0,
+      success: notFound.length === 0 && failed.length === 0,
       name: gradName,
       type: params.type || "linear",
       stopCount: stops.length,
@@ -132,7 +136,7 @@ if (preflight) {
       verified: verifiedItems
     };
     if (notFound.length > 0) result.notFound = notFound;
-    if (errors.length > 0) result.errors = errors;
+    if (failed.length > 0) result.failed = failed;
     if (warnings.length > 0) result.warnings = warnings;
     writeResultFile(RESULT_PATH, appendColorSpaceWarnings(result));
   } catch (e) {
@@ -149,7 +153,7 @@ export function register(server: McpServer): void {
     {
       title: 'Create Gradient',
       description:
-        'Create a gradient in the document and optionally apply it to objects. Note: Illustrator will be activated (brought to foreground) during execution.',
+        'Create a gradient in the document and optionally apply it to objects.',
       inputSchema: {
         name: z.string().describe('Gradient name'),
         type: z.enum(['linear', 'radial']).optional().default('linear'),
@@ -173,7 +177,7 @@ export function register(server: McpServer): void {
         apply_to_uuids: z
           .array(z.string())
           .optional()
-          .describe('UUIDs of objects to apply this gradient as fill. For groups/compound paths it is applied to every path and text inside (clipping paths and guides are skipped) and checked by reading back; verified then reports descendantFills. UUIDs that cannot be found are listed in notFound, objects that could not be painted in errors; either makes success false (the gradient itself is still created).'),
+          .describe('UUIDs of objects to apply this gradient as fill. For groups/compound paths it is applied to every path and text inside (clipping paths and guides are skipped) and checked by reading back; verified then reports descendantFills. UUIDs that cannot be found are listed in notFound, objects that could not be painted in failed; either makes success false (the gradient itself is still created).'),
         angle: z.number().optional().default(0).describe('Gradient angle (for linear). Note: may not take effect due to a long-standing Illustrator bug (since 2008).'),
         coordinate_system: coordinateSystemSchema,
       },
@@ -181,7 +185,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }

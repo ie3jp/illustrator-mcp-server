@@ -60,8 +60,7 @@ export function register(server: McpServer): void {
       title: 'Close Document',
       description:
         'Close the active Illustrator document. If the document has unsaved changes and save is omitted, ' +
-        'the document is NOT closed and an error is returned — pass save: true to save, or save: false to explicitly discard the changes. ' +
-        'Note: Illustrator will be activated (brought to foreground) during execution.',
+        'the document is NOT closed and an error is returned — pass save: true to save, or save: false to explicitly discard the changes.',
       inputSchema: {
         save: coerceBoolean
           .optional()
@@ -70,7 +69,7 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      const result = await executeJsx(jsxCode, params, { activate: true });
+      const result = await executeJsx(jsxCode, params);
       invalidateAutoDetectCache();
       return formatToolResult(result);
     },

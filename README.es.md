@@ -137,7 +137,7 @@ Esto añade el servidor a `~/.codex/config.toml`. Si en el primer arranque se ag
 > **macOS:** En la primera ejecución, concede acceso de automatización en Ajustes del Sistema > Privacidad y Seguridad > Automatización.
 
 > [!NOTE]
-> La mayoría de las herramientas de modificación traen Illustrator al primer plano durante su ejecución. Las herramientas de lectura y `export` se ejecutan sin cambiar de aplicación; `export_pdf` solo lo trae al frente cuando dibuja marcas de corte japonesas.
+> La mayoría de las herramientas se ejecutan sin cambiar de aplicación, así que puedes seguir trabajando mientras Illustrator se controla en segundo plano. Las herramientas que escriben texto (`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `modify_object` con `contents`, `manage_datasets` con `import_csv` / `apply_dataset`) sí traen Illustrator al frente: crear o cambiar texto mientras está en segundo plano se midió bloqueando unos cuatro minutos por llamada. `create_crop_marks` y `export_pdf` con marcas de corte japonesas también necesitan el primer plano, porque ejecutan un comando de menú.
 
 > [!NOTE]
 > **Tus archivos están protegidos por defecto.** `close_document` no descarta cambios sin guardar a menos que lo indiques explícitamente (`save: false`), y `export`, `export_pdf`, `save_document` (guardar como) y `extract_design_tokens` no reemplazan un archivo existente salvo que se indique `overwrite: true`. Si es lo que quieres, basta con pedirle a Claude que "cierre sin guardar" o que "sobrescriba el archivo".
@@ -371,7 +371,7 @@ Plantillas de flujo de trabajo preconstruidas disponibles en el selector de prom
 
 </details>
 
-### Herramientas de Modificación (39)
+### Herramientas de Modificación (41)
 
 <details>
 <summary>Haz clic para expandir</summary>
@@ -416,6 +416,8 @@ Plantillas de flujo de trabajo preconstruidas disponibles en el selector de prom
 | `select_objects` | Selecciona objetos por UUID (admite selección múltiple) |
 | `create_crop_marks` | Crea marcas de corte con detección automática de estilo por locale (doble línea japonesa / línea simple occidental) |
 | `place_style_guide` | Coloca una guía de estilo visual fuera de la mesa de trabajo en una capa no imprimible (colores, fuentes, espaciado, márgenes, separación de guías). Las marcas de medida sobre la propia mesa de trabajo son opcionales (`annotate_artboard`) |
+| `make_trap_stroke` | Añade reventado a trazados rellenos: un trazo del mismo color del relleno, en sobreimpresión, para que un error de registro en prensa no deje un hueco blanco. Solo se reventan rellenos planos; degradados, motivos y objetos bloqueados se informan en `skipped` |
+| `toggle_prepress_view` | Cambia una vista o panel de preimpresión para revisarlo a ojo: previsualización de sobreimpresión, mosaico de impresión, previsualización de separaciones, previsualización de acoplamiento, panel de atributos |
 | `undo` | Operaciones de deshacer/rehacer (multinivel) |
 
 </details>

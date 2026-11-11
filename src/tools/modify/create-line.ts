@@ -56,7 +56,7 @@ if (preflight) {
     }
 
     var uuid = ensureUUID(line);
-    writeResultFile(RESULT_PATH, appendColorSpaceWarnings({ uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(line, coordSystem, abRect) }));
+    writeResultFile(RESULT_PATH, appendColorSpaceWarnings({ success: true, uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(line, coordSystem, abRect) }));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create line: " + e.message, line: e.line });
   }
@@ -68,7 +68,7 @@ export function register(server: McpServer): void {
     'create_line',
     {
       title: 'Create Line',
-      description: 'Create a line. Note: Illustrator will be activated (brought to foreground) during execution.',
+      description: 'Create a line.',
       inputSchema: {
         x1: z.number().describe('Start point X coordinate'),
         y1: z.number().describe('Start point Y coordinate'),
@@ -92,7 +92,7 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
+      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
     },
   );
 }
