@@ -51,7 +51,8 @@ if (preflight) {
         success: true,
         releasedCount: childUuids.length,
         childUuids: childUuids,
-        verified: verifiedChildren
+        verified: verifiedChildren,
+        coordinateSystem: "artboard-web"
       });
     }
   } catch (e) {

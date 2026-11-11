@@ -244,7 +244,8 @@ describe('create_gradient (A)', () => {
     }, makeApp(doc));
     expect(r.coordinateSystem).toBe('artboard-web');
     expect(r.verified[0].bounds).toMatchObject({ x: 10, y: 10, width: 50, height: 50 });
-    expect(r.verified[0].bounds.artboardRelative).toBeUndefined();
+    // 「付いていない＝アートボード相対」と読ませないよう、相対のときも明示する
+    expect(r.verified[0].bounds.artboardRelative).toBe(true);
     expect(r.appliedCount).toBe(1);
     expect(r.notFound).toEqual([UUID_MISSING]);
     expect(r.success).toBe(false);
@@ -427,7 +428,7 @@ describe('place_image (T11-4, T11-10)', () => {
       file_path: '/tmp/a.png', coordinate_system: 'artboard-web',
     }, makeApp(doc));
     expect(r.verified.bounds).toMatchObject({ x: 50, y: 100, width: 100, height: 100 });
-    expect(r.verified.bounds.artboardRelative).toBeUndefined();
+    expect(r.verified.bounds.artboardRelative).toBe(true);
   });
 
   it('runs with the heavy timeout', async () => {

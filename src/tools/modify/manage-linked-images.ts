@@ -44,7 +44,8 @@ if (preflight) {
               action: "relink",
               uuid: params.uuid,
               newPath: params.new_path,
-              verified: verifyItemDefault(item)
+              verified: verifyItemDefault(item),
+              coordinateSystem: "artboard-web"
             });
           }
         }
@@ -73,7 +74,8 @@ if (preflight) {
             action: "embed",
             previousUuid: params.uuid,
             newUuid: resultUuid,
-            verified: embeddedItem ? verifyItemDefault(embeddedItem) : null
+            verified: embeddedItem ? verifyItemDefault(embeddedItem) : null,
+            coordinateSystem: "artboard-web"
           });
         } else {
           writeResultFile(RESULT_PATH, {

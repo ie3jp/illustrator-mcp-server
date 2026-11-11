@@ -807,7 +807,10 @@ describe('verifyItem', () => {
     const snap = h.verifyItem(path(), 'artboard-web', null);
     expect(snap.bounds).toMatchObject({ x: 10, y: -90, artboardRelative: false });
     expect((snap.bounds as { coordinateNote: string }).coordinateNote).toContain('Not artboard-relative');
-    expect(h.verifyItem(path(), 'artboard-web', AB).bounds).toEqual({ x: 10, y: 10, width: 10, height: 10 });
+    // アートボード相対のときも artboardRelative を明示する（付いていない＝相対、と読ませない）
+    expect(h.verifyItem(path(), 'artboard-web', AB).bounds).toEqual({
+      x: 10, y: 10, width: 10, height: 10, artboardRelative: true,
+    });
   });
 });
 

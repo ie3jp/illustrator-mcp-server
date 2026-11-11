@@ -377,7 +377,9 @@ function getBoundsWebCoord(item, artboardRect) {
       x: b[0] - abLeft,
       y: -(b[1] - abTop),  // Y 反転
       width: b[2] - b[0],
-      height: b[1] - b[3]  // top - bottom (Illustrator座標では top > bottom)
+      height: b[1] - b[3],  // top - bottom (Illustrator座標では top > bottom)
+      // false のときだけ付けると「付いていない＝相対である」と読ませることになるので常に出す
+      artboardRelative: true
     };
   }
   // アートボードなし: ドキュメント座標の Y だけ反転。どのアートボードにも属さないアイテムは

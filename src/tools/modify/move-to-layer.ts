@@ -63,7 +63,8 @@ if (preflight) {
         targetLayer: params.target_layer,
         notFound: notFound,
         errors: errors,
-        verified: verifiedItems
+        verified: verifiedItems,
+        coordinateSystem: "artboard-web"
       };
       if (warnings.length > 0) moveResult.warnings = warnings;
       writeResultFile(RESULT_PATH, moveResult);

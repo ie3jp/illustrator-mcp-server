@@ -57,7 +57,8 @@ if (preflight) {
           success: true,
           styleType: params.style_type,
           styleName: params.style_name,
-          verified: verifyItemDefault(item)
+          verified: verifyItemDefault(item),
+          coordinateSystem: "artboard-web"
         });
       }
     }

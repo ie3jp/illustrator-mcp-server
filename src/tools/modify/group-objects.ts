@@ -336,7 +336,8 @@ if (preflight) {
         success: true,
         uuid: uuid,
         childCount: group.pageItems.length,
-        verified: verifyItemDefault(group)
+        verified: verifyItemDefault(group),
+        coordinateSystem: "artboard-web"
       };
       // クリップパスになったパスは自分の塗り/線を失う（UI のクリッピングマスクと同じ）。
       // 結果から気づけないため明示する

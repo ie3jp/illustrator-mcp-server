@@ -37,7 +37,8 @@ if (preflight) {
         uuid: params.uuid,
         command: params.command,
         newZIndex: getZIndex(item),
-        verified: verifyItemDefault(item)
+        verified: verifyItemDefault(item),
+        coordinateSystem: "artboard-web"
       });
     }
   } catch (e) {

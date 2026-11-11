@@ -64,7 +64,8 @@ if (preflight) {
         merge: params.merge === true,
         notFound: notFound,
         errors: errors,
-        verified: verifiedItems
+        verified: verifiedItems,
+        coordinateSystem: "artboard-web"
       });
     }
   } catch (e) {
