@@ -456,22 +456,24 @@ if (preflight) {
     });
 
     // 7. Spot colors
+    var spotColorCount = 0;
     setCoverage("spot_color", "checked");
     try {
-      if (doc.spots.length > 1) {
-        // spots[0] is always the default registration color
-        for (var si = 1; si < doc.spots.length; si++) {
-          var spot = doc.spots[si];
-          try {
-            results.push({
-              level: "warning",
-              category: "spot_color",
-              message: "Spot color in use: " + spot.name,
-              uuid: null,
-              details: { spotName: spot.name, colorType: spot.spotKind.toString() }
-            });
-          } catch(e) { countInspectError("spot_color"); }
-        }
+      // doc.spots holds every swatch with a Spot object: real spot colors, global process colors and
+      // [Registration] (whose name is localized and whose index is not fixed). Only ColorModel.SPOT is a spot color.
+      for (var si = 0; si < doc.spots.length; si++) {
+        var spot = doc.spots[si];
+        try {
+          if (spot.colorType !== ColorModel.SPOT) continue;
+          spotColorCount++;
+          results.push({
+            level: "warning",
+            category: "spot_color",
+            message: "Spot color in use: " + spot.name,
+            uuid: null,
+            details: { spotName: spot.name, colorType: spot.spotKind.toString() }
+          });
+        } catch(e) { countInspectError("spot_color"); }
       }
     } catch(e) {
       setCoverage("spot_color", "skipped", "Check failed: " + e.message);
@@ -548,7 +550,7 @@ if (preflight) {
     var hasRGBItems = false;
     var hasTransparencyItems = false;
     var hasSpotColors = false;
-    try { hasSpotColors = (doc.spots.length > 1); } catch(e9) {}
+    hasSpotColors = (spotColorCount > 0);
     var colorProfileName = "";
     try { colorProfileName = doc.colorProfileName || ""; } catch(e9) {}
     for (var ri2 = 0; ri2 < results.length; ri2++) {
