@@ -137,7 +137,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS:** 처음 실행 시, 시스템 설정 > 개인정보 보호 및 보안 > 자동화에서 자동화 접근 권한을 허용하세요.
 
 > [!NOTE]
-> `create_crop_marks`와 일본식 재단선을 그리는 `export_pdf`만 Illustrator를 명시적으로 전면으로 가져옵니다. 다른 도구는 앱 활성화를 요청하지 않습니다.
+> 대부분의 도구는 앱을 전환하지 않고 실행되므로, Illustrator가 백그라운드에서 동작하는 동안 다른 작업을 계속할 수 있습니다. 다만 텍스트를 쓰는 도구(`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `contents`를 지정한 `modify_object`, `import_csv` / `apply_dataset`의 `manage_datasets`)는 Illustrator를 전면으로 가져옵니다. 백그라운드 상태에서 텍스트를 만들거나 바꾸면 호출마다 약 4분 동안 멈추는 것이 실측되었기 때문입니다. `create_crop_marks`와 일본식 재단선을 그리는 `export_pdf`도 메뉴 명령을 실행하므로 전면이 필요합니다.
 
 > [!NOTE]
 > **파일은 기본적으로 보호됩니다.** `close_document`는 명시적으로 지정하지 않는 한(`save: false`) 저장하지 않은 변경 사항을 버리지 않으며, `export`, `export_pdf`, `save_document`(다른 이름으로 저장), `extract_design_tokens`는 `overwrite: true`를 지정하지 않는 한 기존 파일을 덮어쓰지 않습니다. 그렇게 하고 싶다면 Claude에게 "저장하지 않고 닫아줘" 또는 "파일을 덮어써줘"라고 말하면 됩니다.

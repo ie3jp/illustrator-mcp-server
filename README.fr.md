@@ -137,7 +137,7 @@ Le serveur est ajouté à `~/.codex/config.toml`. Si le délai d’attente est d
 > **macOS :** au premier lancement, autorisez l'accès à l'automatisation dans Réglages Système > Confidentialité et sécurité > Automatisation.
 
 > [!NOTE]
-> Seuls `create_crop_marks` et `export_pdf` avec des traits de coupe japonais mettent explicitement Illustrator au premier plan. Les autres outils ne demandent pas son activation.
+> La plupart des outils s'exécutent sans changer d'application : vous pouvez continuer à travailler pendant qu'Illustrator est piloté en arrière-plan. Les outils qui écrivent du texte (`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `modify_object` avec `contents`, `manage_datasets` avec `import_csv` / `apply_dataset`) mettent en revanche Illustrator au premier plan : créer ou modifier du texte en arrière-plan a été mesuré comme bloquant environ quatre minutes par appel. `create_crop_marks` et `export_pdf` avec des traits de coupe japonais nécessitent aussi le premier plan, car ils exécutent une commande de menu.
 
 > [!NOTE]
 > **Vos fichiers sont protégés par défaut.** `close_document` n'abandonne pas les modifications non enregistrées sauf si vous le demandez explicitement (`save: false`), et `export`, `export_pdf`, `save_document` (enregistrer sous) et `extract_design_tokens` ne remplacent pas un fichier existant sans `overwrite: true`. Si c'est bien ce que vous voulez, demandez simplement à Claude de « fermer sans enregistrer » ou d'« écraser le fichier ».

@@ -135,7 +135,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS:** 初回実行時にオートメーション権限ダイアログが表示されます。システム設定 > プライバシーとセキュリティ > オートメーション で許可してください。
 
 > [!NOTE]
-> `create_crop_marks` と日本式トンボを描く `export_pdf` だけが Illustrator を明示的に前面化します。他のツールは前面化を要求しません。
+> ほとんどのツールはアプリを切り替えずに実行するので、Illustrator を裏で動かしながら別の作業を続けられます。ただしテキストを書くツール（`create_text_frame`・`create_path_text`・`place_style_guide`・`place_color_chips`・`contents` を指定した `modify_object`・`import_csv` / `apply_dataset` の `manage_datasets`）は Illustrator を前面に出します。背面のままテキストを作成・変更すると、1 回あたり約 4 分待たされることを実測したためです。`create_crop_marks` と日本式トンボを描く `export_pdf` も、メニューコマンドを使うため前面化が必要です。
 
 > [!NOTE]
 > **ファイルは既定で保護されます。** `close_document` は、明示的に指定しない限り（`save: false`）未保存の変更を破棄しません。`export`・`export_pdf`・`save_document`（別名保存）・`extract_design_tokens` は、`overwrite: true` を指定しない限り既存ファイルを上書きしません。破棄・上書きしたいときは「保存せずに閉じて」「上書きして」と伝えてください。

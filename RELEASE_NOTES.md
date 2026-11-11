@@ -4,9 +4,13 @@
 
 ### 改善 / Improvements
 
-- 操作系ツールが Illustrator を前面に引っ張り出さなくなりました。別の作業をしながら Illustrator を動かせます。前面に出るのはトンボを描くときだけです / Editing tools no longer pull Illustrator to the front, so you can keep working in another app while it runs. Only the crop-mark tools still come forward（@const7 さんのコントリビューション）
-- 時間のかかる操作を待てるようになりました。`ILLUSTRATOR_MCP_TIMEOUT_NORMAL` / `_HEAVY` を 120 秒以上に設定しても効かず、必ず 120 秒で打ち切られていた問題を直しました（環境によってはテキストの作成に数分かかる例を実測しています） / Long operations can now finish. `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` / `_HEAVY` had no effect above 120 seconds, so every call was cut off there (on some systems a text operation has been measured taking minutes)
+- 大半のツールが Illustrator を前面に引っ張り出さなくなりました。別の作業をしながら Illustrator を動かせます / Most tools no longer pull Illustrator to the front, so you can keep working in another app while it runs（@const7 さんのコントリビューション）
+- テキストを書くツールだけは前面に出ます。背面のままテキストを作成・変更すると 1 回あたり約 4 分待たされることを実測したためで、速度のための前面化です / Tools that write text still come to the front. Creating or changing text while Illustrator sits in the background was measured blocking for about four minutes per call, so the foreground switch is there for speed
+- 時間のかかる操作を待てるようになりました。`ILLUSTRATOR_MCP_TIMEOUT_NORMAL` / `_HEAVY` を 120 秒以上に設定しても効かず、必ず 120 秒で打ち切られていた問題を直しました / Long operations can now finish. `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` / `_HEAVY` had no effect above 120 seconds, so every call was cut off there
 - Illustrator が応答しないときのエラーが「ビジーなのか、指定したバージョンが入っていないのか」を判断できる文面になりました / When Illustrator does not answer, the error now explains what to check instead of showing a raw script error
+
+- 失敗した対象の返し方を全ツールで揃えました。これまで `errors` と `failed`、`reason` と `message` が混在し、どれを読めばよいかツールごとに違っていました。今後は必ず `failed` に入り、各要素に `message` が付きます / Failures are now reported the same way by every tool. They used to be split between `errors` / `failed` and `reason` / `message`; they now always arrive in `failed`, each entry carrying a `message`
+- `create_gradient` と `modify_object` が、失敗した対象を特定できる形で返すようになりました。以前は説明文だけで、どのオブジェクトやどの項目が失敗したのか結果から辿れませんでした / `create_gradient` and `modify_object` now report which object or which property failed, instead of only a sentence
 
 ### バグ修正 / Bug Fixes
 

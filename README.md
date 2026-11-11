@@ -139,7 +139,7 @@ This adds the server to `~/.codex/config.toml`. If the first launch times out wh
 > **macOS:** On first run, allow automation access in System Settings > Privacy & Security > Automation.
 
 > [!NOTE]
-> Only `create_crop_marks` and `export_pdf` with Japanese crop marks explicitly bring Illustrator to the foreground. Other tools do not request activation.
+> Most tools run without switching apps, so you can keep working elsewhere while Illustrator is driven in the background. Tools that write text (`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `modify_object` with `contents`, `manage_datasets` with `import_csv` / `apply_dataset`) do bring Illustrator to the front: creating or changing text while it sits in the background has been measured blocking for about four minutes per call. `create_crop_marks` and `export_pdf` with Japanese trim marks also need the foreground, because they run a menu command.
 
 > [!NOTE]
 > **Your files are protected by default.** `close_document` will not throw away unsaved changes unless you explicitly choose to (`save: false`), and `export`, `export_pdf`, `save_document` (save as) and `extract_design_tokens` will not replace an existing file unless `overwrite: true` is set. If that is what you want, just tell Claude to "close without saving" or "overwrite the file".

@@ -137,7 +137,7 @@ Esto añade el servidor a `~/.codex/config.toml`. Si en el primer arranque se ag
 > **macOS:** En la primera ejecución, concede acceso de automatización en Ajustes del Sistema > Privacidad y Seguridad > Automatización.
 
 > [!NOTE]
-> Solo `create_crop_marks` y `export_pdf` con marcas de corte japonesas traen explícitamente Illustrator al primer plano. Las demás herramientas no solicitan la activación.
+> La mayoría de las herramientas se ejecutan sin cambiar de aplicación, así que puedes seguir trabajando mientras Illustrator se controla en segundo plano. Las herramientas que escriben texto (`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `modify_object` con `contents`, `manage_datasets` con `import_csv` / `apply_dataset`) sí traen Illustrator al frente: crear o cambiar texto mientras está en segundo plano se midió bloqueando unos cuatro minutos por llamada. `create_crop_marks` y `export_pdf` con marcas de corte japonesas también necesitan el primer plano, porque ejecutan un comando de menú.
 
 > [!NOTE]
 > **Tus archivos están protegidos por defecto.** `close_document` no descarta cambios sin guardar a menos que lo indiques explícitamente (`save: false`), y `export`, `export_pdf`, `save_document` (guardar como) y `extract_design_tokens` no reemplazan un archivo existente salvo que se indique `overwrite: true`. Si es lo que quieres, basta con pedirle a Claude que "cierre sin guardar" o que "sobrescriba el archivo".

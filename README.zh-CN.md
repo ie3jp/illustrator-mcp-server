@@ -137,7 +137,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 > **macOS：** 首次运行时，请在「系统设置 > 隐私与安全性 > 自动化」中授权自动化访问权限。
 
 > [!NOTE]
-> 只有 `create_crop_marks` 和绘制日式裁切标记的 `export_pdf` 会主动将 Illustrator 切换到前台。其他工具不请求激活应用。
+> 大多数工具无需切换应用即可执行，因此 Illustrator 在后台运行时你可以继续做别的事。但写入文本的工具（`create_text_frame`、`create_path_text`、`place_style_guide`、`place_color_chips`、指定了 `contents` 的 `modify_object`、使用 `import_csv` / `apply_dataset` 的 `manage_datasets`）会把 Illustrator 切换到前台：实测显示，在后台创建或修改文本时每次调用会阻塞约四分钟。`create_crop_marks` 和绘制日式裁切标记的 `export_pdf` 同样需要前台，因为它们要执行菜单命令。
 
 > [!NOTE]
 > **文件默认受到保护。** 除非明确指定（`save: false`），`close_document` 不会丢弃未保存的更改；除非设置 `overwrite: true`，`export`、`export_pdf`、`save_document`（另存为）和 `extract_design_tokens` 不会覆盖已有文件。如果确实需要，直接告诉 Claude“不保存直接关闭”或“覆盖文件”即可。

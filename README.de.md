@@ -137,7 +137,7 @@ Damit wird der Server in `~/.codex/config.toml` eingetragen. Falls der erste Sta
 > **macOS:** Erlaube beim ersten Start den Automatisierungszugriff unter Systemeinstellungen > Datenschutz & Sicherheit > Automation.
 
 > [!NOTE]
-> Nur `create_crop_marks` und `export_pdf` mit japanischen Schnittmarken bringen Illustrator ausdrücklich in den Vordergrund. Andere Werkzeuge fordern keine Aktivierung an.
+> Die meisten Werkzeuge laufen ohne App-Wechsel, Du kannst also weiterarbeiten, während Illustrator im Hintergrund gesteuert wird. Werkzeuge, die Text schreiben (`create_text_frame`, `create_path_text`, `place_style_guide`, `place_color_chips`, `modify_object` mit `contents`, `manage_datasets` mit `import_csv` / `apply_dataset`), holen Illustrator jedoch nach vorn: Text im Hintergrund anzulegen oder zu ändern blockierte in Messungen rund vier Minuten pro Aufruf. `create_crop_marks` und `export_pdf` mit japanischen Schnittmarken brauchen den Vordergrund ebenfalls, weil sie einen Menübefehl ausführen.
 
 > [!NOTE]
 > **Deine Dateien sind standardmäßig geschützt.** `close_document` verwirft ungespeicherte Änderungen nur, wenn Du das ausdrücklich angibst (`save: false`), und `export`, `export_pdf`, `save_document` (Speichern unter) sowie `extract_design_tokens` ersetzen eine vorhandene Datei nur mit `overwrite: true`. Wenn Du genau das willst, sag Claude einfach „ohne Speichern schließen" oder „Datei überschreiben".
