@@ -1,139 +1,136 @@
 # リリース手順
 
-- npmへの直接publishは禁止。必ずCI（GitHub Actions）経由でリリースする
-- 手順: バージョンbump → コミット → タグ作成・push → GitHub Releaseを作成 → release CIが npm publish・mcpbのリリース添付・MCP Registry公開まで自動実行
-- mcpbの手動アップロードは不要（CIの Upload release asset ステップが自動添付する）
-- server.json の description は **MCP Registry の100文字制限** あり。超えると release CI の Registry publish が422で失敗する（npm publishは成功してしまうので注意）
-- server.json / manifest.json のversionはCIがタグから自動更新する。ローカルでは package.json と `plugins/ie3-design-bridge/.claude-plugin/plugin.json` をbumpする（プラグインは git の main から直接配られるためCIでは書き換えられない。ずれると `test/unit/plugin-manifest.test.ts` が落ちる）
-- `npm publish` をローカルで実行しない
-- GitHub Releaseのノートは以下のフォーマットで日英併記する:
-  - セクション: `### 新機能 / New Features`、`### 改善 / Improvements`、`### バグ修正 / Bug Fixes`、`### ドキュメント / Docs`、`### その他 / Other`（該当があるもののみ）
-  - 各項目は「日本語説明 / English description」の1行形式
-  - デザイナーなど非エンジニアにもわかりやすい表現にする
-  - Full ChangelogリンクやPRリンクは不要
-  - 外部コントリビューター（PR・フィードバック）への謝辞は README ではなく、各リリースノート末尾の `### Special Thanks` に GitHub ハンドルで載せる。該当項目の行末にも「（@handle さんのコントリビューション）」を付ける
-    - README に謝辞セクションを置くと8言語の同期コストがかかり、リリースごとの貢献が見えにくくなるため（2026-09 に README から撤去）
+- **npm への直接 publish は禁止。** CI（GitHub Actions）経由でリリースする
+- 手順: `package.json` と `plugins/ie3-design-bridge/.claude-plugin/plugin.json` を bump →
+  コミット → タグ作成・push → GitHub Release を作成 → release CI が npm publish・
+  mcpb の添付・MCP Registry 公開まで自動実行する（mcpb の手動アップロードは不要）
+- `server.json` / `manifest.json` の version は CI がタグから自動更新する。プラグインは git の
+  main から直接配られるため CI では書き換えられないので、ローカルで bump する
+  （ずれると `test/unit/plugin-manifest.test.ts` が落ちる）
+- `server.json` の description は **MCP Registry の 100 文字制限**あり。超えると Registry publish が
+  422 で失敗する（npm publish は成功してしまうので注意）。`license` は MCP のスキーマに
+  存在しないので入れない
+- Release ノートは日英併記。セクションは該当があるものだけ使う:
+  `### 破壊的変更 / Breaking Changes`、`### 新機能 / New Features`、`### 改善 / Improvements`、
+  `### バグ修正 / Bug Fixes`、`### ドキュメント / Docs`、`### その他 / Other`
+- 各項目は「日本語説明 / English description」の 1 行。デザイナーにも分かる表現にする。
+  Full Changelog や PR リンクは不要
+- 外部コントリビューターへの謝辞は README ではなく各リリースノート末尾の `### Special Thanks` に
+  GitHub ハンドルで載せ、該当項目の行末にも「（@handle さんのコントリビューション）」を付ける
+  （README に置くと 8 言語の同期コストがかかり、リリースごとの貢献も見えにくいため。2026-09 に撤去）
 
-# プロモーション計画
+# ディレクトリ掲載
 
-## 登録済み
-- Glama (READMEにバッジあり)
-- MCP Registry（CI がリリースごとに自動公開）
-- **Claude Desktop 拡張ディレクトリ**: 2026-09-26 に申請（Google フォーム、v1.10.2 の .mcpb を添付）。結果待ち。掲載名を変えたら「既存の拡張の更新: Yes」で出し直す
-- **Claude プラグインディレクトリ（コミュニティ）**: 2026-09-26 に申請（platform.claude.com/plugins/submit、Claude Code と Cowork の両方で動作確認済み）。結果待ち。掲載されたら anthropics/claude-plugins-community の marketplace.json に載る
+- 掲載済み: Glama（README にバッジ）、MCP Registry（CI がリリースごとに自動公開）
+- 申請済み・結果待ち（いずれも 2026-09-26）:
+  - Claude Desktop 拡張ディレクトリ（Google フォーム、v1.10.2 の .mcpb を添付）。
+    掲載名を変えたら「既存の拡張の更新: Yes」で出し直す
+  - Claude プラグインディレクトリ（platform.claude.com/plugins/submit）。掲載されると
+    anthropics/claude-plugins-community の marketplace.json に載る。2026-11-11 時点では未掲載
+- `modelcontextprotocol/servers` の README リストはメンテナンス終了、MCP Registry へ移行済み
 
-## Anthropic のディレクトリでの名前
-- 掲載名は **Design Bridge by IE3**（プラグイン名 `ie3-design-bridge`、マーケットプレイス名 `ie3`、manifest の display_name）
-- 理由: プラグインディレクトリは所有していないブランド名（Adobe / Illustrator）を名前に使うことを禁じている。Adobe 公式の「Illustrator MCP」と紛らわしいのも避けたい
-- Illustrator 用であることは説明文の冒頭（Work with Adobe Illustrator from Claude…）とキーワード（adobe-illustrator 等）で示し、「Not affiliated with Adobe」を添える
-- npm パッケージ名・リポジトリ名 `illustrator-mcp-server` と manifest の内部名（name）は変えない（既存ユーザーの導入が壊れるため）
-- 審査はツールの説明文や結果で Claude の振る舞いを指図することを禁じている（「ユーザーに確認せず実行せよ」等を書かない）
+## Anthropic のディレクトリでの掲載名
 
-## MCP公式ディレクトリ
-- modelcontextprotocol/servers のREADMEリストはメンテナンス終了、MCP Registryへ移行中
-- MCP Registry への登録を検討
+- 掲載名は **Design Bridge by IE3**（プラグイン名 `ie3-design-bridge`、マーケットプレイス名 `ie3`、
+  manifest の `display_name`）
+- 理由: プラグインディレクトリは所有していないブランド名（Adobe / Illustrator）を名前に使うことを
+  禁じている。Adobe 公式の「Illustrator MCP」と紛らわしいのも避けたい
+- Illustrator 用であることは説明文の冒頭とキーワード（`adobe-illustrator` 等）で示し、
+  「Not affiliated with Adobe」を添える
+- npm パッケージ名・リポジトリ名 `illustrator-mcp-server` と manifest の内部名は変えない
+  （既存ユーザーの導入が壊れる）
+- 審査はツールの説明文や結果で Claude の振る舞いを指図することを禁じている
+  （「ユーザーに確認せず実行せよ」等を書かない）
 
-## すぐできること
-- **Smithery / mcp.so** — MCP系ディレクトリに登録
-- **X/Twitter で動画デモ** — Claudeと対話してIllustratorが動く短い動画
-- **Reddit** — r/ClaudeAI, r/AdobeIllustrator, r/graphic_design に投稿
+# 露出の施策
 
-## 記事・コンテンツ
-- **Zenn / note / Qiita** — 日本のデザイナー・DTP界隈向け実践記事（例:「入稿チェックをAIに任せてみた」）
-- **YouTube / ショート動画** — 「AIでIllustratorを操作してみた」系
+- **すぐできること**: Smithery / mcp.so などの MCP 系ディレクトリに登録。X で動画デモ
+  （Claude と対話して Illustrator が動く短いもの）。Reddit（r/ClaudeAI、r/AdobeIllustrator、
+  r/graphic_design）に投稿
+- **記事・動画**: Zenn / note / Qiita に日本のデザイナー・DTP 界隈向けの実践記事
+  （例「入稿チェックを AI に任せてみた」）。YouTube やショート動画で「AI で Illustrator を
+  操作してみた」系
+- **中長期**: Adobe Community Forum は Illustrator ユーザーが直接集まる場所で、ターゲットに
+  そのまま届くので優先度が高い。Product Hunt は出しても問題ないが MCP 系の upvote は全体的に
+  低調なので「ついで」の温度感で。デザイン系メディア（CreatorZine 等）への寄稿
+- **データ（2026-03）**: npm 月間 DL 933（3/23 リリース）。紹介するたびにスパイクが出るので、
+  定期的に違う切り口で露出するのが効果的
 
-## 中長期
-- **Adobe Community Forum** — Illustratorユーザーが直接集まる場所。使い方紹介として投稿。ターゲットにダイレクトに届くので優先度高い
-- **Product Hunt** — 出すのは問題ないがMCP系のupvoteは全体的に低調。やるなら「ついで」の温度感で
-- **デザイン系メディア寄稿** — CreatorZine等
+# 入稿系ツールの方針（2026-11）
 
-## データ (2026-03)
-- npm月間DL: 933 (3/23リリース)
-- 紹介するたびにスパイクが出る → 定期的に違う切り口で露出するのが効果的
-
-## デモ動画の録画
-
-手順・ウィンドウ配置の座標・自動タイピング・`screencapture` のオプションは
-[demo/README.md](demo/README.md) に分離した（録画するときだけ読む）。
-
-# 入稿系ツールの実装方針（2026-11 調査）
-
-- **差別化は「入稿系を持っていること」ではない。** 他にも入稿系を持つ実装はあるので、
-  その前提で訴求しない。実際の差別化は日本の印刷商習慣（日本式トンボ、表記揺れ検出）と、
-  検査・検証の厚さ（preflight / 分版・オーバープリントの読み取り / `verified` で読み返す設計）
+- **差別化は「入稿系を持っていること」ではない。** 他にも入稿系を持つ実装はある。実際の差別化は
+  日本の印刷商習慣（日本式トンボ、表記揺れ検出）と、検査・検証の厚さ（preflight / 分版・
+  オーバープリントの読み取り / `verified` で読み返す設計）
 - 創作系（ブラシ・パターン・遠近・3D・画像トレース・ブレンド・効果・パス編集）は未実装。
   入れるかは需要を見て判断する
 
-あえて実装していないもの（同じ検討を繰り返さないための記録）:
+あえて実装していないもの（同じ検討を繰り返さないため）:
 
-- **`flatten_transparency`（透明の分割・統合）**: 公式リファレンス全体に `flattenTransparency` が
-  1 件も無く、メニューコマンド経由しかない。ダイアログの設定（ラスタライズ解像度・線や文字の
-  アウトライン化）を制御できず、過去に記録された値のまま実行される。不可逆な処理で
-  設定が意図通りか確認できないため、preflight 寄りの方針と合わない
-- **`print_document`（実印刷）**: `Document.print()` と `PrintOptions` は存在する。ただし物理的に
-  紙が出て取り消せない。入稿データを作るという用途から外れるため当面見送る
+- **`flatten_transparency`**: 公式リファレンス全体に `flattenTransparency` が無く、メニューコマンド
+  経由しかない。ダイアログの設定（ラスタライズ解像度・アウトライン化）を制御できないまま
+  不可逆な処理を走らせることになる
+- **`print_document`**: `Document.print()` と `PrintOptions` はあるが、物理的に紙が出て
+  取り消せない。入稿データを作るという用途から外れる
 
-実装したもの:
+# ExtendScript / Illustrator 実機で確認した落とし穴
 
-- **`make_trap_stroke`**: Illustrator にトラッピングの API は無い（`trapping` は `PDFSaveOptions` と
-  `InkInfo` のみ）。「塗りと同じ色の線をオーバープリントで引く」という手作業の自動化として実装
-- **`toggle_prepress_view`**: メニューコマンド経由なので前面化が必須。コマンド名は実機確認済み
-  （`ink` / `pagetiling` / `Adobe Separation Preview Panel` / `Adobe Flattening Preview` /
-  `internal palettes posing as plug-in menus-attributes`。2025 / 29.5.0 で全て成功）
-- **`Document.printTiles` は View > プリント分割表示の状態ではない。** read-only で、意味は
-  「タイル出力として印刷するか」。`pagetiling` を実行しても変化しない（実機確認）ので、
-  表示状態の取得には使えない
+- 括弧なしの三項演算子の連鎖（`a ? x : b ? y : z`）を誤評価する → 必ず括弧で囲む
+  （`test/unit/jsx-nested-ternary.test.ts` が検出）
+- `PageItem.uuid` は保存・再オープンで変わる → 永続 ID は note 方式
+  （`"<UUID> <メモ>::ai-mcp:key=value"`）。`duplicate()` は note を継承するので複製後は
+  `reassignUUIDDeep`
+- `textRanges` を回しながら属性を書くと範囲が結合して無効化され MRAP になる → 全体に一度で
+  設定するか、属性ごとにパスを分ける。**書いた直後の同じ参照から別の属性を読まない**
+- `MRAP` は `PARM`（parameter）の逆順表示（`1346458189 = 0x5041524D`）。意味は「引数が不正」で、
+  無効になったオブジェクト参照を渡すと出る。Adobe は未文書化
+- `Document.saveAs(pdf)` は `PDFSaveOptions.artboardRange` を指定しないと作業中の文書が PDF に
+  切り替わる
+- `Document.pageItems` は再帰的に子孫を含む。`Layer.pageItems` は直下のみ
+- `Document.printTiles` は read-only で、意味は「タイル出力として印刷するか」。
+  View > プリント分割表示の状態ではない（`pagetiling` を実行しても変化しない）
+- `colorProfileName` への代入は黙って無視されることが多い／`createOutline()` はロック中でも
+  変換する／`zOrderPosition` は作成直後に例外
+- JSX のエラー結果（`error: true` / `success: false`）は `formatToolResult` /
+  `applyToolErrorBoundary` で isError 付き JSON として返す。例外にすると追加フィールドが
+  LLM に届かない
 
-# ExtendScript / Illustrator 実機で確認した落とし穴（2026-09）
+# 実行層（AppleScript / osascript）の落とし穴
 
-コードコメントにも残してあるが、新しいツールを書くときに踏みやすいものをまとめる。
-- 括弧なしの三項演算子の連鎖（`a ? x : b ? y : z`）を誤評価する → 必ず括弧で囲む（`test/unit/jsx-nested-ternary.test.ts` が検出）
-- `PageItem.uuid` は保存・再オープンで変わる → 永続 ID は note 方式（`"<UUID> <メモ>::ai-mcp:key=value"`）。`duplicate()` は note を継承するので複製後は `reassignUUIDDeep`
-- `textRanges` を回しながら属性を書くと範囲が結合して無効化され MRAP になる → 全体に一度で設定するか、後ろから書いて最後に取り直して検証
-- `Document.saveAs(pdf)` は `PDFSaveOptions.artboardRange` を指定しないと作業中の文書が PDF に切り替わる
-- `colorProfileName` への代入は黙って無視されることが多い／`createOutline()` はロック中でも変換する／`zOrderPosition` は作成直後に例外
-- JSX のエラー結果（`error: true` / `success: false`）は `formatToolResult` / `applyToolErrorBoundary` で isError 付き JSON として返す。例外にすると追加フィールドが LLM に届かない
-
-# 実行層（AppleScript / osascript）で確認した落とし穴（2026-11）
-
-- **AppleScript の Apple Event 既定タイムアウトは 120 秒。** `tell` ブロックを `with timeout` で
-  包まないとここで打ち切られ、`-1712`（AppleEvent timed out）になる。README とエラーメッセージが
-  案内している `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` / `_HEAVY` は、120 秒以上に設定しても効かなかった。
-  いまは execFile 側のタイムアウト + 60 秒で `with timeout` を生成している（`appleEventTimeoutSeconds`）
-- **`with timeout` はコンパイル段（`tell application` の用語辞書解決）を覆わない。** 存在しないアプリに
-  `tell` すると `with timeout` の内側でも 0.1 秒で `-2741` になる（実測）。`run script` で文字列として
-  渡せばコンパイルも実行時に移せるが、**存在しないアプリ指定が「即エラー」から「長時間ハング」に化ける**
-  ため採用しない（実測で 180 秒待っても返らなかった）
-- **`-2741` は「Illustrator がビジー」だけでなく「`set_illustrator_version` で指定した版が入っていない」
-  ときにも出る。** `set_illustrator_version` は `^\d{4}$` しか検証せず存在確認をしないため、
-  未インストールの年を渡すとこのエラーになる
-- **エラー番号は osascript 形式の末尾「(-1712)」の形で判定する。** stderr には必ず一時スクリプトの
-  パスが入り、その UUID の 4 桁グループが "1712" になりうるので、`includes('-1712')` だと
-  無関係なエラーを誤分類する（約 1/3 万の確率で成立）
-- **`MRAP` は `PARM`（parameter）の逆順表示。** `1346458189 = 0x5041524D = "PARM"`。意味は
-  「渡された引数が不正」で、無効になったオブジェクト参照を API に渡すと出る。Adobe は未文書化
-- **テキスト生成が極端に遅い環境がある。** ある実機で `create_text_frame` 1 回が 124〜961 秒かかった
-  （他のツールは 0.3〜4 秒）。素の JSX で計測すると `textFrames.pointText` の初回が 20.9 秒で
-  2 回目以降は 0 秒の回もあり、**ばらつきの原因は未特定**。こちらのヘルパ（`ensureUUID` /
-  `verifyItem` / `resolveTargetLayer`）は全てゼロ秒で、フォント数との因果も示せていない。
-  `place_image` の埋め込みでも 121 秒かかった例があるのでテキスト専用の問題でもない
+- **AppleScript の Apple Event 既定タイムアウトは 120 秒。** `tell` を `with timeout` で包まないと
+  `-1712` になり、`ILLUSTRATOR_MCP_TIMEOUT_NORMAL` / `_HEAVY` を 120 秒以上にしても効かない。
+  いまは execFile のタイムアウト + 60 秒で包んでいる（`appleEventTimeoutSeconds`）
+- **`with timeout` はコンパイル段（`tell application` の用語辞書解決）を覆わない。**
+  存在しないアプリへの `tell` は内側でも 0.1 秒で `-2741` になる。`run script` で実行時に移せるが、
+  設定ミスが「即エラー」から「長時間ハング」に化けるため採用しない（実測で 180 秒返らず）
+- `-2741` は `set_illustrator_version` で未インストールの版を指定したときにも出る
+- エラー番号は末尾の `(-1712)` の形で判定する。stderr には必ず一時スクリプトのパスが入り、
+  UUID の 4 桁グループが "1712" になりうるため、部分一致では誤分類する
+- **背面の Illustrator はテキスト API で 240 秒待たされる。** `textFrames.pointText` と
+  `contents` 代入がそれぞれ 240 秒（実測: 背面 480014 / 480040 / 480009 ms、前面 0〜2 ms。
+  2025 / 29.5.0 と 2026 / 30.3.0 の両方で再現）。待機中は CPU 1.5% で計算していない。
+  `characterAttributes` の読み書き・`createOutline`・矩形・読み取りは背面でも瞬時
+- したがって `activate: true` を指定するのは次の 2 種類だけ:
+  `executeMenuCommand` を使うツール（前面でないと失敗する）と、テキストを書くツール（速度のため）
 
 # 結果の形の規約
 
-- **書き込み系ツールは `success` を返す。** 単一オブジェクトの作成系だけ返しておらず、LLM から見た
-  成功判定の方法がツールごとに違っていたため揃えた（2026-11）。複数 UUID を扱うものは
-  `success: notFound.length === 0 && errors.length === 0` のように部分失敗を計算する
-- **読み取り系（`get_*` / `list_*`）は `success` を返さない。** データを返すのが仕事で、失敗時は
-  `error: true` と isError が付くため冗長。ここを変えると全クライアントに影響する
+- 書き込み系は `success` を返す。複数 UUID を扱うものは
+  `success: notFound.length === 0 && failed.length === 0` のように部分失敗を計算する
+- 読み取り系（`get_*` / `list_*`）は `success` を返さない。失敗時は `error: true` と isError が付く
+- **失敗は必ず `failed` に入れ、要素に `message` を持たせる**（`errors` / `reason` は使わない）。
+  識別キーは `uuid`（オブジェクト単位）か `property`（プロパティ単位）
 
 # テスト
 
-- ユニットテストの多くは JSX を Node 上のフェイクで評価する。フェイクは実機と食い違いうるので、挙動を変えたら実機 e2e（README の Testing 節）で確かめる
-- e2e は Illustrator が 1 インスタンスだけ起動している状態で回す（2025 と 2026 が同時に起動していると `tell application "Adobe Illustrator"` の宛先が曖昧になる）。実行中は Illustrator に触らない
-- **e2e のタイムアウトは `E2E_TIMEOUT_MS` で三者まとめて上げる**（既定 600 秒）。以前はサーバー側 30 秒・
-  MCP SDK 60 秒・fixture の `with timeout` 120 秒がばらばらに効いており、遅い環境では構造的に完走できなかった
-- e2e のテキスト系テストは 1 本ごとに数分かかる環境がある。全体で数時間になるため、
-  Illustrator を使えない時間を見積まってから回す
-- **間隔（spacing）の集計は、トップレベル（親が Layer）のアイテムをレイヤーをまたいで比較する。**
-  レイヤーごとに scope を分けると「文字」「図形」「背景」のように分けた文書で間隔が一切取れなくなる
-  （#52 の修正で一度そうなった）。グループの子だけ別 scope にして親と子の bounds を混ぜない
+- ユニットテストの多くは JSX を Node 上のフェイクで評価する。フェイクは実機と食い違いうるので、
+  挙動を変えたら実機 e2e で確かめる
+- e2e は Illustrator が 1 インスタンスだけ起動している状態で回す（複数版が同時起動していると
+  `tell application "Adobe Illustrator"` の宛先が曖昧になる）。実行中は Illustrator に触らない
+- e2e のタイムアウトは `E2E_TIMEOUT_MS` で三者（サーバー・MCP SDK・fixture）まとめて上げる
+- 間隔（spacing）の集計は、トップレベル（親が Layer）のアイテムをレイヤーをまたいで比較する。
+  レイヤーごとに分けると「文字」「図形」「背景」のように分けた文書で間隔が取れなくなる
+
+# デモ動画の録画
+
+手順・ウィンドウ配置の座標・自動タイピング・`screencapture` のオプションは
+[demo/README.md](demo/README.md) に分離した（録画するときだけ読む）。
