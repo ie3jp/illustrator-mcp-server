@@ -371,7 +371,7 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 
 </details>
 
-### Ferramentas de Modificação (39)
+### Ferramentas de Modificação (41)
 
 <details>
 <summary>Clique para expandir</summary>
@@ -416,6 +416,8 @@ Templates de fluxo de trabalho pré-construídos, disponíveis no seletor de pro
 | `select_objects` | Seleciona objetos por UUID (seleção múltipla suportada) |
 | `create_crop_marks` | Cria marcas de corte com detecção automática de estilo por locale (linha dupla japonesa / linha única ocidental) |
 | `place_style_guide` | Posiciona um guia de estilo visual fora da prancheta em uma camada não imprimível (cores, fontes, espaçamentos, margens, distâncias entre guias). Marcações de medida sobre a própria prancheta são opcionais (`annotate_artboard`) |
+| `make_trap_stroke` | Adiciona sobreposição (trap) a traçados preenchidos: um traço na cor do próprio preenchimento, em sobreimpressão, para que um erro de registro na impressão não deixe uma falha branca. Só preenchimentos sólidos são tratados; degradês, padrões e objetos bloqueados vão para `skipped` |
+| `toggle_prepress_view` | Alterna uma visualização ou painel de pré-impressão para conferência visual: visualização de sobreimpressão, divisão de impressão, visualização de separações, visualização de acoplamento, painel Atributos |
 | `undo` | Operações de undo/redo (múltiplos passos) |
 
 </details>

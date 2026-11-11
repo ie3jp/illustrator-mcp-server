@@ -373,7 +373,7 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 
 </details>
 
-### Modify Tools (39)
+### Modify Tools (41)
 
 <details>
 <summary>Click to expand</summary>
@@ -418,6 +418,8 @@ Pre-built workflow templates available in the Claude Desktop prompt picker.
 | `select_objects` | Select objects by UUID (multi-select supported) |
 | `create_crop_marks` | Create crop marks (trim marks) with locale-based style auto-detection (Japanese double-line / Western single-line) |
 | `place_style_guide` | Place a visual style guide outside the artboard on a non-printing layer (colors, fonts, spacing, margins, guide gaps). Measurement marks on the artboard itself are opt-in (`annotate_artboard`) |
+| `make_trap_stroke` | Add a trap to filled paths: a stroke in the fill's own color, set to overprint, so a misregistration on press leaves no white gap. Only solid fills are trapped; gradients, patterns and locked objects are reported in `skipped` |
+| `toggle_prepress_view` | Switch a prepress view or panel for a human to check: overprint preview, print tiling, separations preview, flattener preview, attributes panel |
 | `undo` | Undo/redo operations (multi-step) |
 
 </details>

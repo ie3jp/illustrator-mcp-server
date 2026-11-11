@@ -371,7 +371,7 @@ Plantillas de flujo de trabajo preconstruidas disponibles en el selector de prom
 
 </details>
 
-### Herramientas de Modificación (39)
+### Herramientas de Modificación (41)
 
 <details>
 <summary>Haz clic para expandir</summary>
@@ -416,6 +416,8 @@ Plantillas de flujo de trabajo preconstruidas disponibles en el selector de prom
 | `select_objects` | Selecciona objetos por UUID (admite selección múltiple) |
 | `create_crop_marks` | Crea marcas de corte con detección automática de estilo por locale (doble línea japonesa / línea simple occidental) |
 | `place_style_guide` | Coloca una guía de estilo visual fuera de la mesa de trabajo en una capa no imprimible (colores, fuentes, espaciado, márgenes, separación de guías). Las marcas de medida sobre la propia mesa de trabajo son opcionales (`annotate_artboard`) |
+| `make_trap_stroke` | Añade reventado a trazados rellenos: un trazo del mismo color del relleno, en sobreimpresión, para que un error de registro en prensa no deje un hueco blanco. Solo se reventan rellenos planos; degradados, motivos y objetos bloqueados se informan en `skipped` |
+| `toggle_prepress_view` | Cambia una vista o panel de preimpresión para revisarlo a ojo: previsualización de sobreimpresión, mosaico de impresión, previsualización de separaciones, previsualización de acoplamiento, panel de atributos |
 | `undo` | Operaciones de deshacer/rehacer (multinivel) |
 
 </details>

@@ -371,7 +371,7 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 
 </details>
 
-### Modify-Werkzeuge (39)
+### Modify-Werkzeuge (41)
 
 <details>
 <summary>Zum Aufklappen klicken</summary>
@@ -416,6 +416,8 @@ Vorgefertigte Workflow-Vorlagen stehen im Prompt-Picker von Claude Desktop zur V
 | `select_objects` | Objekte nach UUID auswählen (Mehrfachauswahl unterstützt) |
 | `create_crop_marks` | Schnittmarken (Beschnittzeichen) erstellen mit automatischer Stilerkennung nach Locale (japanische Doppellinie / westliche Einzellinie) |
 | `place_style_guide` | Einen visuellen Styleguide außerhalb der Zeichenfläche auf einer nicht druckenden Ebene platzieren (Farben, Schriften, Abstände, Ränder, Hilfslinienabstände). Messmarkierungen auf der Zeichenfläche selbst nur auf Wunsch (`annotate_artboard`) |
+| `make_trap_stroke` | Überfüllung für gefüllte Pfade: eine Kontur in der Farbe der Fläche, auf Überdrucken gesetzt, damit ein Passerfehler im Druck keine weiße Lücke lässt. Nur Volltonflächen werden überfüllt; Verläufe, Muster und gesperrte Objekte stehen in `skipped` |
+| `toggle_prepress_view` | Druckvorstufen-Ansicht oder -Panel umschalten, damit ein Mensch prüfen kann: Überdruckenvorschau, Druckaufteilung, Separationsvorschau, Transparenzreduzierungsvorschau, Attribute-Panel |
 | `undo` | Rückgängig-/Wiederholen-Operationen (mehrstufig) |
 
 </details>

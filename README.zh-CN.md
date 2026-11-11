@@ -371,7 +371,7 @@ Claude:  → check_contrast (auto_detect: true)
 
 </details>
 
-### 修改类工具 (39)
+### 修改类工具 (41)
 
 <details>
 <summary>点击展开</summary>
@@ -416,6 +416,8 @@ Claude:  → check_contrast (auto_detect: true)
 | `select_objects` | 按 UUID 选中对象（支持多选） |
 | `create_crop_marks` | 创建裁切标记（根据区域自动检测样式：日式双线 / 西式单线） |
 | `place_style_guide` | 在画板外的非打印图层上放置可视化样式指南（颜色、字体、间距、边距、参考线间距）。仅在指定 `annotate_artboard` 时才会在画板上绘制测量标注 |
+| `make_trap_stroke` | 为有填色的路径添加补漏白（trap）：以填色本身的颜色描边并设为叠印，这样印刷套印不准时也不会露出白边。仅处理单色填充，渐变、图案和锁定对象会连同原因返回在 `skipped` 中 |
+| `toggle_prepress_view` | 切换印前检查用的视图或面板，便于人工确认：叠印预览、分页预览、分色预览、拼合预览、属性面板 |
 | `undo` | 撤销/重做操作（支持多步） |
 
 </details>

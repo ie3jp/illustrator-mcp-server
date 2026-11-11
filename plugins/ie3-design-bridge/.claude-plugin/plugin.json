@@ -1,7 +1,7 @@
 {
   "name": "ie3-design-bridge",
   "displayName": "Design Bridge by IE3",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Work with Adobe Illustrator from Claude Code and Cowork — read, edit and export Illustrator documents via illustrator-mcp-server, plus a pre-press preflight skill. Not affiliated with Adobe.",
   "author": {
     "name": "ie3jp",

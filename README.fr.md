@@ -371,7 +371,7 @@ Des modèles de workflow prédéfinis sont disponibles dans le sélecteur de pro
 
 </details>
 
-### Outils de modification (39)
+### Outils de modification (41)
 
 <details>
 <summary>Cliquez pour déployer</summary>
@@ -416,6 +416,8 @@ Des modèles de workflow prédéfinis sont disponibles dans le sélecteur de pro
 | `select_objects` | Sélectionne des objets par UUID (sélection multiple prise en charge) |
 | `create_crop_marks` | Crée des traits de coupe (repères de rognage) avec détection automatique du style selon la locale (double filet japonais / filet simple occidental) |
 | `place_style_guide` | Place un guide de style visuel hors du plan de travail sur un calque non imprimable (couleurs, polices, espacements, marges, interstices des repères). Les annotations de mesure sur le plan de travail lui-même sont optionnelles (`annotate_artboard`) |
+| `make_trap_stroke` | Ajoute un grossi aux tracés avec fond : un contour de la couleur du fond, en surimpression, pour qu'un défaut de repérage sur presse ne laisse pas de filet blanc. Seuls les fonds en ton direct sont traités ; dégradés, motifs et objets verrouillés sont signalés dans `skipped` |
+| `toggle_prepress_view` | Bascule une vue ou un panneau de prépresse pour un contrôle visuel : aperçu de la surimpression, mosaïque d'impression, aperçu des séparations, aperçu de l'aplatissement, panneau Attributs |
 | `undo` | Opérations d'annulation/rétablissement (multi-étapes) |
 
 </details>
