@@ -7,7 +7,7 @@ import {
   resolveCoordinateSystem,
 } from '../session.js';
 import { readImageDimensions } from '../../utils/image-header.js';
-import { READ_ANNOTATIONS } from '../modify/shared.js';
+import { READ_ANNOTATIONS, coerceBoolean } from '../modify/shared.js';
 /**
  * preflight_check — 入稿前プリフライトチェック
  * @see https://ai-scripting.docsforadobe.dev/jsobjref/Document/ — documentColorSpace
@@ -30,10 +30,31 @@ if (preflight) {
     var coordSystem = (params && params.coordinate_system) ? params.coordinate_system : "artboard-web";
     var minDPI = (params && params.min_dpi) ? params.min_dpi : 300;
     var targetPdfProfile = (params && params.target_pdf_profile) ? params.target_pdf_profile : null;
+    var includeNonPrinting = (params && params.include_non_printing === true);
     var doc = app.activeDocument;
     var results = [];
     var docColorSpace = doc.documentColorSpace;
     var isCMYKDoc = (docColorSpace === DocumentColorSpace.CMYK);
+
+    // 印刷されないもの（非表示のオブジェクト、非表示・印刷しないレイヤー上のもの）は既定で検査しない。
+    // 作業用メモ・ガイド用レイヤーの警告が本番の問題を埋もれさせるため（include_non_printing: true で検査する）
+    function isNonPrinting(item) {
+      if (includeNonPrinting) return false;
+      try {
+        var obj = item;
+        while (obj) {
+          if (obj.typename === "Document") return false;
+          if (obj.typename === "Layer") {
+            if (obj.printable === false || obj.visible === false) return true;
+          } else if (obj.hidden === true) {
+            return true;
+          }
+          obj = obj.parent;
+        }
+      } catch(e) {}
+      return false;
+    }
+    var nonPrintingSkipped = 0;
 
     // 1フレームあたりの文字走査上限。超えたフレームは間引き、coverage に partial と記録する
     var TEXT_SAMPLE_LIMIT = 500;
@@ -147,6 +168,7 @@ if (preflight) {
       try {
         for (var layerIdx = 0; layerIdx < doc.layers.length; layerIdx++) {
           iterateAllItems(doc.layers[layerIdx], function(item) {
+            if (isNonPrinting(item)) return;
             try {
               var t = item.typename;
               if (t === "PathItem") {
@@ -182,6 +204,7 @@ if (preflight) {
     try {
       for (var pi = 0; pi < doc.placedItems.length; pi++) {
         var placed = doc.placedItems[pi];
+        if (isNonPrinting(placed)) continue;
         try {
           var f = placed.file;
           if (!f.exists) {
@@ -215,6 +238,7 @@ if (preflight) {
     try {
       for (var ri = 0; ri < doc.rasterItems.length; ri++) {
         var raster = doc.rasterItems[ri];
+        if (isNonPrinting(raster)) continue;
         var measured = false;
         try {
           var bounds = raster.geometricBounds;
@@ -263,6 +287,7 @@ if (preflight) {
     try {
       for (var pli = 0; pli < doc.placedItems.length; pli++) {
         var pItem = doc.placedItems[pli];
+        if (isNonPrinting(pItem)) continue;
         try {
           var pFile = pItem.file;
           if (pFile && pFile.exists) {
@@ -315,6 +340,7 @@ if (preflight) {
     try {
       for (var tf = 0; tf < doc.textFrames.length; tf++) {
         var textFrame = doc.textFrames[tf];
+        if (isNonPrinting(textFrame)) continue;
         var frameUuid = "";
         try {
           frameUuid = ensureUUID(textFrame);
@@ -430,6 +456,7 @@ if (preflight) {
       for (var layerIdx2 = 0; layerIdx2 < doc.layers.length; layerIdx2++) {
         iterateAllItems(doc.layers[layerIdx2], function(item) {
           if (item.typename !== "PathItem") return;
+          if (isNonPrinting(item)) return;
           try {
             var hasFillOP = item.fillOverprint;
             var hasStrokeOP = item.strokeOverprint;
@@ -484,6 +511,10 @@ if (preflight) {
     try {
       for (var layerIdx3 = 0; layerIdx3 < doc.layers.length; layerIdx3++) {
         iterateAllItems(doc.layers[layerIdx3], function(item) {
+          if (isNonPrinting(item)) {
+            if (reportOwner(item) === item) nonPrintingSkipped++;
+            return;
+          }
           try {
             var reasons = [];
             var isInnerPath = (reportOwner(item) !== item);
@@ -537,6 +568,16 @@ if (preflight) {
       }
     } catch(e) {
       setCoverage("transparency", "skipped", "Check failed: " + e.message);
+    }
+
+    if (nonPrintingSkipped > 0) {
+      results.push({
+        level: "info",
+        category: "non_printing_skipped",
+        message: nonPrintingSkipped + " object(s) that do not print (hidden, or on hidden / non-printing layers) were not checked. Pass include_non_printing: true to check them.",
+        uuid: null,
+        details: { count: nonPrintingSkipped }
+      });
     }
 
     // オブジェクト単位の例外件数を coverage に反映する
@@ -687,6 +728,7 @@ function capResultsPerCategory(results: PreflightEntry[]): {
 export function postProcessPreflightResult(
   result: PreflightRawResult,
   fallbackMinDpi: number,
+  ignoreCategories: readonly string[] = [],
 ): Record<string, unknown> {
   const coverage = (result.coverage ??= {});
 
@@ -821,6 +863,17 @@ export function postProcessPreflightResult(
   delete result.targetPdfProfile;
   delete result.pdfxSummary;
 
+  // 意図どおりの結果（編集可能テンプレートのライブテキスト等）を除外する。件数は ignoredCounts に残す
+  if (ignoreCategories.length > 0) {
+    const ignoredCounts: Record<string, number> = {};
+    result.results = result.results.filter((r) => {
+      if (!ignoreCategories.includes(r.category)) return true;
+      ignoredCounts[r.category] = (ignoredCounts[r.category] ?? 0) + 1;
+      return false;
+    });
+    if (Object.keys(ignoredCounts).length > 0) result.ignoredCounts = ignoredCounts;
+  }
+
   const hasIssues = result.results.some((r) => r.level === 'error' || r.level === 'warning');
   const incomplete = Object.entries(coverage)
     .filter(([, c]) => c.status === 'partial' || c.status === 'skipped')
@@ -869,6 +922,14 @@ export function register(server: McpServer): void {
           .enum(['x1a', 'x4'])
           .optional()
           .describe('Target PDF/X profile for compliance checks. x1a: no transparency/RGB, fonts must be embeddable (installed). x4: allows transparency, recommends ICC profile.'),
+        include_non_printing: coerceBoolean
+          .optional()
+          .default(false)
+          .describe('Also check hidden objects and objects on hidden or non-printing layers (default false: they are skipped and counted in a "non_printing_skipped" info entry)'),
+        ignore_categories: z
+          .array(z.string())
+          .optional()
+          .describe('Result categories to leave out, e.g. ["non_outlined_text"] for editable templates whose live text is intentional. Counts of removed results are returned in ignoredCounts.'),
       },
       annotations: READ_ANNOTATIONS,
     },
@@ -879,7 +940,7 @@ export function register(server: McpServer): void {
       if (!result || result.error || !Array.isArray(result.results)) {
         return formatToolResult(result);
       }
-      return formatToolResult(postProcessPreflightResult(result, params.min_dpi ?? 300));
+      return formatToolResult(postProcessPreflightResult(result, params.min_dpi ?? 300, params.ignore_categories ?? []));
     },
   );
 }

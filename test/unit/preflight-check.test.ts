@@ -361,3 +361,54 @@ describe('postProcessPreflightResult', () => {
     expect(out).not.toHaveProperty('placedImageData');
   });
 });
+
+describe('preflight_check JSX: non-printing content', () => {
+  function docWithNotesLayer(notesLayer: Fake): Fake {
+    const printed = layer([textFrame([charRange(cmyk())], { contents: 'Price' })]);
+    const notesTf = textFrame([charRange(rgb())], { contents: 'Note - how to edit' });
+    const notesPath = pathItem({ fillColor: rgb() });
+    const notes = { ...layer([notesTf, notesPath]), name: 'Instructions', ...notesLayer };
+    for (const it of notes.pageItems as Fake[]) it.parent = notes;
+    return makeDoc([], { layers: [printed, notes], textFrames: [(printed.pageItems as Fake[])[0], notesTf] });
+  }
+
+  it('skips objects on a non-printing layer and reports how many were skipped', () => {
+    const r = runPreflightJsx(docWithNotesLayer({ printable: false }));
+    expect(byCategory(r, 'non_outlined_text').map((e) => e.details.contents)).toEqual(['Price']);
+    expect(byCategory(r, 'rgb_in_cmyk')).toEqual([]);
+    expect(byCategory(r, 'non_printing_skipped')[0].details.count).toBe(2);
+  });
+
+  it('skips objects on a hidden layer and hidden objects', () => {
+    const r = runPreflightJsx(docWithNotesLayer({ visible: false }));
+    expect(byCategory(r, 'rgb_in_cmyk')).toEqual([]);
+    const hidden = runPreflightJsx(makeDoc([pathItem({ fillColor: rgb(), hidden: true })]));
+    expect(byCategory(hidden, 'rgb_in_cmyk')).toEqual([]);
+    expect(byCategory(hidden, 'non_printing_skipped')[0].details.count).toBe(1);
+  });
+
+  it('checks non-printing content when include_non_printing is true', () => {
+    const r = runPreflightJsx(docWithNotesLayer({ printable: false }), { include_non_printing: true });
+    expect(byCategory(r, 'non_outlined_text')).toHaveLength(2);
+    expect(byCategory(r, 'rgb_in_cmyk').length).toBeGreaterThan(0);
+    expect(byCategory(r, 'non_printing_skipped')).toEqual([]);
+  });
+});
+
+describe('postProcessPreflightResult: ignore_categories', () => {
+  it('removes ignored categories, counts them, and can give a clean result', () => {
+    const raw: PreflightRawResult = {
+      checkCount: 3,
+      results: [
+        { level: 'warning', category: 'non_outlined_text', message: '', uuid: 'a', details: {} },
+        { level: 'warning', category: 'non_outlined_text', message: '', uuid: 'b', details: {} },
+        { level: 'info', category: 'bleed', message: '', uuid: null, details: {} },
+      ],
+      coverage: { non_outlined_text: { status: 'checked' } },
+    };
+    const out = postProcessPreflightResult(raw, 300, ['non_outlined_text']);
+    expect((out.results as PreflightEntry[]).map((e) => e.category)).toEqual(['bleed']);
+    expect(out.ignoredCounts).toEqual({ non_outlined_text: 2 });
+    expect(out._note).toMatch(/^No issues detected/);
+  });
+});
