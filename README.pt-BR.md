@@ -220,7 +220,7 @@ Claude:  → get_document_info → resize_for_variation
 
 | | Este projeto | MCP oficial da Adobe (beta) |
 |---|---|---|
-| Instalação | npm (`npx illustrator-mcp-server`) ou instalação em um clique via `.mcpb` | Integrado ao Illustrator Beta — obtenha a chave de autenticação + URL nas configurações do app e conecte via `mcp-remote` |
+| Instalação | npm (`npx -y illustrator-mcp-server@latest`) ou instalação em um clique via `.mcpb` | Integrado ao Illustrator Beta — obtenha a chave de autenticação + URL nas configurações do app e conecte via `mcp-remote` |
 | Versões suportadas | Illustrator 2024+ verificado / 2020+ não verificado (macOS / Windows) | Apenas Illustrator Beta 30.4+ |
 | Número de ferramentas | 66 | ~40 |
 | Análise e processamento em lote de documentos existentes | ✅ Análise de estrutura / cores / fontes, recolorização em massa, variações e conjuntos de dados, exportação em lote de pranchetas (`artboard:all`), preflight de fontes e links quebrados | ✅ Seu foco principal |
@@ -622,7 +622,7 @@ As suítes E2E criam seus próprios documentos, não mexem em outros documentos 
 
 ## Política de Privacidade (Privacy Policy)
 
-O illustrator-mcp-server roda inteiramente no seu computador. Ele não coleta dados pessoais, não tem telemetria e não faz conexões de rede próprias. Os parâmetros das ferramentas e os dados do documento vão apenas para o seu Illustrator local e voltam ao cliente MCP que chamou a ferramenta; os arquivos temporários são excluídos após cada chamada. Veja a [Política de Privacidade completa](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
+O illustrator-mcp-server roda inteiramente no seu computador. Ele não coleta dados pessoais, não tem telemetria e sua única conexão de rede própria é uma verificação de versão no registro do npm ao iniciar, que não envia dados pessoais nem do documento (defina `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1` para desativá-la). Os parâmetros das ferramentas e os dados do documento vão apenas para o seu Illustrator local e voltam ao cliente MCP que chamou a ferramenta; os arquivos temporários são excluídos após cada chamada. Veja a [Política de Privacidade completa](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
 
 ---
 

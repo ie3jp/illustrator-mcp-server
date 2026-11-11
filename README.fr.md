@@ -220,7 +220,7 @@ Claude:  → get_document_info → resize_for_variation
 
 | | Ce projet | MCP officiel d'Adobe (bêta) |
 |---|---|---|
-| Installation | npm (`npx illustrator-mcp-server`) ou installation en un clic via `.mcpb` | Intégré à Illustrator Beta — récupérez une clé d'authentification + URL dans les réglages de l'application, connexion via `mcp-remote` |
+| Installation | npm (`npx -y illustrator-mcp-server@latest`) ou installation en un clic via `.mcpb` | Intégré à Illustrator Beta — récupérez une clé d'authentification + URL dans les réglages de l'application, connexion via `mcp-remote` |
 | Versions prises en charge | Illustrator 2024+ vérifié / 2020+ non vérifié (macOS / Windows) | Illustrator Beta 30.4+ uniquement |
 | Nombre d'outils | 66 | ~40 |
 | Analyse & traitement par lot de documents existants | ✅ Analyse de structure / couleurs / polices, recoloration en masse, déclinaisons & jeux de données, export par lot des plans de travail (`artboard:all`), preflight polices & liens manquants | ✅ Son axe principal |
@@ -622,7 +622,7 @@ Les suites E2E créent leurs propres documents, ne touchent pas aux autres docum
 
 ## Politique de confidentialité (Privacy Policy)
 
-illustrator-mcp-server s'exécute entièrement sur votre ordinateur. Il ne collecte aucune donnée personnelle, n'intègre aucune télémétrie et n'établit aucune connexion réseau de lui-même. Les paramètres des outils et les données du document ne transitent qu'entre votre Illustrator local et le client MCP qui a appelé l'outil ; les fichiers temporaires sont supprimés après chaque appel. Voir la [politique de confidentialité complète](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
+illustrator-mcp-server s'exécute entièrement sur votre ordinateur. Il ne collecte aucune donnée personnelle, n'intègre aucune télémétrie et sa seule connexion réseau est une vérification de version auprès du registre npm au démarrage, qui n'envoie aucune donnée personnelle ni aucune donnée de document (définissez `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1` pour la désactiver). Les paramètres des outils et les données du document ne transitent qu'entre votre Illustrator local et le client MCP qui a appelé l'outil ; les fichiers temporaires sont supprimés après chaque appel. Voir la [politique de confidentialité complète](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
 
 ---
 

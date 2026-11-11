@@ -1,6 +1,6 @@
 # Privacy Policy / プライバシーポリシー
 
-Effective date / 施行日: 2026-09-25
+Effective date / 施行日: 2026-11-12
 
 illustrator-mcp-server ("the server") is an open-source MCP server that runs entirely on your computer and controls your local copy of Adobe Illustrator.
 
@@ -8,9 +8,15 @@ illustrator-mcp-server（以下「本サーバー」）は、お使いのコン�
 
 ## Data collection / 収集するデータ
 
-The server does not collect, transmit, or sell any personal data. It has no telemetry, analytics, or crash reporting, and it makes no network connections of its own.
+The server does not collect, transmit, or sell any personal data. It has no telemetry, analytics, or crash reporting. Its only network connection is the update check described below.
 
-本サーバーは個人データを収集・送信・販売しません。テレメトリー、アクセス解析、クラッシュレポートの仕組みはなく、本サーバー自身がネットワーク通信を行うこともありません。
+本サーバーは個人データを収集・送信・販売しません。テレメトリー、アクセス解析、クラッシュレポートの仕組みはありません。本サーバー自身が行うネットワーク通信は、下記の更新確認だけです。
+
+## Update check / 更新の確認
+
+Once per start, the server asks the public npm registry (`https://registry.npmjs.org/illustrator-mcp-server/latest`) for the latest version number, so it can tell you when an update is available. The request contains no personal data and no document data; like any web request, the registry sees your IP address. If the check fails (for example, when you are offline), it is silently skipped. To turn it off, set the environment variable `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1`.
+
+本サーバーは起動のたびに一度だけ、公開されている npm レジストリ（`https://registry.npmjs.org/illustrator-mcp-server/latest`）に最新の版番号を問い合わせ、更新があればお知らせします。問い合わせに個人データやドキュメントのデータは含まれません（通常の Web 通信と同じく、レジストリには IP アドレスが伝わります）。オフラインなどで失敗した場合は何もせずに続行します。無効にするには環境変数 `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1` を設定してください。
 
 ## How data is used and stored / データの利用と保存
 

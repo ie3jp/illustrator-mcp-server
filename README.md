@@ -222,7 +222,7 @@ Claude:  → get_document_info → resize_for_variation
 
 | | This project | Adobe official MCP (beta) |
 |---|---|---|
-| Installation | npm (`npx illustrator-mcp-server`) or one-click `.mcpb` install | Built into Illustrator Beta — get an auth key + URL from the app settings, connect via `mcp-remote` |
+| Installation | npm (`npx -y illustrator-mcp-server@latest`) or one-click `.mcpb` install | Built into Illustrator Beta — get an auth key + URL from the app settings, connect via `mcp-remote` |
 | Supported versions | Illustrator 2024+ verified / 2020+ unverified (macOS / Windows) | Illustrator Beta 30.4+ only |
 | Number of tools | 66 | ~40 |
 | Analyzing & batch-processing existing documents | ✅ Structure / color / font analysis, bulk recolor, variations & datasets, batch artboard export (`artboard:all`), font & broken-link preflight | ✅ Its main focus |
@@ -624,7 +624,7 @@ The E2E suites create their own documents, never touch other open documents, and
 
 ## Privacy Policy
 
-illustrator-mcp-server runs entirely on your computer. It collects no personal data, has no telemetry, and makes no network connections of its own. Tool parameters and document data go only to your local Illustrator and back to the MCP client that called the tool; temporary files are deleted after each call. See the full [Privacy Policy](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
+illustrator-mcp-server runs entirely on your computer. It collects no personal data, has no telemetry, and its only network connection is a version check against the npm registry at startup, which sends no personal or document data (set `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1` to turn it off). Tool parameters and document data go only to your local Illustrator and back to the MCP client that called the tool; temporary files are deleted after each call. See the full [Privacy Policy](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md).
 
 ---
 

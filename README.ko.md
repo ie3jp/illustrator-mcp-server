@@ -220,7 +220,7 @@ Claude:  → get_document_info → resize_for_variation
 
 | | 본 프로젝트 | Adobe 공식 MCP (Beta) |
 |---|---|---|
-| 설치 방법 | npm(`npx illustrator-mcp-server`) 또는 `.mcpb` 원클릭 설치 | Illustrator Beta 내장 — 앱 설정에서 인증 키와 URL을 받아 `mcp-remote`로 연결 |
+| 설치 방법 | npm(`npx -y illustrator-mcp-server@latest`) 또는 `.mcpb` 원클릭 설치 | Illustrator Beta 내장 — 앱 설정에서 인증 키와 URL을 받아 `mcp-remote`로 연결 |
 | 지원 버전 | Illustrator 2024+ 검증됨 / 2020+ 미검증 (macOS / Windows) | Illustrator Beta 30.4+ 한정 |
 | 도구 수 | 66 | 약 40 |
 | 기존 문서 분석・일괄 처리 | ✅ 구조 / 컬러 / 폰트 분석, 일괄 리컬러, 바리에이션 생성・데이터셋, 전체 아트보드 일괄 내보내기(`artboard:all`), 폰트 / 링크 누락 프리플라이트 | ✅ 주요 포커스 |
@@ -622,7 +622,7 @@ E2E 스위트는 각자 전용 문서를 만들고, 열려 있는 다른 문서�
 
 ## 개인정보처리방침 (Privacy Policy)
 
-illustrator-mcp-server는 사용자의 컴퓨터에서만 동작합니다. 개인 데이터를 수집하지 않고, 텔레메트리가 없으며, 서버 자체적으로 네트워크 연결을 하지 않습니다. 도구 인수와 문서 데이터는 로컬 Illustrator와 도구를 호출한 MCP 클라이언트 사이에서만 오가며, 임시 파일은 호출이 끝날 때마다 삭제됩니다. 자세한 내용은 [개인정보처리방침](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md)을 참고하세요.
+illustrator-mcp-server는 사용자의 컴퓨터에서만 동작합니다. 개인 데이터를 수집하지 않고, 텔레메트리가 없으며, 서버 자체의 네트워크 연결은 시작 시 npm 레지스트리에 최신 버전 번호를 확인하는 것뿐입니다(개인 데이터나 문서 데이터는 보내지 않으며, `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1`로 끌 수 있습니다). 도구 인수와 문서 데이터는 로컬 Illustrator와 도구를 호출한 MCP 클라이언트 사이에서만 오가며, 임시 파일은 호출이 끝날 때마다 삭제됩니다. 자세한 내용은 [개인정보처리방침](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md)을 참고하세요.
 
 ---
 

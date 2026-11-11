@@ -220,7 +220,7 @@ Claude:  → get_document_info → resize_for_variation
 
 | | 本项目 | Adobe 官方 MCP（Beta） |
 |---|---|---|
-| 获取方式 | npm（`npx illustrator-mcp-server`）或一键安装 `.mcpb` | 内置于 Illustrator Beta —— 在应用设置中获取认证密钥和 URL，通过 `mcp-remote` 连接 |
+| 获取方式 | npm（`npx -y illustrator-mcp-server@latest`）或一键安装 `.mcpb` | 内置于 Illustrator Beta —— 在应用设置中获取认证密钥和 URL，通过 `mcp-remote` 连接 |
 | 支持版本 | Illustrator 2024+ 已验证 / 2020+ 未验证（macOS / Windows） | 仅限 Illustrator Beta 30.4+ |
 | 工具数量 | 66 | 约 40 |
 | 现有文档的分析与批量处理 | ✅ 结构 / 颜色 / 字体分析、批量重新配色、变体生成与数据集、全画板批量导出（`artboard:all`）、字体 / 链接缺失预检 | ✅ 主要专注领域 |
@@ -622,7 +622,7 @@ E2E 测试套件各自创建专用文档，不会触碰其他已打开的文档�
 
 ## 隐私政策（Privacy Policy）
 
-illustrator-mcp-server 完全在你的电脑上运行。它不收集个人数据，没有遥测，自身也不进行任何网络连接。工具参数和文档数据只在本地 Illustrator 与调用工具的 MCP 客户端之间传递，临时文件会在每次调用后删除。详见完整的[隐私政策](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md)。
+illustrator-mcp-server 完全在你的电脑上运行。它不收集个人数据，没有遥测，自身唯一的网络连接是启动时向 npm registry 查询最新版本号（不发送个人数据或文档数据，设置 `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1` 可关闭）。工具参数和文档数据只在本地 Illustrator 与调用工具的 MCP 客户端之间传递，临时文件会在每次调用后删除。详见完整的[隐私政策](https://github.com/ie3jp/illustrator-mcp-server/blob/main/PRIVACY.md)。
 
 ---
 

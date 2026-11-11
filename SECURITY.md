@@ -21,7 +21,7 @@ We will acknowledge your report within 7 days and aim to release a fix promptly.
 This MCP server executes ExtendScript code inside Adobe Illustrator via `osascript` (macOS) or PowerShell COM automation (Windows). Key security considerations:
 
 - **File system access**: The server reads/writes temporary files and can export to user-specified paths
-- **No network access**: The server does not make network requests
+- **Network access**: The only request the server makes is a version check against the npm registry at startup (`https://registry.npmjs.org/illustrator-mcp-server/latest`). It sends no document or personal data, failures are ignored, and `ILLUSTRATOR_MCP_NO_UPDATE_CHECK=1` disables it
 - **Local only**: Designed to run locally via stdio transport, not over a network
 
 ## Dependency Update PR Safety (Dependabot)
