@@ -208,6 +208,11 @@ function applyStroke(item, strokeObj, defaultStroked) {
   if (strokeObj.color) {
     item.strokeColor = createColor(strokeObj.color);
     item.stroked = true;
+  } else if (defaultStroked === true) {
+    // 色を省略して線幅だけ指定した場合、defaultStroked が明示的に true のとき（create_line）は
+    // 線を出す。線なしの線分は完全に不可視で、成功を返しても何も見えないため。
+    // 既存オブジェクトの変更では現在の stroked が渡るので、ここでは触らない
+    item.stroked = true;
   }
 }
 `;

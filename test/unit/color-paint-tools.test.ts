@@ -395,6 +395,43 @@ describe('replace_color', () => {
     expect(r.warnings).toBeUndefined();
   });
 
+  // target: "both" で塗りを書いた直後に同じ characterAttributes から線を読むと、
+  // 結合で無効になった範囲を触って MRAP になる。属性ごとにパスを分けたことの回帰テスト。
+  // 実機では結合すると範囲オブジェクトが差し替わるため、取り直せば有効なものが得られる
+  it('does not read back a characterAttributes it just wrote to (target: both)', async () => {
+    const ranges: Array<{ characterAttributes: Record<string, unknown> }> = [];
+    const dead = new Set<unknown>();
+    const makeRange = (fill: unknown, strokeWeight: number): { characterAttributes: Record<string, unknown> } => {
+      const attrs: Record<string, unknown> = { strokeColor: { typename: 'NoColor' } };
+      const guard = (): void => {
+        if (dead.has(attrs)) throw new Error("an Illustrator error occurred: 1346458189 ('MRAP')");
+      };
+      Object.defineProperty(attrs, 'fillColor', {
+        get: () => { guard(); return fill; },
+        // 書いた時点でこの範囲オブジェクトは無効になり、コレクション上は別オブジェクトに差し替わる
+        set: (v) => {
+          guard();
+          dead.add(attrs);
+          const idx = ranges.findIndex((r) => r.characterAttributes === attrs);
+          ranges[idx] = makeRange(v, strokeWeight);
+        },
+      });
+      Object.defineProperty(attrs, 'strokeWeight', { get: () => { guard(); return strokeWeight; } });
+      return { characterAttributes: attrs };
+    };
+    ranges.push(makeRange(cmyk(0, 100, 100, 0), 1));
+    const tf = { typename: 'TextFrame', textRanges: ranges };
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [], textFrames: [tf] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 }, target: 'both' },
+      { doc },
+    );
+    // 書いた範囲を読み直さないので MRAP にならず、置換が成立する
+    expect(r.error).toBeUndefined();
+    expect(r.textFramesChanged).toBe(1);
+  });
+
   it('survives ranges merging as colors change (textRanges is a live collection)', async () => {
     // 実機では色を変えた範囲が同色の隣と結合し、前から回すと存在しない範囲に触れて MRAP になる
     const ranges: Array<{ characterAttributes: Record<string, unknown> }> = [];

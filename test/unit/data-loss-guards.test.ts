@@ -112,6 +112,12 @@ function runJsx(code: string, params: Record<string, unknown>, globals: Globals)
     ...commonLayerHelpers,
     ...globals,
   };
+  // 実機の verifyItemDefault は verifyItem に委譲する（座標系を取らないツール用）。
+  // 差し替えられた verifyItem を使うよう、マージ後に定義する
+  if (!base['verifyItemDefault']) {
+    const effectiveVerifyItem = base['verifyItem'] as (item: unknown) => Record<string, unknown>;
+    base['verifyItemDefault'] = (item: unknown) => effectiveVerifyItem(item);
+  }
   const names = Object.keys(base);
   // eslint-disable-next-line no-new-func -- test-only: executing embedded ES3 JSX against fakes
   const fn = new Function(...names, code); // NOSONAR

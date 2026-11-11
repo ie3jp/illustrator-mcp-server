@@ -44,7 +44,7 @@ if (preflight) {
               action: "relink",
               uuid: params.uuid,
               newPath: params.new_path,
-              verified: verifyItem(item)
+              verified: verifyItemDefault(item)
             });
           }
         }
@@ -73,7 +73,7 @@ if (preflight) {
             action: "embed",
             previousUuid: params.uuid,
             newUuid: resultUuid,
-            verified: embeddedItem ? verifyItem(embeddedItem) : null
+            verified: embeddedItem ? verifyItemDefault(embeddedItem) : null
           });
         } else {
           writeResultFile(RESULT_PATH, {

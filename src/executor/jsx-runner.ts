@@ -177,6 +177,15 @@ ${toolScript}
 
 // ─── エラーメッセージ変換 ────────────────────────────────────────────────────
 
+/**
+ * osascript の診断末尾に出る「(-1712)」形式のエラー番号だけを見る。
+ * stderr には一時スクリプトのパスが必ず含まれ、その UUID に "-1712" が現れうるため、
+ * 素朴な部分一致では誤分類する。
+ */
+export function hasOsascriptErrorCode(stderr: string, code: number): boolean {
+  return new RegExp(`\\(-${code}\\)`).test(stderr);
+}
+
 function parseOsascriptError(stderr: string): string {
   if (stderr.includes('Connection is invalid')) {
     return 'Illustrator is not running. Please launch Adobe Illustrator.';
@@ -186,17 +195,29 @@ function parseOsascriptError(stderr: string): string {
   }
   // -1712: Illustrator が Apple Event に応答しないまま with timeout を超えた。
   // -2741: tell ブロックのコンパイル時に用語辞書を引けなかった（Illustrator が応答しないときに出る）。
-  // どちらも「Illustrator が長時間ビジー」の症状で、実測ではフォントが数千ある環境の
-  // 初回テキスト処理（テキストエンジンの初期化）で起きる。
-  if (stderr.includes('-1712')) {
-    return 'Illustrator did not respond before the AppleEvent timeout. It is busy, not crashed: '
-      + 'the first text operation after launch or after being idle can take minutes when many fonts are installed. '
+  // 実測では、ある環境でテキストフレームの生成だけが 1 回 240 秒かかり（他のツールは 0.3 秒）、
+  // 既定の 30 秒・AppleScript の 120 秒を超えて両方のエラーが出た。原因は未特定で、
+  // こちら側のヘルパは全てゼロ秒だったため Illustrator 側の処理と見ている。
+  // 未インストールのバージョンを set_illustrator_version で指定した場合も -2741 になる。
+  //
+  // 番号は osascript 形式の末尾「(-1712)」の形だけを見る。stderr には必ず一時スクリプトの
+  // パスが入り、その UUID の 4 桁グループが "1712" になりうるため、includes('-1712') だと
+  // 無関係なエラーを誤分類する（例: run-xxxxxxxx-1712-4xxx-....scpt）。
+  // 断定は避け、元の診断も必ず残す（別原因のときに調査材料を失わないため）。
+  if (hasOsascriptErrorCode(stderr, 1712)) {
+    return 'Illustrator did not respond before the AppleEvent timeout. '
+      + 'It is often busy rather than crashed: on some systems a single text operation has been measured '
+      + 'taking minutes while every other tool returned in under a second. '
       + 'Wait for it to settle, or raise ILLUSTRATOR_MCP_TIMEOUT_NORMAL / ILLUSTRATOR_MCP_TIMEOUT_HEAVY (ms), then retry. '
-      + 'Check the document state before retrying so the operation is not applied twice.';
+      + 'Check the document state before retrying so the operation is not applied twice. '
+      + `Original error: ${stderr.trim()}`;
   }
-  if (stderr.includes('-2741')) {
-    return 'Could not read Illustrator\'s scripting terminology, which means it is busy and not answering. '
-      + 'This happens while Illustrator is still initializing its text engine. Wait for it to settle and retry.';
+  if (hasOsascriptErrorCode(stderr, 2741)) {
+    return 'Could not read Illustrator\'s scripting terminology to compile the script. '
+      + 'Either Illustrator is busy and not answering Apple Events, or the version set with '
+      + 'set_illustrator_version is not installed at that path. Check the version, wait for Illustrator to settle, '
+      + 'and check the document state before retrying so the operation is not applied twice. '
+      + `Original error: ${stderr.trim()}`;
   }
   return stderr;
 }

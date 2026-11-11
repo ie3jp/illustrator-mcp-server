@@ -6,7 +6,7 @@ import { execFile } from 'child_process';
 import type { ExecFileException } from 'child_process';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { appleEventTimeoutSeconds, writeAppleScript, writePowerShellScript } from '../../src/executor/file-transport.js';
-import { getExecFailureMessage, getAppPath, setAppVersion, getAppVersion, resolveVersionToPath, resolveTransport, resolveTimeout } from '../../src/executor/jsx-runner.js';
+import { getExecFailureMessage, getAppPath, setAppVersion, getAppVersion, resolveVersionToPath, resolveTransport, resolveTimeout, hasOsascriptErrorCode } from '../../src/executor/jsx-runner.js';
 
 // ─── resolveTransport ────────────────────────────────────────────────────────
 
@@ -206,6 +206,15 @@ describe('writeAppleScript', () => {
     expect(content.indexOf('end tell')).toBeLessThan(content.indexOf('end timeout'));
   });
 
+  // activate を「付けない」ことを確かめるテストが無かったため、file-transport を
+  // 常時前面化に変えても全テストが通ってしまっていた（PR #58 の退行が検出できない）
+  it('activate 省略時は前面化しない', async () => {
+    const scpt = path.join(tmpDir, 'run.scpt');
+    await writeAppleScript(scpt, '/tmp/script.jsx', { timeoutMs: 30_000 });
+    const content = await fs.readFile(scpt, 'utf-8');
+    expect(content).not.toContain('activate');
+  });
+
   it('timeoutMs 未指定なら with timeout を付けない（既定 120 秒のまま）', async () => {
     const scpt = path.join(tmpDir, 'run.scpt');
     await writeAppleScript(scpt, '/tmp/script.jsx');
@@ -265,6 +274,13 @@ describe('writePowerShellScript', () => {
     await writePowerShellScript(ps1, '/tmp/script.jsx', { activate: true });
     const content = await fs.readFile(ps1, 'utf-8');
     expect(content).toContain('AppActivate("Adobe Illustrator")');
+  });
+
+  it('activate 省略時は前面化しない', async () => {
+    const ps1 = path.join(tmpDir, 'run-hidden.ps1');
+    await writePowerShellScript(ps1, '/tmp/script.jsx');
+    const content = await fs.readFile(ps1, 'utf-8');
+    expect(content).not.toContain('AppActivate');
   });
 
   it('Windows パスのバックスラッシュをスラッシュに変換する', async () => {
@@ -447,5 +463,62 @@ describe('getExecFailureMessage osascript transport', () => {
       100,
     );
     expect(msg).toBe('some unknown osascript error');
+  });
+});
+
+// ─── osascript のエラー番号判定 ───────────────────────────────────────────────
+
+describe('hasOsascriptErrorCode', () => {
+  // stderr には必ず一時スクリプトのパスが入る（実測の形）
+  const realError =
+    '/var/folders/3t/xx/T/illustrator-mcp-DfhnYT/run-f2b4f7fc-a367-4a33-90f3-de180fe094a3.scpt:76:224: '
+    + 'execution error: Adobe Illustratorでエラーが起きました: AppleEventがタイムアウトしました。 (-1712)';
+
+  it('末尾の (-1712) を検出する', () => {
+    expect(hasOsascriptErrorCode(realError, 1712)).toBe(true);
+  });
+
+  it('別の番号とは混同しない', () => {
+    expect(hasOsascriptErrorCode(realError, 2741)).toBe(false);
+  });
+
+  // UUID の 4 桁グループが "1712" になると includes('-1712') では誤検出する
+  it('一時ファイル名の UUID に 1712 が入っていても誤検出しない', () => {
+    const pathOnly =
+      '/var/folders/3t/xx/T/illustrator-mcp-AbCdEf/run-aaaaaaaa-1712-4bbb-8ccc-dddddddddddd.scpt:10:20: '
+      + 'execution error: Adobe Illustrator got an error: Can\'t get document 1. (-1728)';
+    expect(hasOsascriptErrorCode(pathOnly, 1712)).toBe(false);
+    expect(hasOsascriptErrorCode(pathOnly, 1728)).toBe(true);
+  });
+
+  it('run- の直後に 1712 が来る UUID でも誤検出しない', () => {
+    const pathOnly = '/tmp/illustrator-mcp-X/run-1712abcd-0000-4000-8000-000000000000.scpt:1:2: '
+      + 'execution error: something else. (-1700)';
+    expect(hasOsascriptErrorCode(pathOnly, 1712)).toBe(false);
+  });
+});
+
+// ─── -1712 / -2741 のメッセージ ──────────────────────────────────────────────
+
+describe('getExecFailureMessage の AppleEvent タイムアウト案内', () => {
+  const stderr1712 =
+    '/tmp/illustrator-mcp-X/run-aaaa.scpt:76:224: execution error: '
+    + 'Adobe Illustratorでエラーが起きました: AppleEventがタイムアウトしました。 (-1712)';
+
+  it('-1712 は待機・延長の案内に差し替え、元の診断も残す', () => {
+    const msg = getExecFailureMessage({} as never, stderr1712, 30_000, 'osascript', 10);
+    expect(msg).toContain('AppleEvent timeout');
+    expect(msg).toContain('ILLUSTRATOR_MCP_TIMEOUT_NORMAL');
+    // 断定しない（別原因でもこの番号は出る）
+    expect(msg).toContain('often busy rather than crashed');
+    // 調査材料を捨てない
+    expect(msg).toContain('(-1712)');
+  });
+
+  it('番号がパスにしか無いエラーは差し替えない', () => {
+    const stderr = '/tmp/illustrator-mcp-X/run-aaaaaaaa-1712-4bbb-8ccc-dddddddddddd.scpt:1:2: '
+      + 'execution error: Adobe Illustrator got an error: Can\'t get document 1. (-1728)';
+    const msg = getExecFailureMessage({} as never, stderr, 30_000, 'osascript', 10);
+    expect(msg).toBe(stderr);
   });
 });

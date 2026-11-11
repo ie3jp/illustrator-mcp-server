@@ -231,12 +231,14 @@ describe('activation is confined to menu-command tools', () => {
     return relative(SRC_TOOLS_DIR, file).split(sep).join('/');
   }
 
-  it('only create_crop_marks hardcodes activate: true', () => {
+  // activate: true のリテラルだけを見ると activate: cond や { ...opts, activate } をすり抜ける。
+  // 「activate という語が出るファイル」の allowlist にして、式・変数・短縮形も拾う
+  it('only the menu-command tools mention activate at all', () => {
     const offenders = collectTsFiles(SRC_TOOLS_DIR)
-      .filter((file) => /activate:\s*true/.test(readFileSync(file, 'utf8')))
+      .filter((file) => /\bactivate\b/.test(readFileSync(file, 'utf8')))
       .map(toolPath)
       .sort();
-    expect(offenders).toEqual(['modify/create-crop-marks.ts']);
+    expect(offenders).toEqual(['export/export-pdf.ts', 'modify/create-crop-marks.ts', 'tool-executor.ts']);
   });
 
   it('export_pdf activates only when it needs the trim-mark menu command', () => {

@@ -55,7 +55,7 @@ if (preflight) {
 
       var verifiedItems = [];
       for (var vi = 0; vi < moved.length; vi++) {
-        verifiedItems.push(verifyItem(moved[vi]));
+        verifiedItems.push(verifyItemDefault(moved[vi]));
       }
       var moveResult = {
         success: notFound.length === 0 && errors.length === 0,

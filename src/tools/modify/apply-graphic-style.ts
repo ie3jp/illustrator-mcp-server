@@ -55,7 +55,7 @@ if (preflight) {
       }
       var verifiedItems = [];
       for (var vi = 0; vi < applied.length; vi++) {
-        verifiedItems.push(verifyItem(applied[vi]));
+        verifiedItems.push(verifyItemDefault(applied[vi]));
       }
       writeResultFile(RESULT_PATH, {
         success: notFound.length === 0 && errors.length === 0,

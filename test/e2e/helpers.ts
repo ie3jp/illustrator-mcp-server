@@ -93,10 +93,33 @@ function formatDuration(ms: number): string {
 
 // ── クライアント ──
 
+/**
+ * e2e のタイムアウト。
+ * 既定では MCP SDK の 60 秒とサーバーの 30 秒 / 60 秒が先に当たるため、フォントが数千ある
+ * 環境の初回テキスト処理（実機で 480 秒を計測）では e2e が構造的に通らなかった。
+ * E2E_TIMEOUT_MS で三者をまとめて上げられるようにする。
+ */
+export const E2E_TIMEOUT_MS = (() => {
+  const raw = process.env['E2E_TIMEOUT_MS'];
+  if (raw && /^\d+$/.test(raw) && Number(raw) > 0) return Number(raw);
+  // 実測: ある環境ではテキストフレームの生成が 1 回 480 秒かかった（他のツールは 1 秒未満）。
+  // 原因は未特定。e2e は手で回すものなので、既定は実測を踏まえて余裕を取る
+  return 600_000;
+})();
+
+/** fixture の osascript に渡す with timeout の秒数（同じ値から作る） */
+export const E2E_TIMEOUT_SEC = Math.ceil(E2E_TIMEOUT_MS / 1000);
+
 export async function createClient(): Promise<Client> {
   const transport = new StdioClientTransport({
     command: 'node',
     args: ['dist/index.js'],
+    // サーバー側の既定（30 秒 / 60 秒）では遅い環境のテキスト処理が必ず落ちる
+    env: {
+      ...(process.env as Record<string, string>),
+      ILLUSTRATOR_MCP_TIMEOUT_NORMAL: String(E2E_TIMEOUT_MS),
+      ILLUSTRATOR_MCP_TIMEOUT_HEAVY: String(E2E_TIMEOUT_MS),
+    },
   });
   const client = new Client({ name: 'e2e-test', version: '1.0.0' });
   await client.connect(transport);
@@ -104,7 +127,8 @@ export async function createClient(): Promise<Client> {
 }
 
 export async function callTool(client: Client, name: string, params: Record<string, unknown> = {}): Promise<unknown> {
-  const result = await client.callTool({ name, arguments: params });
+  // 渡さないと MCP SDK の既定 60 秒が先に当たる
+  const result = await client.callTool({ name, arguments: params }, undefined, { timeout: E2E_TIMEOUT_MS });
   const content = result.content as Array<{ type: string; text: string }>;
   if (!content || content.length === 0) throw new Error('No content in response');
 

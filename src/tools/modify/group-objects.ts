@@ -336,8 +336,13 @@ if (preflight) {
         success: true,
         uuid: uuid,
         childCount: group.pageItems.length,
-        verified: verifyItem(group)
+        verified: verifyItemDefault(group)
       };
+      // クリップパスになったパスは自分の塗り/線を失う（UI のクリッピングマスクと同じ）。
+      // 結果から気づけないため明示する
+      if (params.clipped === true) {
+        okResult.warnings = ["The clip path (last UUID) lost its own fill and stroke, as it does when you make a clipping mask in the UI."];
+      }
       writeResultFile(RESULT_PATH, okResult);
       committed = true;
     }
@@ -367,7 +372,7 @@ export function register(server: McpServer): void {
         clipped: coerceBoolean
           .optional()
           .default(false)
-          .describe('Create as clipping group. Needs at least 2 objects; the last UUID becomes the clip path (topmost) and must be a path or compound path. Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid.'),
+          .describe('Create as clipping group. Needs at least 2 objects; the last UUID becomes the clip path (topmost) and must be a path or compound path. Example: [content-uuid, mask-uuid] — mask-uuid clips content-uuid. The object that becomes the clip path LOSES its own fill and stroke (same as making a clipping mask in the UI), so do not pass an object whose own paint you want to keep.'),
       },
       // clipped: true ではクリップパスになるパスの塗り/線が失われる（UI のクリッピングマスクと同じ）
       annotations: DESTRUCTIVE_ANNOTATIONS,

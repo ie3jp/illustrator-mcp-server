@@ -63,7 +63,7 @@ describe('collectTopLevelPageItems', () => {
 });
 
 describe('extract_design_tokens spacing bounds (#52)', () => {
-  it('tags bounds with a sibling scope: groups stay in their parent scope, their children get their own, compound paths are one shape', () => {
+  it('tags bounds with a scope: top-level items share one scope across layers, group children get their own, compound paths are one shape', () => {
     const { doc } = layeredDoc();
     const r = runToolJsx(extractJsxCode('read/extract-design-tokens.ts'), {}, makeApp(doc));
     expect(r.error).toBeUndefined();
@@ -73,7 +73,23 @@ describe('extract_design_tokens spacing bounds (#52)', () => {
       { left: 60, top: 100, right: 70, bottom: 60, scope: 1 }, // グループの子
       { left: 80, top: 100, right: 100, bottom: 60, scope: 1 },
       { left: 120, top: 100, right: 160, bottom: 60, scope: 0 },
-      { left: 180, top: 100, right: 220, bottom: 60, scope: 2 }, // サブレイヤー
+      { left: 180, top: 100, right: 220, bottom: 60, scope: 0 }, // サブレイヤー: トップレベル同士は比較する
     ]);
+  });
+
+  // レイヤーごとに scope を分けると、「文字」「図形」「背景」のようにレイヤーを分けた文書で
+  // 間隔が一切取れなくなる。#52 の修正で一度そうなったので、同じ退行を検出する
+  it('compares spacing across layers: items on different layers land in the same scope', () => {
+    const { doc } = layeredDoc();
+    const r = runToolJsx(extractJsxCode('read/extract-design-tokens.ts'), {}, makeApp(doc));
+    expect(r.error).toBeUndefined();
+    // left:120 は Art レイヤー直下の rect、left:180 は Sub レイヤー直下の subRect。
+    // 別レイヤーでも同じ scope でなければ、両者の間隔は一度も比較されない
+    const bounds = r.objectBounds as Array<{ left: number; scope: number }>;
+    const artScope = bounds.find((b) => b.left === 120)?.scope;
+    const subScope = bounds.find((b) => b.left === 180)?.scope;
+    expect(artScope).toBeDefined();
+    expect(subScope).toBeDefined();
+    expect(subScope).toBe(artScope);
   });
 });

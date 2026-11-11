@@ -57,7 +57,7 @@ if (preflight) {
           success: true,
           styleType: params.style_type,
           styleName: params.style_name,
-          verified: verifyItem(item)
+          verified: verifyItemDefault(item)
         });
       }
     }

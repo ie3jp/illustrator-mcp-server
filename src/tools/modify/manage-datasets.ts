@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { executeJsx } from '../../executor/jsx-runner.js';
 import { formatToolResult } from '../tool-executor.js';
-import { DESTRUCTIVE_ANNOTATIONS } from './shared.js';
+import { coerceBoolean, DESTRUCTIVE_ANNOTATIONS } from './shared.js';
 
 /**
  * manage_datasets — 変数・データセットの一覧・適用・作成・インポート/エクスポート
@@ -306,8 +306,21 @@ if (preflight) {
         writeResultFile(RESULT_PATH, { error: true, message: "file_path is required for export" });
       } else {
         var expFile = new File(params.file_path);
-        doc.exportVariables(expFile);
-        writeResultFile(RESULT_PATH, { success: true, action: "export", path: params.file_path });
+        // 既存ファイルは overwrite: true のときだけ置き換える（他ツールと同じ契約。
+        // ここだけ防御が無く、無関係な XML を無断で上書きできていた）
+        var expExisted = false;
+        try { expExisted = expFile.exists; } catch (eEx) {}
+        if (expExisted && params.overwrite !== true) {
+          writeResultFile(RESULT_PATH, {
+            error: true,
+            action: "export",
+            path: params.file_path,
+            message: "File already exists: " + params.file_path + ". Nothing was written. Pass overwrite: true to replace it, or choose another path."
+          });
+        } else {
+          doc.exportVariables(expFile);
+          writeResultFile(RESULT_PATH, { success: true, action: "export", path: params.file_path });
+        }
       }
     } else {
       writeResultFile(RESULT_PATH, { error: true, message: "Unknown action: " + action });
@@ -324,7 +337,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Variables & Datasets',
       description:
-        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header.',
+        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. export refuses to replace an existing file unless overwrite is true. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header.',
       inputSchema: {
         action: z
           .enum([
@@ -358,6 +371,10 @@ export function register(server: McpServer): void {
           .string()
           .optional()
           .describe('File path (XML for import/export, CSV for import_csv)'),
+        overwrite: coerceBoolean
+          .optional()
+          .default(false)
+          .describe('For export: replace the file if it already exists. Without this, an existing file is never overwritten.'),
       },
       // import は既存の変数・データセットを全置換する（importVariables の仕様）ため destructive
       annotations: DESTRUCTIVE_ANNOTATIONS,
