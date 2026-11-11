@@ -9,18 +9,22 @@ const UUID_A = '11111111-2222-4333-8444-555555555555';
 const UUID_B = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
 
 function textFrame(bounds: number[], extra: Record<string, unknown> = {}): any {
+  const chars = [
+    {
+      characterAttributes: { textFont: { family: 'Helvetica', style: 'Regular' }, size: 12 },
+      paragraphStyles: [{ name: 'Body' }],
+      characterStyles: [{ name: 'Emphasis' }],
+    },
+  ];
+  const { textRange: extraTextRange, ...rest } = extra as { textRange?: Record<string, unknown> };
   return fakeItem('TextFrame', bounds, {
     kind: 'POINTTEXT',
     contents: 'Hello',
     orientation: 'HORIZONTAL',
-    textRanges: [
-      {
-        characterAttributes: { textFont: { family: 'Helvetica', style: 'Regular' }, size: 12 },
-        paragraphStyles: [{ name: 'Body' }],
-        characterStyles: [{ name: 'Emphasis' }],
-      },
-    ],
-    ...extra,
+    textRanges: chars,
+    // 実機の TextFrame.textRange は characters を持つ（文字属性はそこから読む）
+    textRange: { characters: chars, ...extraTextRange },
+    ...rest,
   });
 }
 
@@ -98,6 +102,19 @@ function detailFrame(extra: Record<string, unknown> = {}): any {
     kerningMethod: 'AUTO', proportionalMetrics: false, akiLeft: -1, akiRight: -1, Tsume: 0,
     baselineShift: 0, horizontalScale: 100, verticalScale: 100, rotation: 0,
   });
+  const paragraphs = [
+    {
+      contents: 'AB',
+      // ParagraphAttributes には leading / autoLeading / paragraphStyle が無い（公式リファレンス）
+      paragraphAttributes: { autoLeadingAmount: 175, justification: 'LEFT' },
+      characterAttributes: { leading: 18, autoLeading: false },
+      paragraphStyles: [{ name: 'Body' }],
+    },
+  ];
+  const characters = [
+    { contents: 'A', characterAttributes: charAttrs(spot('DIC 1')) },
+    { contents: 'B', characterAttributes: charAttrs(spot('DIC 2')) },
+  ];
   return fakeItem('TextFrame', [0, 0, 100, -20], {
     note: UUID_A,
     kind: 'AREATEXT',
@@ -105,19 +122,9 @@ function detailFrame(extra: Record<string, unknown> = {}): any {
     orientation: 'VERTICAL',
     nextFrame: fakeItem('TextFrame', [0, -30, 100, -50], { note: UUID_B }),
     previousFrame: null,
-    paragraphs: [
-      {
-        contents: 'AB',
-        // ParagraphAttributes には leading / autoLeading / paragraphStyle が無い（公式リファレンス）
-        paragraphAttributes: { autoLeadingAmount: 175, justification: 'LEFT' },
-        characterAttributes: { leading: 18, autoLeading: false },
-        paragraphStyles: [{ name: 'Body' }],
-      },
-    ],
-    characters: [
-      { contents: 'A', characterAttributes: charAttrs(spot('DIC 1')) },
-      { contents: 'B', characterAttributes: charAttrs(spot('DIC 2')) },
-    ],
+    paragraphs,
+    characters,
+    textRange: { paragraphs, characters },
     ...extra,
   });
 }

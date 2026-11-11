@@ -34,30 +34,21 @@ if (preflight) {
       } catch(e) {}
     }
 
+    // 文字ごとのフォント。読めなかったフレームは既定値で埋めず、記録して部分失敗にする
     var fontEntries = [];
-    var textBounds = [];
+    var textReadLog = newTextReadLog();
     for (var ti = 0; ti < doc.textFrames.length; ti++) {
       var tf = doc.textFrames[ti];
+      if (skipLayers[tf.layer.name]) continue;
       try {
-        if (skipLayers[tf.layer.name]) continue;
-        var b = tf.geometricBounds;
-        textBounds.push({ left: b[0], top: b[1], right: b[2], bottom: b[3] });
-        for (var ri = 0; ri < tf.textRanges.length; ri++) {
-          var tr = tf.textRanges[ri];
-          try {
-            var ca = tr.characterAttributes;
-            var fontName = "";
-            var fontStyle = "";
-            try { fontName = ca.textFont.name; } catch(e2) {}
-            try { fontStyle = ca.textFont.style; } catch(e2) {}
-            fontEntries.push({
-              fontFamily: fontName,
-              fontStyle: fontStyle,
-              fontSize: ca.size
-            });
-          } catch(e2) {}
-        }
-      } catch(e) {}
+        var frameFonts = readTextUnits(tf, "characters", function(ch) {
+          var ca = ch.characterAttributes;
+          return { fontFamily: ca.textFont.name, fontStyle: ca.textFont.style, fontSize: ca.size };
+        }, { units: tf.textRanges, refetch: (function(idx) { return function() { return doc.textFrames[idx]; }; })(ti) });
+        for (var fe = 0; fe < frameFonts.length; fe++) fontEntries.push(frameFonts[fe]);
+      } catch(e) {
+        noteTextReadFailure(textReadLog, tf, "typography", e);
+      }
     }
 
     // Collect object bounds for spacing analysis.
@@ -75,13 +66,13 @@ if (preflight) {
       } catch(e) {}
     }
 
-    writeResultFile(RESULT_PATH, {
+    writeResultFile(RESULT_PATH, markTextReadFailures({
       documentColorSpace: isCMYKDoc ? "CMYK" : "RGB",
       fillColors: fillColors,
       strokeColors: strokeColors,
       fontEntries: fontEntries,
       objectBounds: objectBounds
-    });
+    }, textReadLog));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }
@@ -240,6 +231,7 @@ export function register(server: McpServer): void {
         error?: boolean;
         message?: string;
         warnings?: unknown[];
+        textReadFailures?: unknown;
       };
 
       if (result.error) {
@@ -334,6 +326,20 @@ export function register(server: McpServer): void {
       const respond = (saved?: string) => ({
         content: [output, ...extras, ...(saved ? [`Saved to: ${saved}`] : [])].map((text) => ({ type: 'text' as const, text })),
       });
+
+      // 文字属性を読めなかったフレームがあればタイポグラフィが欠けている。欠けたトークンをファイルに書かず、
+      // 失敗（isError）として読めた分の出力を添えて返す
+      if (result.textReadFailures) {
+        const failure = formatToolResult({
+          success: false,
+          message: `Typography tokens are incomplete: some text frames could not be read.${params.output_path ? ' Nothing was written to output_path.' : ''}`,
+          textReadFailures: result.textReadFailures,
+        });
+        return {
+          ...failure,
+          content: [...failure.content, { type: 'text' as const, text: `Incomplete output (read failures above):\n${output}` }],
+        };
+      }
 
       if (params.output_path) {
         const fail = (message: string) => ({

@@ -111,6 +111,12 @@ if (preflight) {
 
     var uuid = ensureUUID(tf);
     var resultData = { success: true, uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) };
+    // 文字属性を読み返せなければ指定どおりか確かめられない。作成済みであることを添えて失敗にする
+    if (resultData.verified.textReadError) {
+      resultData.success = false;
+      resultData.created = true;
+      resultData.message = "The text frame was created (uuid " + uuid + "), but its character attributes could not be read back to verify them.";
+    }
     writeResultFile(RESULT_PATH, appendColorSpaceWarnings(resultData));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to create text frame: " + e.message, line: e.line });

@@ -729,6 +729,118 @@ function getTextKind(tf) {
   return "unknown";
 }
 
+// --- 文字属性の読み取り（MRAP 対策） ---
+// 長く使った Illustrator では、文字属性（characterAttributes / paragraphAttributes）の読み書きが
+// "an Illustrator error occurred: 1346458189 ('MRAP')"（e.number 1200）で散発的に失敗する（2026 / 30.3.0 実機）。
+// 実機で確かめたこと:
+// - tf.characters / tf.textRanges は一度失敗すると、文書から tf を取り直しても、次の呼び出しでも失敗し続ける
+// - 毎回新しく作られる tf.textRange（とその characters / paragraphs）から読み直すとほぼ読める
+//   （1 文字ずつの読み取りで初回失敗 32 回中 31 回が回復。tf ごと文書から取り直した側は 16/16、同じ tf だと 15/16。
+//    全体の属性は tf ごと取り直すと 13/16、同じ tf の textRange だと 2/4、同じ characterAttributes の読み直しは 0/3）
+// - 呼び出しの間隔・前面化・$.gc()・app.redraw()・$.sleep() では変わらない
+// 読めなかった値を既定値で埋めると「成功したのに値が違う」結果になるので、読めなかったことを記録して失敗として返す
+
+// Illustrator 内部のエラー（"an Illustrator error occurred: ..."）か。値が無いことを表す例外（手動カーニング無しの 9551 など）とは区別する
+function isIllustratorInternalError(e) {
+  if (!e) return false;
+  if (e.number === 1200) return true;
+  var m = String(e.message || "");
+  return m.indexOf("MRAP") >= 0 || m.indexOf("1346458189") >= 0;
+}
+
+var TEXT_READ_FAILURE_NOTE = "Illustrator raised an internal scripting error while reading text attributes " +
+  "(typically \"an Illustrator error occurred: 1346458189 ('MRAP')\"), even after re-reading through fresh references. " +
+  "Values for these text objects were not read, so the result is incomplete. " +
+  "The error becomes more frequent the longer an Illustrator session runs; restarting Illustrator is the reported remedy.";
+
+// 例外の説明。内部エラーなら注記を付ける
+function describeTextReadError(e) {
+  var msg = (e && e.message) ? String(e.message) : String(e);
+  return isIllustratorInternalError(e) ? msg + " -- " + TEXT_READ_FAILURE_NOTE : msg;
+}
+
+// tf の文字列全体（tf.textRange）を reader(textRange) で読む。混在する属性は先頭文字の値になる（実機）。
+// 内部エラーなら refetch()（省略時は tf）から新しい textRange を取って 1 度だけ読み直す
+function readTextWhole(tf, reader, refetch) {
+  try {
+    return reader(tf.textRange);
+  } catch (e) {
+    if (!isIllustratorInternalError(e)) throw e;
+    return reader((refetch ? refetch() : tf).textRange);
+  }
+}
+
+// tf の文字（unit = "characters"）または段落（"paragraphs"）を 1 つずつ reader(range, index) で読み、結果を配列で返す。
+// opts.units は最初に読むコレクション（tf.textRanges / tf.characters / tf.paragraphs など、各ツールが従来読んでいたもの）。
+// 平常時の Illustrator への触り方を変えないため、最初はそれを読み、内部エラーが出たときだけ
+// refetch()（省略時は tf）の新しい textRange から同じ単位を 1 度だけ読み直して、残りもそちらで読む
+// （失敗したコレクションは取り直しても失敗し続ける）。opts.units が無ければ最初から新しい textRange を読む。
+// opts.step で間引き、opts.limit で読む個数を制限し、opts.until(value) が true を返したらそこで止める。
+// reader は読むだけにする（失敗した単位は読み直すため、副作用があると二重になる）。読み直しも失敗したら投げる
+function readTextUnits(tf, unit, reader, opts) {
+  opts = opts || {};
+  var step = (opts.step > 1) ? opts.step : 1;
+  var limit = (typeof opts.limit === "number") ? opts.limit : -1;
+  function freshUnits(frame) {
+    var tr = frame.textRange;
+    return (unit === "paragraphs") ? tr.paragraphs : tr.characters;
+  }
+  var out = [];
+  // 空のフレームは段落数が 1 なのに paragraphs[0] が "No such element" を投げる（実機）
+  if (unit === "paragraphs" && tf.characters.length === 0) return out;
+  var units = opts.units || freshUnits(tf);
+  var n = units.length;
+  for (var i = 0; i < n; i += step) {
+    if (limit >= 0 && out.length >= limit) break;
+    var value;
+    try {
+      value = reader(units[i], i);
+    } catch (e) {
+      if (!isIllustratorInternalError(e)) throw e;
+      units = freshUnits(opts.refetch ? opts.refetch() : tf);
+      value = reader(units[i], i);
+    }
+    out.push(value);
+    if (opts.until && opts.until(value)) break;
+  }
+  return out;
+}
+
+// 読めなかった記録。ツールごとに newTextReadLog() で作り、noteTextReadFailure() で積み、markTextReadFailures() で結果に付ける
+var TEXT_READ_LOG_MAX_ITEMS = 20;
+
+function newTextReadLog() {
+  return { count: 0, items: [] };
+}
+
+function noteTextReadFailure(log, item, what, e) {
+  log.count++;
+  if (log.items.length >= TEXT_READ_LOG_MAX_ITEMS) return;
+  var entry = { what: what, message: (e && e.message) ? String(e.message) : String(e) };
+  try {
+    var u = extractUUIDFromNote(item.note);
+    if (u) entry.uuid = u;
+  } catch (eU) {}
+  try { if (item.name) entry.name = item.name; } catch (eN) {}
+  log.items.push(entry);
+}
+
+// 記録を結果に付ける（success は変えない）。オブジェクトを作り終えた後の付随的な読み取りの失敗に使う
+// （失敗扱いにすると作り直されて二重になりうる）
+function attachTextReadFailures(result, log) {
+  if (!log || log.count === 0) return result;
+  result.textReadFailures = { count: log.count, items: log.items, note: TEXT_READ_FAILURE_NOTE };
+  if (log.count > log.items.length) result.textReadFailures.truncated = true;
+  return result;
+}
+
+// 記録があれば結果を部分失敗（success: false → isError）にする。読めた分の値は残す
+function markTextReadFailures(result, log) {
+  if (!log || log.count === 0) return result;
+  result.success = false;
+  return attachTextReadFailures(result, log);
+}
+
 // --- 再帰的アイテム走査 ---
 
 // container 配下の全 PageItem に callback を呼ぶ（グループ・複合パス内部・サブレイヤーも辿る）
@@ -874,14 +986,18 @@ function collectPaintLeaves(item, skipped) {
 
 // 末端の塗り・線を colorToObject() 形式で読む（TextFrame は全体の文字属性）
 function readTargetFill(t) {
-  if (t.typename === "TextFrame") return colorToObject(t.textRange.characterAttributes.fillColor);
+  if (t.typename === "TextFrame") {
+    return readTextWhole(t, function(tr) { return colorToObject(tr.characterAttributes.fillColor); });
+  }
   return t.filled ? colorToObject(t.fillColor) : { type: "none" };
 }
 
 function readTargetStroke(t) {
   if (t.typename === "TextFrame") {
-    var rca = t.textRange.characterAttributes;
-    return { color: colorToObject(rca.strokeColor), width: rca.strokeWeight };
+    return readTextWhole(t, function(tr) {
+      var rca = tr.characterAttributes;
+      return { color: colorToObject(rca.strokeColor), width: rca.strokeWeight };
+    });
   }
   return { color: t.stroked ? colorToObject(t.strokeColor) : { type: "none" }, width: t.strokeWidth };
 }
@@ -903,16 +1019,27 @@ function verifyPaintContainer(snap, item) {
   collectPaintTargets(item, vTargets, {});
   var vFills = [];
   var vStrokes = [];
+  var unread = 0;
+  var unreadMessage = "";
   for (var vi = 0; vi < vTargets.length; vi++) {
-    try { vFills.push(readTargetFill(vTargets[vi])); } catch(eVF) {}
     try {
+      var vf = readTargetFill(vTargets[vi]);
       var vs = readTargetStroke(vTargets[vi]);
+      vFills.push(vf);
       if (vs.color.type !== "none") vStrokes.push(vs.color);
-    } catch(eVS) {}
+    } catch(eV) {
+      unread++;
+      if (!unreadMessage) unreadMessage = describeTextReadError(eV);
+    }
   }
   snap.descendantCount = vTargets.length;
   snap.descendantFills = summarizeColors(vFills);
   snap.descendantStrokes = summarizeColors(vStrokes);
+  // 読めなかった子孫は集計に入っていないことを明示する（黙って件数を減らさない）
+  if (unread > 0) {
+    snap.descendantsUnread = unread;
+    snap.descendantReadError = unreadMessage;
+  }
   return snap;
 }
 
@@ -982,20 +1109,24 @@ function verifyItem(item, coordSystem, artboardRect) {
   if (item.typename === "TextFrame") {
     snap.contents = item.contents;
     snap.textKind = getTextKind(item);
-    // 文字属性は環境によって取得できないことがあるため個別に握りつぶす
-    try {
-      var ca = item.textRange.characterAttributes;
-      try { snap.fontSize = ca.size; } catch (eSize) {}
-      try { snap.tracking = ca.tracking; } catch (eTrack) {}
-      // TextFrame 自体は塗りを持たないため文字の塗りを報告する（混在時は先頭文字）
+    // 空のフレームは文字属性を読むと例外になる（読むものが無い）。それ以外で読めなければ textReadError に残し、
+    // 値を省いたまま黙って返さない（呼び出し側で文字属性が目的のツールは失敗にする）
+    if (snap.contents !== "") {
       try {
-        var tfFill = ca.fillColor;
-        if (tfFill === void 0 || tfFill === null) {
-          try { tfFill = item.characters[0].characterAttributes.fillColor; } catch (eFirst) {}
-        }
-        snap.fill = colorToObject(tfFill);
-      } catch (eFill) {}
-    } catch (eAttr) {}
+        var tv = readTextWhole(item, function(tr) {
+          var ca = tr.characterAttributes;
+          // TextFrame 自体は塗りを持たないため文字の塗りを報告する（混在時は先頭文字）
+          var tfFill = ca.fillColor;
+          if (tfFill === void 0 || tfFill === null) tfFill = tr.characters[0].characterAttributes.fillColor;
+          return { fontSize: ca.size, tracking: ca.tracking, fill: colorToObject(tfFill) };
+        });
+        snap.fontSize = tv.fontSize;
+        snap.tracking = tv.tracking;
+        snap.fill = tv.fill;
+      } catch (eAttr) {
+        snap.textReadError = describeTextReadError(eAttr);
+      }
+    }
   } else {
     try {
       if (item.filled) {

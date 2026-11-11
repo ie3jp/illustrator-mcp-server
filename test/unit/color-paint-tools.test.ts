@@ -24,6 +24,7 @@ import { register as registerManageSwatches } from '../../src/tools/modify/manag
 import { register as registerSelectObjects } from '../../src/tools/modify/select-objects.js';
 import { register as registerGetColors } from '../../src/tools/read/get-colors.js';
 import { captureInputSchema } from './helpers/tool-schema.js';
+import { mrapOnRead } from './helpers/fake-illustrator.js';
 
 type Handler = (params: Record<string, unknown>) => Promise<unknown>;
 type Result = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -112,7 +113,9 @@ function makePath(fill: unknown, extra: Record<string, unknown> = {}) {
 
 function makeText(fill: unknown) {
   const ca: Record<string, unknown> = { fillColor: fill, strokeWeight: 0, size: 12, tracking: 0, autoLeading: true, leading: 14.4 };
-  const range = { characterAttributes: ca, paragraphAttributes: { justification: 'J_LEFT' } };
+  const range: Record<string, unknown> = { characterAttributes: ca, paragraphAttributes: { justification: 'J_LEFT' } };
+  range.characters = [range];
+  range.paragraphs = [range];
   return {
     typename: 'TextFrame',
     name: '',
@@ -278,6 +281,43 @@ describe('modify_object paragraph controls', () => {
     expect(r.verified).toMatchObject({ justification: 'center', autoLeading: false, leading: 24 });
   });
 
+  it('行送り・揃えを読み返せなければ（MRAP）、値を省いて成功にせず失敗にする', async () => {
+    const text = makeText(rgb(0, 0, 0));
+    const ca = text.textRange.characterAttributes as Record<string, unknown>;
+    // 書き込みは通るが、読み返しは失敗し続ける
+    let leading = 14.4;
+    Object.defineProperty(ca, 'leading', {
+      configurable: true,
+      get: () => { const e = new Error("an Illustrator error occurred: 1346458189 ('MRAP')") as Error & { number: number }; e.number = 1200; throw e; },
+      set: (v: number) => { leading = v; },
+    });
+    mrapOnRead(text.textRange.paragraphAttributes as object, 'justification');
+    const r = await runTool(
+      registerModifyObject,
+      { uuid: 't', properties: { justification: 'center', leading: 24 }, coordinate_system: 'document' },
+      { findItem: () => text },
+    );
+    expect(leading).toBe(24);
+    expect(r.success).toBe(false);
+    // 失敗は failed: [{property, message}] で返る（errors の文字列配列ではない）
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed.some((f) => /could not read back leading/.test(f.message))).toBe(true);
+    expect(failed.some((f) => /could not read back justification/.test(f.message))).toBe(true);
+    expect(r.verified.leading).toBeUndefined();
+  });
+
+  it('文字属性を変えていなければ、読み返しの失敗は verified.textReadError に出すだけで失敗にしない', async () => {
+    const text = makeText(rgb(0, 0, 0));
+    mrapOnRead(text.textRange.characterAttributes as object, 'size');
+    const r = await runTool(
+      registerModifyObject,
+      { uuid: 't', properties: { opacity: 50 }, coordinate_system: 'document' },
+      { findItem: () => text },
+    );
+    expect(r.success).toBe(true);
+    expect(r.verified.textReadError).toContain('MRAP');
+  });
+
   it('switches back to auto leading', async () => {
     const text = makeText(rgb(0, 0, 0));
     text.textRange.characterAttributes.autoLeading = false;
@@ -398,6 +438,21 @@ describe('replace_color', () => {
     expect(tf.textRanges[0].characterAttributes.fillColor).toMatchObject({ typename: 'CMYKColor', black: 50 });
     expect(tf.textRanges[1].characterAttributes.fillColor).toMatchObject({ black: 100 });
     expect(r.warnings).toBeUndefined();
+  });
+
+  it('文字色の読み取りが MRAP なら、そのフレームを failed に出して success: false にする', async () => {
+    const tf = textWithRanges([cmyk(0, 100, 100, 0)]) as { typename: string; textRanges: Array<Record<string, unknown>> };
+    mrapOnRead(tf.textRanges[0].characterAttributes as object, 'fillColor');
+    const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [], textFrames: [tf] };
+    const r = await runTool(
+      registerReplaceColor,
+      { from_color: CMYK_RED, to_color: { type: 'cmyk', c: 0, m: 0, y: 0, k: 50 } },
+      { doc },
+    );
+    expect(r.success).toBe(false);
+    expect(r.failedCount).toBe(1);
+    expect(r.failed[0]).toMatchObject({ attribute: 'text' });
+    expect(r.failed[0].message).toContain('MRAP');
   });
 
   // target: "both" で塗りを書いた直後に同じ characterAttributes から線を読むと、
@@ -538,6 +593,24 @@ describe('get_colors used colors', () => {
       { type: 'cmyk', c: 0, m: 0, y: 0, k: 100, count: 2 },
     ]);
     expect(r.usedStrokeColors).toEqual([]);
+  });
+});
+
+describe('get_colors: 文字色を読めなかったテキスト', () => {
+  it('数から黙って落とさず、部分失敗（success: false）にする', async () => {
+    const broken = makeText(cmyk(0, 0, 0, 100));
+    mrapOnRead((broken.textRange.characters as object[])[0], 'characterAttributes');
+    const doc = {
+      documentColorSpace: 'DCS_CMYK', swatches: [], gradients: [], patterns: [], spots: [],
+      pathItems: [makePath(rgb(10, 20, 30))], textFrames: [makeText(cmyk(0, 0, 0, 100)), broken], meshItems: [],
+    };
+    const r = await runTool(registerGetColors, { include_swatches: false }, { doc });
+    expect(r.success).toBe(false);
+    expect(r.textReadFailures.count).toBe(1);
+    expect(r.usedFillColors).toEqual([
+      { type: 'rgb', r: 10, g: 20, b: 30, count: 1 },
+      { type: 'cmyk', c: 0, m: 0, y: 0, k: 100, count: 1 },
+    ]);
   });
 });
 

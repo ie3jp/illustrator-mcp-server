@@ -72,7 +72,14 @@ if (preflight) {
 
       var uuid = ensureUUID(tf);
       var abRect = (coordSystem === "artboard-web") ? getActiveArtboardRect() : null;
-      writeResultFile(RESULT_PATH, { success: true, uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) });
+      var ptResult = { success: true, uuid: uuid, coordinateSystem: coordSystem, verified: verifyItem(tf, coordSystem, abRect) };
+      // 文字属性を読み返せなければ指定どおりか確かめられない。作成済みであることを添えて失敗にする
+      if (ptResult.verified.textReadError) {
+        ptResult.success = false;
+        ptResult.created = true;
+        ptResult.message = "The path text was created (uuid " + uuid + "), but its character attributes could not be read back to verify them.";
+      }
+      writeResultFile(RESULT_PATH, ptResult);
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "create_path_text failed: " + e.message, line: e.line });

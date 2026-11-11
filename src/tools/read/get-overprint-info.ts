@@ -123,34 +123,41 @@ if (preflight) {
     }
 
     // テキストのオーバープリントは文字単位の属性。
-    // 同じ（塗りOP, 線OP, 塗り色, 線色）の組み合わせは 1 エントリにまとめて文字数を数える
+    // 同じ（塗りOP, 線OP, 塗り色, 線色）の組み合わせは 1 エントリにまとめて文字数を数える。
+    // 読めなかったフレームは「オーバープリントなし」とみなさず、記録して部分失敗にする（見落としを成功で返さない）
+    var textReadLog = newTextReadLog();
     function analyzeText(tf) {
       scanned.textFrames++;
+      var chars;
+      try {
+        chars = readTextUnits(tf, "characters", function(ch) {
+          var ca = ch.characterAttributes;
+          var fOP = ca.overprintFill === true;
+          var sOP = ca.overprintStroke === true;
+          if (!fOP && !sOP) return null;
+          var fc = paintOrNull(ca.fillColor);
+          var sc = paintOrNull(ca.strokeColor);
+          var len = 1;
+          try { if (typeof ch.length === "number") len = ch.length; } catch(eLen) {}
+          return {
+            fOP: fOP, sOP: sOP, fc: fc, sc: sc, len: len,
+            key: (fOP ? "1" : "0") + (sOP ? "1" : "0") + "|" + jsonStringify(colorToObject(fc)) + "|" + jsonStringify(colorToObject(sc))
+          };
+        }, { units: tf.textRanges });
+      } catch(e) {
+        noteTextReadFailure(textReadLog, tf, "overprint", e);
+        return;
+      }
       var groups = {};
       var order = [];
-      var ranges = tf.textRanges;
-      for (var ri = 0; ri < ranges.length; ri++) {
-        var range = ranges[ri];
-        var ca = null;
-        try { ca = range.characterAttributes; } catch(e) { continue; }
-        var fOP = false;
-        var sOP = false;
-        try { fOP = ca.overprintFill === true; } catch(e) {}
-        try { sOP = ca.overprintStroke === true; } catch(e) {}
-        if (!fOP && !sOP) continue;
-        var fc = null;
-        var sc = null;
-        try { fc = paintOrNull(ca.fillColor); } catch(e) {}
-        try { sc = paintOrNull(ca.strokeColor); } catch(e) {}
-        var len = 1;
-        try { if (typeof range.length === "number") len = range.length; } catch(e) {}
-        var key = (fOP ? "1" : "0") + (sOP ? "1" : "0") + "|" +
-          jsonStringify(colorToObject(fc)) + "|" + jsonStringify(colorToObject(sc));
-        if (groups[key]) {
-          groups[key].characterCount += len;
+      for (var ri = 0; ri < chars.length; ri++) {
+        var c = chars[ri];
+        if (!c) continue;
+        if (groups[c.key]) {
+          groups[c.key].characterCount += c.len;
         } else {
-          groups[key] = { fOP: fOP, sOP: sOP, fc: fc, sc: sc, characterCount: len };
-          order.push(key);
+          groups[c.key] = { fOP: c.fOP, sOP: c.sOP, fc: c.fc, sc: c.sc, characterCount: c.len };
+          order.push(c.key);
         }
       }
       for (var gi = 0; gi < order.length; gi++) {
@@ -186,7 +193,7 @@ if (preflight) {
       });
     }
 
-    writeResultFile(RESULT_PATH, {
+    writeResultFile(RESULT_PATH, markTextReadFailures({
       overprintCount: results.length,
       items: results,
       scope: {
@@ -195,7 +202,7 @@ if (preflight) {
         notInspected: "Overprint inside placed/linked files, symbol instances, meshes and plugin items (counted in skippedItems) and extra fills/strokes added via the Appearance panel are NOT inspected. overprintCount 0 does not guarantee the file is free of overprint."
       },
       heuristicNote: "heuristic is inferred from colors only and cannot know intent. k100_overprint / rich_black_overprint / spot_overprint are common intentional settings; likely_accidental = an overprinting fill/stroke is not K100, rich black or spot (e.g. white overprint makes the object disappear); no_effect = overprint is set on a side with no paint; raster_overprint needs manual review. Confirm with Separations Preview."
-    });
+    }, textReadLog));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: e.message, line: e.line });
   }

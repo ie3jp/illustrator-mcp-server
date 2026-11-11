@@ -86,6 +86,17 @@ describe('extract_design_tokens', () => {
     expect(textOf(rel)).toContain('absolute path');
   });
 
+  it('文字属性を読めなかったフレームがあれば、欠けたトークンをファイルに書かず isError で返す', async () => {
+    const textReadFailures = { count: 1, items: [{ uuid: 'u1', what: 'typography', message: 'MRAP' }], note: 'n' };
+    mockExecuteJsx.mockResolvedValue({ ...emptyTokens, success: false, textReadFailures });
+    const file = path.join(tmpDir, 'incomplete.css');
+    const res = await tokens({ format: 'css', output_path: file });
+    expect(res.isError).toBe(true);
+    expect(parse(res)).toMatchObject({ success: false, textReadFailures });
+    expect(textOf(res)).toContain('Nothing was written');
+    expect(fsSync.existsSync(file)).toBe(false);
+  });
+
   it('特色は元の色と濃度から hex にし、変換できない色は CSS に出さない', async () => {
     mockExecuteJsx.mockResolvedValue({
       ...emptyTokens,
@@ -205,5 +216,13 @@ describe('check_contrast', () => {
     expect((res.unevaluatedPairs as Array<Record<string, unknown>>)[0].reason).toContain('image');
     expect(res.skippedHiddenCount).toBe(2);
     expect(res.limitations).toBeDefined();
+  });
+
+  it('自動検出: 文字色を読めなかったテキストがあれば isError にして textReadFailures を返す', async () => {
+    const textReadFailures = { count: 1, items: [{ uuid: 't9', what: 'text color', message: 'MRAP' }], note: 'n' };
+    mockExecuteJsx.mockResolvedValue({ colorItems: [], skippedHidden: 0, success: false, textReadFailures });
+    const raw = await contrast({ auto_detect: true });
+    expect(raw.isError).toBe(true);
+    expect(parse(raw)).toMatchObject({ pairCount: 0, success: false, textReadFailures });
   });
 });

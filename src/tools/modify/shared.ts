@@ -256,7 +256,8 @@ function _addDocColor(state, color) {
 }
 
 function collectDocumentColors(doc, excludeLayerNames) {
-  var state = { map: {}, list: [], skipped: {} };
+  // textReadLog: 文字色を読めなかったテキスト（その色はチップに出ない）。呼び出し側で結果に付ける
+  var state = { map: {}, list: [], skipped: {}, textReadLog: newTextReadLog() };
   function isExcluded(item) {
     var ln = "";
     try { ln = item.layer.name; } catch (e) { return false; }
@@ -274,13 +275,20 @@ function collectDocumentColors(doc, excludeLayerNames) {
   for (var ti = 0; ti < doc.textFrames.length; ti++) {
     var tf = doc.textFrames[ti];
     if (isExcluded(tf)) continue;
+    var paints;
     try {
-      for (var ri = 0; ri < tf.textRanges.length; ri++) {
-        var ca = tf.textRanges[ri].characterAttributes;
-        try { _addDocColor(state, ca.fillColor); } catch (e) {}
-        try { if (ca.strokeWeight > 0) _addDocColor(state, ca.strokeColor); } catch (e) {}
-      }
-    } catch (e) {}
+      paints = readTextUnits(tf, "characters", function(ch) {
+        var ca = ch.characterAttributes;
+        return { fill: ca.fillColor, stroke: (ca.strokeWeight > 0) ? ca.strokeColor : null };
+      }, { units: tf.textRanges, refetch: (function(idx) { return function() { return doc.textFrames[idx]; }; })(ti) });
+    } catch (eText) {
+      noteTextReadFailure(state.textReadLog, tf, "character colors", eText);
+      continue;
+    }
+    for (var ri = 0; ri < paints.length; ri++) {
+      try { _addDocColor(state, paints[ri].fill); } catch (e) {}
+      try { if (paints[ri].stroke) _addDocColor(state, paints[ri].stroke); } catch (e) {}
+    }
   }
   return state;
 }

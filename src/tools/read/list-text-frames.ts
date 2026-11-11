@@ -79,6 +79,11 @@ if (preflight) {
           entry._sortVertical = (getOrientation(frame) === "vertical");
         }
 
+        // 文字属性の読み直しで tf を文書から取り直す関数（doc.textFrames を回しているとき＝layer_name 指定なしだけ使える）
+        function frameAt(idx) {
+          return function() { return doc.textFrames[idx]; };
+        }
+
         var textFrames = [];
         var canPaginateEarly = contentsOnly && sortMode !== "reading-order";
         var earlySkipped = 0;
@@ -124,34 +129,34 @@ if (preflight) {
 
           var bounds = getBounds(tf, coordSystem, boundsAbRect);
 
-          // フォント情報（先頭 textRange）
+          // フォント・スタイル名は先頭の文字から読む（スタイル名は Paragraph/CharacterAttributes になく
+          // TextRange.paragraphStyles / characterStyles にある）。空のフレームは読むものが無いので null / "" のまま。
+          // 読めなければ（再試行しても）null にして textReadError を付ける（既定値で埋めない）
           var fontFamily = null;
           var fontSize = null;
-          try {
-            if (tf.textRanges.length > 0) {
-              var firstRange = tf.textRanges[0];
-              fontFamily = firstRange.characterAttributes.textFont.family;
-              fontSize = firstRange.characterAttributes.size;
-            }
-          } catch (e) {
-            // フォント情報が取得できない場合は null のまま
-          }
-
-          // スタイル名は Paragraph/CharacterAttributes になく、TextRange.paragraphStyles / characterStyles から読む
           var paragraphStyleName = "";
           var characterStyleName = "";
+          var frameReadError = null;
           try {
-            if (tf.textRanges.length > 0) {
-              var firstTr = tf.textRanges[0];
-              try {
-                if (firstTr.paragraphStyles.length > 0) paragraphStyleName = firstTr.paragraphStyles[0].name || "";
-              } catch (e) {}
-              try {
-                if (firstTr.characterStyles.length > 0) characterStyleName = firstTr.characterStyles[0].name || "";
-              } catch (e) {}
+            var firstChar = readTextUnits(tf, "characters", function(ch) {
+              var ca = ch.characterAttributes;
+              return {
+                fontFamily: ca.textFont.family,
+                fontSize: ca.size,
+                paragraphStyle: (ch.paragraphStyles.length > 0) ? (ch.paragraphStyles[0].name || "") : "",
+                characterStyle: (ch.characterStyles.length > 0) ? (ch.characterStyles[0].name || "") : ""
+              };
+            }, { units: tf.textRanges, limit: 1, refetch: filterLayer ? null : frameAt(i) });
+            if (firstChar.length > 0) {
+              fontFamily = firstChar[0].fontFamily;
+              fontSize = firstChar[0].fontSize;
+              paragraphStyleName = firstChar[0].paragraphStyle;
+              characterStyleName = firstChar[0].characterStyle;
             }
-          } catch (e) {
-            // スタイル情報が取得できない場合は空文字のまま
+          } catch (eRead) {
+            paragraphStyleName = null;
+            characterStyleName = null;
+            frameReadError = (eRead && eRead.message) ? String(eRead.message) : String(eRead);
           }
 
           var nextFrameUUID = null;
@@ -177,6 +182,7 @@ if (preflight) {
             paragraphStyle: paragraphStyleName,
             characterStyle: characterStyleName
           };
+          if (frameReadError) info.textReadError = frameReadError;
           if (sortMode === "reading-order") {
             attachSortKeys(info, tf, itemArtboardIndex);
           }
@@ -239,7 +245,16 @@ if (preflight) {
         var payload = { totalCount: totalCount, count: textFrames.length, textFrames: textFrames };
         if (!contentsOnly) { payload.coordinateSystem = coordSystem; }
         if (paramOffset > 0 || paramLimit !== null) { payload.offset = paramOffset; }
-        writeResultFile(RESULT_PATH, payload);
+        // 返すフレームに文字属性を読めなかったものがあれば部分失敗にする（ページ外のフレームは数えない）
+        var readLog = newTextReadLog();
+        for (var fi = 0; fi < textFrames.length; fi++) {
+          if (!textFrames[fi].textReadError) continue;
+          readLog.count++;
+          if (readLog.items.length < TEXT_READ_LOG_MAX_ITEMS) {
+            readLog.items.push({ uuid: textFrames[fi].uuid, what: "font / style", message: textFrames[fi].textReadError });
+          }
+        }
+        writeResultFile(RESULT_PATH, markTextReadFailures(payload, readLog));
       }
     }
   } catch (e) {

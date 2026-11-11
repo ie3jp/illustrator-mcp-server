@@ -17,6 +17,7 @@ if (preflight) {
     var coordSystem = params.coordinate_system || "artboard-web";
     var doc = app.activeDocument;
     var results = [];
+    var textReadLog = newTextReadLog();
 
     function colorsMatch(actual, expected) {
       var tol = (expected.tolerance !== undefined) ? expected.tolerance : 5;
@@ -84,32 +85,36 @@ if (preflight) {
       if (params.fill_color && !pathPaintMatches(item, "fill", params.fill_color)) { return false; }
       if (params.stroke_color && !pathPaintMatches(item, "stroke", params.stroke_color)) { return false; }
 
-      // font_name filter
+      // font_name / font_size filter。文字属性を読めなかったテキストは「一致しない」とみなさず、記録して部分失敗にする
       if (params.font_name) {
         if (item.typename !== "TextFrame") { return false; }
+        var fontHits;
         try {
-          var fontFound = false;
-          for (var t = 0; t < item.textRanges.length; t++) {
-            var tf = item.textRanges[t].characterAttributes.textFont;
-            var familyName = tf.family || "";
-            var fontName = tf.name || "";
-            if (familyName.indexOf(params.font_name) >= 0 || fontName.indexOf(params.font_name) >= 0) {
-              fontFound = true;
-              break;
-            }
-          }
-          if (!fontFound) { return false; }
-        } catch (e) { return false; }
+          fontHits = readTextUnits(item, "characters", function(ch) {
+            var tfont = ch.characterAttributes.textFont;
+            var familyName = tfont.family || "";
+            var fontName = tfont.name || "";
+            return familyName.indexOf(params.font_name) >= 0 || fontName.indexOf(params.font_name) >= 0;
+          }, { units: item.textRanges, until: function(hit) { return hit; } });
+        } catch (e) {
+          noteTextReadFailure(textReadLog, item, "font", e);
+          return false;
+        }
+        if (fontHits.length === 0 || !fontHits[fontHits.length - 1]) { return false; }
       }
 
-      // font_size filter
       if (params.font_size) {
         if (item.typename !== "TextFrame") { return false; }
+        var sizes;
         try {
-          var size = item.textRanges[0].characterAttributes.size;
-          if (params.font_size.min !== undefined && size < params.font_size.min) { return false; }
-          if (params.font_size.max !== undefined && size > params.font_size.max) { return false; }
-        } catch (e) { return false; }
+          sizes = readTextUnits(item, "characters", function(ch) { return ch.characterAttributes.size; }, { units: item.textRanges, limit: 1 });
+        } catch (e) {
+          noteTextReadFailure(textReadLog, item, "font size", e);
+          return false;
+        }
+        if (sizes.length === 0) { return false; }
+        if (params.font_size.min !== undefined && sizes[0] < params.font_size.min) { return false; }
+        if (params.font_size.max !== undefined && sizes[0] > params.font_size.max) { return false; }
       }
 
       return true;
@@ -148,11 +153,11 @@ if (preflight) {
       collectItems(doc.layers[i]);
     }
 
-    writeResultFile(RESULT_PATH, {
+    writeResultFile(RESULT_PATH, markTextReadFailures({
       coordinateSystem: coordSystem,
       count: results.length,
       objects: results
-    });
+    }, textReadLog));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "find_objects: " + e.message, line: e.line });
   }

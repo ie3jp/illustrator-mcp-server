@@ -59,6 +59,35 @@ export function throwOnRead<T extends object>(obj: T, prop: string, message = 'N
   return obj;
 }
 
+/**
+ * 実機の MRAP。長く使った Illustrator では文字属性の読み書きが散発的にこれで失敗する
+ * （e.number 1200、message "an Illustrator error occurred: 1346458189 ('MRAP')"。2026 / 30.3.0 実機）
+ */
+export function mrapError(): Error {
+  const e = new Error("an Illustrator error occurred: 1346458189 ('MRAP')") as Error & { number: number };
+  e.number = 1200;
+  return e;
+}
+
+/** 読むと MRAP を投げるプロパティにする。failures 回だけ投げて以後は元の値を返す（省略時はずっと投げる）。代入は無視 */
+export function mrapOnRead<T extends object>(obj: T, prop: string, failures = Infinity): T {
+  const value = (obj as Fake)[prop];
+  let left = failures;
+  Object.defineProperty(obj, prop, {
+    configurable: true,
+    enumerable: true,
+    get: () => {
+      if (left > 0) {
+        left--;
+        throw mrapError();
+      }
+      return value;
+    },
+    set: () => {},
+  });
+  return obj;
+}
+
 function detach(item: Fake) {
   if (item.parent && Array.isArray(item.parent.pageItems)) {
     const idx = item.parent.pageItems.indexOf(item);
@@ -111,7 +140,10 @@ export function makeItem(typename: string, props: Fake = {}): Fake {
 export function makeTextFrame(props: Fake = {}): Fake {
   const charAttrs: Fake = { size: 12, tracking: 0, autoLeading: true, leading: 0, fillColor: null, strokeWeight: 0 };
   const paraAttrs: Fake = { justification: undefined };
-  const textRange = { characterAttributes: charAttrs, paragraphAttributes: paraAttrs };
+  // 実機の TextFrame.textRange は文字（characters）・段落（paragraphs）の範囲を持つ。ここでは全体を 1 文字として扱う
+  const textRange: Fake = { characterAttributes: charAttrs, paragraphAttributes: paraAttrs };
+  textRange.characters = [textRange];
+  textRange.paragraphs = [textRange];
   return makeItem('TextFrame', {
     contents: '',
     kind: 1,

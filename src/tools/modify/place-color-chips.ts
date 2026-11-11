@@ -108,7 +108,8 @@ if (preflight) {
       for (var vci = 0; vci < chipItems.length && vci < 5; vci++) {
         verifiedChips.push(verifyItem(chipItems[vci], coordSystem, verifyAbRect));
       }
-      writeResultFile(RESULT_PATH, {
+      // 文字色を読めなかったテキストの色はチップに出ていない。チップは作り終えているので失敗にはせず明示する
+      writeResultFile(RESULT_PATH, attachTextReadFailures({
         success: true,
         coordinateSystem: coordSystem,
         chipCount: placedCount,
@@ -116,7 +117,7 @@ if (preflight) {
         layerName: layerName,
         position: position,
         verified: verifiedChips
-      });
+      }, colorScan.textReadLog));
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Place color chips failed: " + e.message, line: e.line });

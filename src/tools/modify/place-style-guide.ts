@@ -175,33 +175,32 @@ if (preflight) {
       var fontMap = {};
       var fontList = [];
 
+      // 文字属性を読めなかったテキストのフォントはサンプルに出ない。記録して結果に付ける
       for (var ti = 0; ti < doc.textFrames.length; ti++) {
+        var tf = doc.textFrames[ti];
+        // Skip items on the style guide layer itself
+        try { if (tf.layer.name === layerName) continue; } catch(eL) {}
+        var charFonts;
         try {
-          var tf = doc.textFrames[ti];
-          // Skip items on the style guide layer itself
-          if (tf.layer.name === layerName) continue;
-          for (var ri = 0; ri < tf.textRanges.length; ri++) {
-            try {
-              var tr = tf.textRanges[ri];
-              var ca = tr.characterAttributes;
-              var fName = "";
-              var fStyle = "";
-              var fSize = 0;
-              try { fName = ca.textFont.name; } catch(e2) {}
-              try { fStyle = ca.textFont.style; } catch(e2) {}
-              try { fSize = Math.round(ca.size); } catch(e2) {}
-              if (fName) {
-                var fKey = fName + "|" + fSize;
-                if (!fontMap[fKey]) {
-                  fontMap[fKey] = { name: fName, style: fStyle, size: fSize, count: 1 };
-                  fontList.push(fontMap[fKey]);
-                } else {
-                  fontMap[fKey].count++;
-                }
-              }
-            } catch(e2) {}
+          charFonts = readTextUnits(tf, "characters", function(ch) {
+            var ca = ch.characterAttributes;
+            return { name: ca.textFont.name, style: ca.textFont.style, size: Math.round(ca.size) };
+          }, { units: tf.textRanges, refetch: (function(idx) { return function() { return doc.textFrames[idx]; }; })(ti) });
+        } catch(eText) {
+          noteTextReadFailure(colorScan.textReadLog, tf, "fonts", eText);
+          continue;
+        }
+        for (var ri = 0; ri < charFonts.length; ri++) {
+          var cf = charFonts[ri];
+          if (!cf.name) continue;
+          var fKey = cf.name + "|" + cf.size;
+          if (!fontMap[fKey]) {
+            fontMap[fKey] = { name: cf.name, style: cf.style, size: cf.size, count: 1 };
+            fontList.push(fontMap[fKey]);
+          } else {
+            fontMap[fKey].count++;
           }
-        } catch(e) {}
+        }
       }
 
       // Sort by frequency, take top 8
@@ -764,7 +763,8 @@ if (preflight) {
         verified: verifiedItems
       };
       if (warnings.length > 0) result.warnings = warnings;
-      writeResultFile(RESULT_PATH, result);
+      // 読めなかったテキストの色・フォントはスタイルガイドに出ていない。配置は終えているので失敗にはせず明示する
+      writeResultFile(RESULT_PATH, attachTextReadFailures(result, colorScan.textReadLog));
     }
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Place style guide failed: " + e.message, line: e.line });

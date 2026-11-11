@@ -24,6 +24,7 @@ if (preflight) {
     var isCMYKDoc = (doc.documentColorSpace === DocumentColorSpace.CMYK);
 
     var result = {};
+    var textReadLog = newTextReadLog();
 
     // スウォッチ一覧
     if (includeSwatches) {
@@ -168,35 +169,38 @@ if (preflight) {
         } catch (e) {}
       }
 
-      // テキストフレームの文字色を収集
+      // テキストフレームの文字色を収集。読めなかったフレームは数から黙って落とさず、記録して部分失敗にする
       for (var ti = 0; ti < doc.textFrames.length; ti++) {
+        var tfItem = doc.textFrames[ti];
+        var charPaints;
         try {
-          var tfItem = doc.textFrames[ti];
-          for (var ci = 0; ci < tfItem.textRanges.length; ci++) {
-            var ca = tfItem.textRanges[ci].characterAttributes;
-            try {
-              var tfc = colorToObject(ca.fillColor);
-              if (includeDiagnostics && tfc.type === "cmyk") {
-                tfc.inkCoverage = tfc.c + tfc.m + tfc.y + tfc.k;
-              }
-              if (includeDiagnostics) {
-                if (isCMYKDoc && tfc.type === "rgb") rgbInCmyk++;
-                if (!isCMYKDoc && tfc.type === "cmyk") cmykInRgb++;
-              }
-              usedFills.push(tfc);
-              if (tfc.type === "spot") {
-                var tSpName = tfc.name;
-                countSpotUsage(tSpName);
-              }
-            } catch (e3) {}
-            try {
-              if (ca.strokeWeight > 0) {
-                var tsc = colorToObject(ca.strokeColor);
-                usedStrokes.push(tsc);
-              }
-            } catch (e4) {}
+          charPaints = readTextUnits(tfItem, "characters", function(ch) {
+            var ca = ch.characterAttributes;
+            return {
+              fill: colorToObject(ca.fillColor),
+              stroke: (ca.strokeWeight > 0) ? colorToObject(ca.strokeColor) : null
+            };
+          }, { units: tfItem.textRanges, refetch: (function(idx) { return function() { return doc.textFrames[idx]; }; })(ti) });
+        } catch (eText) {
+          noteTextReadFailure(textReadLog, tfItem, "character colors", eText);
+          continue;
+        }
+        for (var ci = 0; ci < charPaints.length; ci++) {
+          var tfc = charPaints[ci].fill;
+          if (includeDiagnostics && tfc.type === "cmyk") {
+            tfc.inkCoverage = tfc.c + tfc.m + tfc.y + tfc.k;
           }
-        } catch (e5) {}
+          if (includeDiagnostics) {
+            if (isCMYKDoc && tfc.type === "rgb") rgbInCmyk++;
+            if (!isCMYKDoc && tfc.type === "cmyk") cmykInRgb++;
+          }
+          usedFills.push(tfc);
+          if (tfc.type === "spot") {
+            var tSpName = tfc.name;
+            countSpotUsage(tSpName);
+          }
+          if (charPaints[ci].stroke) usedStrokes.push(charPaints[ci].stroke);
+        }
       }
 
       // メッシュアイテム検出 (document-wide)
@@ -225,7 +229,7 @@ if (preflight) {
       };
     }
 
-    writeResultFile(RESULT_PATH, result);
+    writeResultFile(RESULT_PATH, markTextReadFailures(result, textReadLog));
   } catch (e) {
     writeResultFile(RESULT_PATH, { error: true, message: "Failed to get color information: " + e.message, line: e.line });
   }
