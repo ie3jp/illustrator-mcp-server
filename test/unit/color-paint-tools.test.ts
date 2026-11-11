@@ -299,8 +299,10 @@ describe('modify_object paragraph controls', () => {
     );
     expect(leading).toBe(24);
     expect(r.success).toBe(false);
-    expect((r.errors as string[]).some((e) => e.startsWith('verify: could not read back leading'))).toBe(true);
-    expect((r.errors as string[]).some((e) => e.startsWith('verify: could not read back justification'))).toBe(true);
+    // 失敗は failed: [{property, message}] で返る（errors の文字列配列ではない）
+    const failed = r.failed as Array<{ property: string; message: string }>;
+    expect(failed.some((f) => /could not read back leading/.test(f.message))).toBe(true);
+    expect(failed.some((f) => /could not read back justification/.test(f.message))).toBe(true);
     expect(r.verified.leading).toBeUndefined();
   });
 
@@ -451,6 +453,8 @@ describe('replace_color', () => {
     expect(r.failedCount).toBe(1);
     expect(r.failed[0]).toMatchObject({ attribute: 'text' });
     expect(r.failed[0].message).toContain('MRAP');
+  });
+
   // target: "both" で塗りを書いた直後に同じ characterAttributes から線を読むと、
   // 結合で無効になった範囲を触って MRAP になる。属性ごとにパスを分けたことの回帰テスト。
   // 実機では結合すると範囲オブジェクトが差し替わるため、取り直せば有効なものが得られる

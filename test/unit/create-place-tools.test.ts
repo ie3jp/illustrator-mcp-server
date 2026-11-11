@@ -220,7 +220,7 @@ describe('create_text_frame (T11-5, B, C)', () => {
       return tf;
     };
     const r = await runTool(registerCreateTextFrame, { x: 0, y: 0, contents: 'Hello' }, makeApp(doc));
-    expect(r.success).toBeUndefined();
+    expect(r.success).toBe(true);
     expect(r.verified.fontSize).toBe(12);
   });
 

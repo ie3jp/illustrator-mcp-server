@@ -276,7 +276,7 @@ if (preflight) {
         typeof props.tracking === "number" || typeof props.leading !== "undefined" || props.justification ||
         typeof props.fill !== "undefined" || props.stroke);
       if (textPropsRequested && verifiedState.textReadError) {
-        errors.push("verify: could not read back the text attributes: " + verifiedState.textReadError);
+        failed.push({ property: "verify", message: "could not read back the text attributes: " + verifiedState.textReadError });
       }
       if (item.typename === "TextFrame" && (typeof props.leading !== "undefined" || props.justification)) {
         try {
@@ -287,7 +287,7 @@ if (preflight) {
           verifiedState.autoLeading = vl.autoLeading;
           verifiedState.leading = vl.leading;
         } catch(eVL) {
-          errors.push("verify: could not read back leading: " + describeTextReadError(eVL));
+          failed.push({ property: "verify", message: "could not read back leading: " + describeTextReadError(eVL) });
         }
         try {
           var vj = readTextWhole(item, function(tr) { return tr.paragraphAttributes.justification; });
@@ -295,7 +295,7 @@ if (preflight) {
           verifiedState.justification = (vj === Justification.LEFT) ? "left" : ((vj === Justification.CENTER) ? "center" :
             ((vj === Justification.RIGHT) ? "right" : String(vj)));
         } catch(eVJ) {
-          errors.push("verify: could not read back justification: " + describeTextReadError(eVJ));
+          failed.push({ property: "verify", message: "could not read back justification: " + describeTextReadError(eVJ) });
         }
       }
 
