@@ -285,7 +285,12 @@ if (preflight) {
       // 同じ親の兄弟どうしだけを比べる（scope）。doc.pageItems はグループの子・複合パス内部まで含み、
       // 親子の bounds が混ざる（issue #52）。レイヤー直下だけだとグループ内の間隔を拾えないので中へも降りる
       var objInfos = [];
-      var spacingItems = collectSpacingItems(doc, 300);
+      // 自分の生成物（スタイルガイド・カラーチップ）を収集側で除外する。
+      // 後から捨てると生成物が limit を食い潰し、置き直すほど比較対象が減る
+      var spacingSkip = {};
+      spacingSkip[layerName] = true;
+      spacingSkip["Color Chips"] = true;
+      var spacingItems = collectSpacingItems(doc, 300, spacingSkip);
       for (var oi = 0; oi < spacingItems.length; oi++) {
         try {
           var pItem = spacingItems[oi].item;

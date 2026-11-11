@@ -337,7 +337,7 @@ export function register(server: McpServer): void {
     {
       title: 'Manage Variables & Datasets',
       description:
-        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. export refuses to replace an existing file unless overwrite is true. Note: import_csv brings Illustrator to the foreground, because writing text contents while it is in the background blocks for minutes. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header.',
+        'List variables/datasets, apply or create datasets, bind variables to objects, import/export variable XML, or generate artboards from CSV. import (XML) replaces ALL existing variables and datasets in the document. export refuses to replace an existing file unless overwrite is true. Note: import_csv and apply_dataset bring Illustrator to the foreground, because writing text contents while it is in the background blocks for minutes. import_csv does not create variables or datasets: it copies the objects on artboard 0 (left unchanged as the template) onto one new artboard per CSV row, placed to the right of existing artboards, and sets the text of copied text frames whose name matches a CSV header.',
       inputSchema: {
         action: z
           .enum([
@@ -381,8 +381,10 @@ export function register(server: McpServer): void {
     },
     async (params) => {
       // import_csv はコピーしたテキストフレームの contents を書き換える。
-      // 背面だと 1 件あたり 240 秒待たされる（実測）ため、この action だけ前面化する
-      const writesText = params.action === 'import_csv';
+      // apply_dataset は Dataset.display() で TEXTUAL 変数の内容を差し替えるため、
+      // 直接の contents 代入はないが同じ待機に入る可能性がある（未検証のため安全側に倒す）。
+      // 背面だと 1 件あたり 240 秒待たされる（実測）
+      const writesText = params.action === 'import_csv' || params.action === 'apply_dataset';
       const result = await executeJsx(jsxCode, params, { activate: writesText });
       return formatToolResult(result);
     },

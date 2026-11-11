@@ -65,7 +65,7 @@ if (preflight) {
     // そのまま使うと親と子の bounds が混ざって間隔の頻度が水増しされる（issue #52）。
     // レイヤー直下だけにするとグループ内の間隔が拾えなくなるので、グループの中へも降りる
     var objectBounds = [];
-    var spacingItems = collectSpacingItems(doc, 500);
+    var spacingItems = collectSpacingItems(doc, 500, skipLayers);
     for (var oi = 0; oi < spacingItems.length; oi++) {
       try {
         var pItem = spacingItems[oi].item;

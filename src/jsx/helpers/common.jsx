@@ -780,14 +780,22 @@ function collectTopLevelPageItems(doc) {
 // 分けると「文字」「図形」「背景」のようにレイヤーを分けた文書で間隔が一切取れなくなるため
 // （#52 の修正で一度そうなった）。グループの子だけを別 scope にすることで、
 // 「親と子の bounds を混ぜない」という #52 の目的は保つ。
-// 複合パスは 1 つの図形として扱い内部へ降りない。limit 件で打ち切る
-function collectSpacingItems(doc, limit) {
+// 複合パスは 1 つの図形として扱い内部へ降りない。limit 件で打ち切る。
+// skipLayerNames（レイヤー名 -> true のオブジェクト）に載っているレイヤーのアイテムは
+// 収集前に除外する。呼び出し側で後から捨てると、注釈レイヤーが limit を食い潰して
+// 後方のデザイン要素が一件も比較されない文書が出る（スタイルガイド自身の生成物で起きる）
+function collectSpacingItems(doc, limit, skipLayerNames) {
   var out = [];
   var TOP_SCOPE = 0;
   var scopes = [null];
+  function isSkipped(item) {
+    if (!skipLayerNames) return false;
+    try { return skipLayerNames[item.layer.name] === true; } catch (eL) { return false; }
+  }
   function visit(item, scope) {
     if (out.length >= limit) return;
-    out.push({ item: item, scope: scope });
+    // 除外対象は out に積まない（limit を消費させない）。ただしグループの子は見に行く
+    if (!isSkipped(item)) out.push({ item: item, scope: scope });
     var tn = "";
     try { tn = item.typename; } catch(e) {}
     if (tn !== "GroupItem") return;
@@ -1017,9 +1025,20 @@ function verifyItem(item, coordSystem, artboardRect) {
 // さらに artboardRect が無いためアートボード外のはみ出し警告も出なくなる。
 // スキーマの既定と同じ artboard-web で、アクティブアートボード基準に揃える
 function verifyItemDefault(item) {
-  // アートボードが取れない文書では従来どおりドキュメント座標で返す（検証自体を壊さない）
+  // アイテムが載っているアートボードで検証する。アクティブアートボードで比べると、
+  // 別のアートボード上にある正常なオブジェクトを「どのアートボードにも載っていない」と
+  // 誤報する（AB0 がアクティブなまま AB1 のオブジェクトを動かした場合など）
   var abRect = null;
-  try { abRect = getActiveArtboardRect(); } catch (eAb) {}
+  try {
+    var abIdx = getArtboardIndexForItem(item);
+    if (abIdx >= 0) abRect = getArtboardRectByIndex(abIdx);
+  } catch (eIdx) {}
+  // どのアートボードにも載っていない場合はアクティブアートボード基準で報告する
+  // （「アートボードの外」という警告はこのときだけ正しい）
+  if (!abRect) {
+    try { abRect = getActiveArtboardRect(); } catch (eAb) {}
+  }
+  // アートボードが取れない文書では従来どおりドキュメント座標で返す（検証自体を壊さない）
   if (!abRect) return verifyItem(item);
   return verifyItem(item, "artboard-web", abRect);
 }
@@ -1027,8 +1046,10 @@ function verifyItemDefault(item) {
 // アートボード上（中心座標で判定）の名前付きアイテム一覧。アートボード操作・バッチ操作の検証用。
 // doc.pageItems は再帰的に子孫を含む（#52）ため、グループとその子の両方が並ぶ。
 // 子も検証には要る（CSV 差し込みでテキストの中身を確かめるのはこれ）ので列挙は維持し、
-// itemCount は「親が Layer のアイテム＝独立したオブジェクト」だけを数える。
-// 入れ子のものには nested: true を付け、何個の独立オブジェクトが載ったのかを誤読させない
+// itemCount は「名前付きで、かつ親が Layer のアイテム」だけを数える。入れ子のものには
+// nested: true を付け、グループと子を合算した数を独立オブジェクト数と誤読させない。
+// 名前のないアイテムは従来どおり列挙も計数もしない（無名グループの中の名前付きテキストだけが
+// ある場合は itemCount 0 / nestedCount 1 になる）ので、総オブジェクト数ではない
 function verifyArtboardContents(artboardIndex) {
   var doc = app.activeDocument;
   var ab = doc.artboards[artboardIndex];

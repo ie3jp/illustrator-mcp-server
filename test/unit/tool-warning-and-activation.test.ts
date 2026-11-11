@@ -38,6 +38,10 @@ import { register as registerModifyObject } from '../../src/tools/modify/modify-
 import { register as registerCreateDocument } from '../../src/tools/modify/create-document.js';
 import { register as registerPlaceImage } from '../../src/tools/modify/place-image.js';
 import { register as registerCreateCropMarks } from '../../src/tools/modify/create-crop-marks.js';
+import { register as registerCreatePathText } from '../../src/tools/modify/create-path-text.js';
+import { register as registerPlaceColorChips } from '../../src/tools/modify/place-color-chips.js';
+import { register as registerPlaceStyleGuide } from '../../src/tools/modify/place-style-guide.js';
+import { register as registerManageDatasets } from '../../src/tools/modify/manage-datasets.js';
 
 type ToolResponse = { content: Array<{ type: string; text?: string }> };
 type ToolHandler = (params: Record<string, unknown>) => Promise<ToolResponse>;
@@ -223,6 +227,32 @@ describe('DOM tool activation', () => {
     await handler({ uuid: 'test', properties: { contents: 'new text' } });
     calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
     expect(calls[0][2]?.activate).toBe(true);
+  });
+
+  // allowlist（単語の有無）では activate: false への書き換えを検出できない。
+  // 前面化が必要なツールは、ハンドラが実際に activate: true を渡すことを 1 本ずつ検証する
+  it.each([
+    ['create_text_frame', registerCreateTextFrame, { x: 10, y: 20, contents: 'T' }],
+    ['create_path_text', registerCreatePathText, { uuid: 'u', contents: 'T' }],
+    ['place_color_chips', registerPlaceColorChips, {}],
+    ['place_style_guide', registerPlaceStyleGuide, {}],
+  ])('%s は前面化を要求する（背面だとテキスト API が 240 秒待つ）', async (_name, register, params) => {
+    await captureToolHandler(register)(params as Record<string, unknown>);
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]?.activate).toBe(true);
+  });
+
+  // 条件付きのものは、対象 action と非対象 action の両方を押さえる
+  it.each([
+    ['import_csv', true],
+    ['apply_dataset', true],
+    ['list_variables', false],
+    ['export', false],
+  ])('manage_datasets は action=%s のとき activate=%s', async (action, expected) => {
+    await captureToolHandler(registerManageDatasets)({ action, file_path: '/tmp/x.csv', dataset_name: 'd' });
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls[0][2]?.activate ?? false).toBe(expected);
   });
 
   it('crop marks still request activation', async () => {

@@ -401,25 +401,35 @@ describe('replace_color', () => {
   it('does not read back a characterAttributes it just wrote to (target: both)', async () => {
     const ranges: Array<{ characterAttributes: Record<string, unknown> }> = [];
     const dead = new Set<unknown>();
-    const makeRange = (fill: unknown, strokeWeight: number): { characterAttributes: Record<string, unknown> } => {
-      const attrs: Record<string, unknown> = { strokeColor: { typename: 'NoColor' } };
+    // 塗りと線の両方を置換対象にし、どちらを書いても参照が無効になるようにする。
+    // 線側を NoColor にしていると「線を書いた後に参照を使い回す」退行を検出できない
+    const makeRange = (
+      fill: unknown,
+      stroke: unknown,
+      strokeWeight: number,
+    ): { characterAttributes: Record<string, unknown> } => {
+      const attrs: Record<string, unknown> = {};
       const guard = (): void => {
         if (dead.has(attrs)) throw new Error("an Illustrator error occurred: 1346458189 ('MRAP')");
+      };
+      const replaceSelf = (nextFill: unknown, nextStroke: unknown): void => {
+        dead.add(attrs);
+        const idx = ranges.findIndex((r) => r.characterAttributes === attrs);
+        ranges[idx] = makeRange(nextFill, nextStroke, strokeWeight);
       };
       Object.defineProperty(attrs, 'fillColor', {
         get: () => { guard(); return fill; },
         // 書いた時点でこの範囲オブジェクトは無効になり、コレクション上は別オブジェクトに差し替わる
-        set: (v) => {
-          guard();
-          dead.add(attrs);
-          const idx = ranges.findIndex((r) => r.characterAttributes === attrs);
-          ranges[idx] = makeRange(v, strokeWeight);
-        },
+        set: (v) => { guard(); replaceSelf(v, stroke); },
+      });
+      Object.defineProperty(attrs, 'strokeColor', {
+        get: () => { guard(); return stroke; },
+        set: (v) => { guard(); replaceSelf(fill, v); },
       });
       Object.defineProperty(attrs, 'strokeWeight', { get: () => { guard(); return strokeWeight; } });
       return { characterAttributes: attrs };
     };
-    ranges.push(makeRange(cmyk(0, 100, 100, 0), 1));
+    ranges.push(makeRange(cmyk(0, 100, 100, 0), cmyk(0, 100, 100, 0), 1));
     const tf = { typename: 'TextFrame', textRanges: ranges };
     const doc = { documentColorSpace: 'DCS_CMYK', pathItems: [], textFrames: [tf] };
     const r = await runTool(

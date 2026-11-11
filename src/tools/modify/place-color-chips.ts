@@ -163,7 +163,8 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      // カラーチップのラベルとしてテキストフレームを作る。背面だと 1 個あたり 240 秒待たされる（実測）
+      // include_info: true のときカラーチップのラベルをテキストフレームで作る。
+      // 背面だと 1 個あたり 240 秒待たされる（実測）ため、作らない経路もあるが安全側で常に前面化する
       return executeToolJsx(jsxCode, params, { activate: true, heavy: true, resolveCoordinate: true });
     },
   );
