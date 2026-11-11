@@ -6,6 +6,7 @@ import { JsxToolError } from './executor/jsx-runner.js';
 import { registerAllTools } from './tools/registry.js';
 import { formatToolResult } from './tools/tool-executor.js';
 import { registerAllPrompts } from './prompts/registry.js';
+import { takeUpdateNotice } from './update-check.js';
 
 /**
  * serverInfo.version は package.json から読む（手書き定数はリリースのたびにずれる）。
@@ -44,11 +45,23 @@ export function applyToolErrorBoundary(server: McpServer): void {
   const register = server.registerTool.bind(server) as (...args: unknown[]) => unknown;
   (server as { registerTool: unknown }).registerTool = (name: string, config: unknown, handler: (...a: unknown[]) => unknown) =>
     register(name, config, async (...args: unknown[]) => {
+      let result: unknown;
       try {
-        return await handler(...args);
+        result = await handler(...args);
       } catch (e) {
         if (!(e instanceof JsxToolError)) throw e;
-        return formatToolResult(e.result);
+        result = formatToolResult(e.result);
       }
+      return appendUpdateNotice(result);
     });
+}
+
+/** 新しい版の知らせがあれば、応答の末尾に一度だけ別の text として添える（本体の JSON は崩さない） */
+export function appendUpdateNotice(result: unknown): unknown {
+  if (!result || typeof result !== 'object') return result;
+  const content = (result as { content?: unknown }).content;
+  if (!Array.isArray(content)) return result;
+  const notice = takeUpdateNotice();
+  if (!notice) return result;
+  return { ...(result as object), content: [...content, { type: 'text', text: notice }] };
 }

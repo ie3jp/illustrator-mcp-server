@@ -54,7 +54,7 @@ Alle unten gezeigten Artworks wurden vollständig von Claude durch natürlichspr
 Erfordert [Node.js 20+](https://nodejs.org/).
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 Oder als Plugin installieren – es bündelt den MCP-Server mit einem Preflight-Skill für die Druckvorstufe (funktioniert auch in Claude Cowork):
@@ -100,7 +100,7 @@ Aus der Claude-Desktop-Menüleiste:
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -125,7 +125,7 @@ Aus der Claude-Desktop-Menüleiste:
 Erfordert [Node.js 20+](https://nodejs.org/).
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 Damit wird der Server in `~/.codex/config.toml` eingetragen. Falls der erste Start abbricht, während npx das Paket herunterlädt, ergänzen Sie `startup_timeout_sec = 60` im Abschnitt `[mcp_servers.illustrator]`.
@@ -157,6 +157,7 @@ Wenn Du mehrere Versionen von Illustrator installiert hast, kannst Du Claude im 
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Timeout in Millisekunden für normale Werkzeuge |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Timeout in Millisekunden für aufwendige Werkzeuge (Platzieren/Importieren von Dateien, Export, Preflight, Styleguides und Farbchips, Größenvarianten) |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | nicht gesetzt | Auf `1` setzen, um die Versionsprüfung gegen npm beim Start zu überspringen. Gibt es eine neuere Version, weist die erste Tool-Antwort darauf hin und erklärt das Update. |
 
 Erhöhe diese Werte, wenn ein einzelner Aufruf länger als der Standard braucht: etwa beim Import eines großen SVG mit `import_svg_as_editable` (100+ Objekte) oder bei `get_document_structure` / `export_pdf` auf einem umfangreichen Dokument.
 
@@ -167,7 +168,7 @@ Die Werte müssen positive ganze Zahlen in Millisekunden sein. Alles andere (`0`
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"

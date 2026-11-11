@@ -56,7 +56,7 @@ All artwork below was created entirely by Claude through natural language conver
 Requires [Node.js 20+](https://nodejs.org/).
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 Or install it as a plugin, which bundles the MCP server with a pre-press preflight skill (also works in Claude Cowork):
@@ -102,7 +102,7 @@ From the Claude Desktop menu bar:
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -127,7 +127,7 @@ From the Claude Desktop menu bar:
 Requires [Node.js 20+](https://nodejs.org/).
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 This adds the server to `~/.codex/config.toml`. If the first launch times out while npx downloads the package, add `startup_timeout_sec = 60` to the `[mcp_servers.illustrator]` section.
@@ -159,6 +159,7 @@ If you have multiple versions of Illustrator installed, you can tell Claude whic
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Timeout in milliseconds for normal tools |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Timeout in milliseconds for heavy tools (placing or importing files, export, preflight, style guides and color chips, size variations) |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | unset | Set to `1` to skip the startup check against npm. When a newer version exists, the first tool response says so and explains how to update. |
 
 Raise these when a single call needs longer than the default: importing a large SVG with `import_svg_as_editable` (100+ objects), or running `get_document_structure` / `export_pdf` on a big document.
 
@@ -169,7 +170,7 @@ Values must be positive integers in milliseconds. Anything else (`0`, a negative
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"

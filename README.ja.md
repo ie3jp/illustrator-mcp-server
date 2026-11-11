@@ -52,7 +52,7 @@ Adobe 公式の Illustrator MCP（Beta）にできることは全部できて、
 [Node.js 20+](https://nodejs.org/) が必要です。
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 プラグインとして入れることもできます。MCP サーバーと入稿前チェック（プリフライト）用のスキルがセットになっています（Claude Cowork でも使えます）。
@@ -98,7 +98,7 @@ Claude Desktop のメニューバーから:
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -123,7 +123,7 @@ Claude Desktop のメニューバーから:
 [Node.js 20+](https://nodejs.org/) が必要です。
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 `~/.codex/config.toml` に登録されます。初回起動で npx のダウンロード中にタイムアウトする場合は、`[mcp_servers.illustrator]` に `startup_timeout_sec = 60` を追加してください。
@@ -155,6 +155,7 @@ Illustrator が複数インストールされている場合、会話で使用�
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | 通常ツールのタイムアウト（ミリ秒） |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 重いツール（ファイルの配置・取り込み、書き出し、プリフライト、スタイルガイド・カラーチップ、サイズ展開）のタイムアウト（ミリ秒） |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | 未設定 | `1` にすると起動時の npm への最新版確認を行いません。新しい版があるときは、最初のツール応答で知らせ、更新方法を案内します。 |
 
 1 回の呼び出しが既定値では足りない場合に延ばしてください。`import_svg_as_editable` で 100 個以上のオブジェクトを含む SVG を取り込む場合や、巨大なドキュメントで `get_document_structure` / `export_pdf` を実行する場合などです。
 
@@ -165,7 +166,7 @@ Illustrator が複数インストールされている場合、会話で使用�
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"

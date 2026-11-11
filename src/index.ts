@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { createServer } from './server.js';
+import { createServer, readPackageVersion } from './server.js';
+import { checkForUpdate } from './update-check.js';
 import { ensureTmpDir, cleanupTmpDirSync } from './executor/file-transport.js';
 import { waitForPendingExecutions } from './executor/jsx-runner.js';
 
@@ -27,6 +28,9 @@ async function main(): Promise<void> {
   const server = createServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
+
+  // 新しい版の確認は待たない（結果は最初のツール応答に添える。失敗しても何もしない）
+  void checkForUpdate(readPackageVersion());
 }
 
 main().catch((error) => {

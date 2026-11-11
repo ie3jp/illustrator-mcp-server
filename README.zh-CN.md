@@ -54,7 +54,7 @@ Adobe 官方 Illustrator MCP（Beta）能做的这里全都能做，而且不止
 需要 [Node.js 20+](https://nodejs.org/)。
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 也可以作为插件安装，其中包含 MCP 服务器和印前检查（Preflight）技能（也适用于 Claude Cowork）：
@@ -100,7 +100,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -125,7 +125,7 @@ claude mcp add illustrator-mcp -- npx illustrator-mcp-server
 需要 [Node.js 20+](https://nodejs.org/)。
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 服务器会被添加到 `~/.codex/config.toml`。如果首次启动时 npx 下载包导致超时，请在 `[mcp_servers.illustrator]` 中添加 `startup_timeout_sec = 60`。
@@ -157,6 +157,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | 普通工具的超时时间（毫秒） |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 重型工具（置入/导入文件、导出、印前预检、样式指南与色卡、尺寸变体）的超时时间（毫秒） |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | 未设置 | 设为 `1` 可跳过启动时对 npm 最新版本的检查。有新版本时，第一次工具响应会提示并说明更新方法。 |
 
 当单次调用需要的时间超过默认值时，可以调大这些值。例如用 `import_svg_as_editable` 导入大型 SVG（100 个以上对象），或在大型文档上运行 `get_document_structure` / `export_pdf`。
 
@@ -167,7 +168,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"

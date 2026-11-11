@@ -54,7 +54,7 @@ Toutes les créations ci-dessous ont été entièrement réalisées par Claude v
 Nécessite [Node.js 20+](https://nodejs.org/).
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 Vous pouvez aussi l'installer comme plugin, qui regroupe le serveur MCP et une skill de contrôle prépresse (fonctionne aussi dans Claude Cowork) :
@@ -100,7 +100,7 @@ Depuis la barre de menu de Claude Desktop :
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -125,7 +125,7 @@ Depuis la barre de menu de Claude Desktop :
 Nécessite [Node.js 20+](https://nodejs.org/).
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 Le serveur est ajouté à `~/.codex/config.toml`. Si le délai d’attente est dépassé au premier lancement pendant que npx télécharge le paquet, ajoutez `startup_timeout_sec = 60` dans la section `[mcp_servers.illustrator]`.
@@ -157,6 +157,7 @@ Si plusieurs versions d'Illustrator sont installées, vous pouvez indiquer à Cl
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Délai d'expiration en millisecondes pour les outils normaux |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Délai d'expiration en millisecondes pour les outils lourds (placement ou import de fichiers, exportation, contrôle prépresse, guides de style et pastilles de couleur, déclinaisons de taille) |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | non défini | Mettez `1` pour ignorer la vérification de version auprès de npm au démarrage. Si une version plus récente existe, la première réponse d'un outil le signale et explique comment mettre à jour. |
 
 Augmentez-les lorsqu'un seul appel a besoin de plus de temps que la valeur par défaut : par exemple pour importer un gros SVG avec `import_svg_as_editable` (plus de 100 objets), ou pour exécuter `get_document_structure` / `export_pdf` sur un document volumineux.
 
@@ -167,7 +168,7 @@ Les valeurs doivent être des entiers positifs en millisecondes. Toute autre val
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"

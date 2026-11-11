@@ -54,7 +54,7 @@ Todo el material gráfico mostrado a continuación fue creado íntegramente por 
 Requiere [Node.js 20+](https://nodejs.org/).
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 O instálalo como plugin, que incluye el servidor MCP y una skill de preflight para preimpresión (también funciona en Claude Cowork):
@@ -100,7 +100,7 @@ Desde la barra de menú de Claude Desktop:
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -125,7 +125,7 @@ Desde la barra de menú de Claude Desktop:
 Requiere [Node.js 20+](https://nodejs.org/).
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 Esto añade el servidor a `~/.codex/config.toml`. Si en el primer arranque se agota el tiempo de espera mientras npx descarga el paquete, añade `startup_timeout_sec = 60` a la sección `[mcp_servers.illustrator]`.
@@ -157,6 +157,7 @@ Si tienes varias versiones de Illustrator instaladas, puedes indicarle a Claude 
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | Tiempo de espera en milisegundos para las herramientas normales |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | Tiempo de espera en milisegundos para las herramientas pesadas (colocar o importar archivos, exportación, preflight, guías de estilo y muestras de color, variaciones de tamaño) |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | sin definir | Ponlo en `1` para omitir la comprobación de versión contra npm al arrancar. Si hay una versión más nueva, la primera respuesta de una herramienta lo indica y explica cómo actualizar. |
 
 Auméntalos cuando una sola llamada necesite más tiempo que el predeterminado: por ejemplo, al importar un SVG grande con `import_svg_as_editable` (más de 100 objetos) o al ejecutar `get_document_structure` / `export_pdf` en un documento grande.
 
@@ -167,7 +168,7 @@ Los valores deben ser enteros positivos en milisegundos. Cualquier otro valor (`
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"

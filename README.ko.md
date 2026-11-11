@@ -54,7 +54,7 @@ Adobe 공식 Illustrator MCP(Beta)가 할 수 있는 것은 전부, 그리고 �
 [Node.js 20+](https://nodejs.org/)가 필요합니다.
 
 ```bash
-claude mcp add illustrator-mcp -- npx illustrator-mcp-server
+claude mcp add illustrator-mcp -- npx -y illustrator-mcp-server@latest
 ```
 
 플러그인으로 설치할 수도 있습니다. MCP 서버와 인쇄 전 점검(프리플라이트) 스킬이 함께 들어 있습니다(Claude Cowork에서도 사용 가능).
@@ -100,7 +100,7 @@ Claude Desktop 메뉴 바에서:
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"]
+      "args": ["-y", "illustrator-mcp-server@latest"]
     }
   }
 }
@@ -125,7 +125,7 @@ Claude Desktop 메뉴 바에서:
 [Node.js 20+](https://nodejs.org/)가 필요합니다.
 
 ```bash
-codex mcp add illustrator -- npx -y illustrator-mcp-server
+codex mcp add illustrator -- npx -y illustrator-mcp-server@latest
 ```
 
 `~/.codex/config.toml`에 서버가 등록됩니다. 첫 실행 시 npx가 패키지를 내려받는 동안 시간 초과가 나면 `[mcp_servers.illustrator]` 섹션에 `startup_timeout_sec = 60`을 추가하세요.
@@ -157,6 +157,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
 |---|---|---|
 | `ILLUSTRATOR_MCP_TIMEOUT_NORMAL` | `30000` | 일반 도구의 타임아웃(밀리초) |
 | `ILLUSTRATOR_MCP_TIMEOUT_HEAVY` | `60000` | 무거운 도구(파일 배치·가져오기, 내보내기, 프리플라이트, 스타일 가이드·컬러 칩, 사이즈 바리에이션)의 타임아웃(밀리초) |
+| `ILLUSTRATOR_MCP_NO_UPDATE_CHECK` | 미설정 | `1`로 설정하면 시작 시 npm 최신 버전 확인을 건너뜁니다. 새 버전이 있으면 첫 번째 도구 응답에서 알리고 업데이트 방법을 안내합니다. |
 
 한 번의 호출에 기본값보다 오래 걸리는 경우 늘려 주세요. 예를 들어 `import_svg_as_editable`로 대용량 SVG(객체 100개 이상)를 가져오거나, 큰 문서에서 `get_document_structure` / `export_pdf`를 실행하는 경우입니다.
 
@@ -167,7 +168,7 @@ codex mcp add illustrator -- npx -y illustrator-mcp-server
   "mcpServers": {
     "illustrator": {
       "command": "npx",
-      "args": ["illustrator-mcp-server"],
+      "args": ["-y", "illustrator-mcp-server@latest"],
       "env": {
         "ILLUSTRATOR_MCP_TIMEOUT_NORMAL": "60000",
         "ILLUSTRATOR_MCP_TIMEOUT_HEAVY": "180000"
