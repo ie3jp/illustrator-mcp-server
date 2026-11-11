@@ -86,7 +86,7 @@ export function register(server: McpServer): void {
     {
       title: 'Create Path Text',
       description:
-        'Create a text frame that flows along a path. If font_name is not found, nothing is created and an error with font_candidates is returned.',
+        'Create a text frame that flows along a path. If font_name is not found, nothing is created and an error with font_candidates is returned. Note: Illustrator is brought to the foreground for this tool — creating text while it is in the background blocks for minutes.',
       inputSchema: {
         path_uuid: z.string().describe('UUID of the path to place text along'),
         contents: z.string().describe('Text contents'),
@@ -116,7 +116,8 @@ export function register(server: McpServer): void {
       annotations: WRITE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
+      // create_text_frame と同じ理由で前面化する（背面だとテキスト API が 240 秒待つ）
+      return executeToolJsx(jsxCode, params, { activate: true, resolveCoordinate: true });
     },
   );
 }

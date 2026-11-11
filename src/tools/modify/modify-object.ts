@@ -304,7 +304,7 @@ export function register(server: McpServer): void {
     {
       title: 'Modify Object',
       description:
-        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted.',
+        'Modify properties of an existing object. fill/stroke on a group or compound path are applied to every path and text frame inside it (like Illustrator\'s UI; clipping paths and guides are skipped) and the result reports how many were changed (painted) and the colors they actually have (verified.descendantFills). success is false if any of them could not be painted. Note: when properties.contents is given, Illustrator is brought to the foreground, because assigning text contents while it is in the background blocks for minutes.',
       inputSchema: {
         uuid: z.string().describe('UUID of the target object'),
         properties: z
@@ -357,7 +357,10 @@ export function register(server: McpServer): void {
       annotations: DESTRUCTIVE_ANNOTATIONS,
     },
     async (params) => {
-      return executeToolJsx(jsxCode, params, { resolveCoordinate: true });
+      // テキストの contents 代入は背面だと 240 秒待たされる（実測）。その指定があるときだけ前面化する。
+      // 位置・色・サイズなどの変更は背面でも瞬時なのでフォーカスを奪わない
+      const changesText = typeof (params as { properties?: { contents?: unknown } }).properties?.contents === 'string';
+      return executeToolJsx(jsxCode, params, { activate: changesText, resolveCoordinate: true });
     },
   );
 }

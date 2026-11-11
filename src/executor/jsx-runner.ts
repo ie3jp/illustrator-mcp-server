@@ -406,7 +406,12 @@ export async function executeJsx(
 
 /**
  * 重い処理用の JSX 実行（タイムアウト延長）。
- * activate: true は executeMenuCommand を使うツールだけが指定する（前面でないと失敗するため）
+ * activate: true を指定するのは次の 2 種類だけ。
+ * 1. executeMenuCommand を使うツール（前面でないと失敗する）
+ * 2. テキストを作るツール（前面でないと 1 API あたり 240 秒待たされる。実測 2026-11:
+ *    背面で textFrames.pointText + contents が 480014 / 480040 / 480009 ms、
+ *    前面では 0〜2 ms。3 回が 31 ms 以内に収まることから固定タイマーと判断した。
+ *    矩形・パス・配置・読み取りは背面でも 0.3〜4 秒で終わるため前面化しない）
  */
 export async function executeJsxHeavy(
   jsxCode: string,

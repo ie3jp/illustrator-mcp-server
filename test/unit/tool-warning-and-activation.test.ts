@@ -189,10 +189,9 @@ describe('DOM tool activation', () => {
     mockExecuteJsxHeavy.mockResolvedValue({ success: true });
   });
 
+  // 背面でも 0.3〜4 秒で終わるツールは前面化しない（実測）
   it.each([
     [registerCreateRectangle, { x: 10, y: 20, width: 30, height: 40 }],
-    [registerCreateTextFrame, { x: 10, y: 20, contents: 'Test' }],
-    [registerModifyObject, { uuid: 'test', properties: { position: { x: 10, y: 20 } } }],
     [registerCreateDocument, {}],
     [registerPlaceImage, { file_path: '/tmp/test.png' }],
   ])('DOM handler %s does not request activation', async (register, params) => {
@@ -200,6 +199,30 @@ describe('DOM tool activation', () => {
     const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
     expect(calls).toHaveLength(1);
     expect(calls[0][2]?.activate ?? false).toBe(false);
+  });
+
+  // テキスト作成は背面だと 1 API あたり 240 秒待たされる（実測 2026-11:
+  // 背面 480014 / 480040 / 480009 ms、前面 0〜2 ms）。前面化は速度のために必要
+  it('create_text_frame は前面化を要求する（背面だと 480 秒かかる）', async () => {
+    await captureToolHandler(registerCreateTextFrame)({ x: 10, y: 20, contents: 'Test' });
+    const calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls).toHaveLength(1);
+    expect(calls[0][2]?.activate).toBe(true);
+  });
+
+  // modify_object は contents を書くときだけ前面化する（位置や色の変更では奪わない）
+  it('modify_object は contents 指定時だけ前面化する', async () => {
+    const handler = captureToolHandler(registerModifyObject);
+    await handler({ uuid: 'test', properties: { position: { x: 10, y: 20 } } });
+    let calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls[0][2]?.activate).toBe(false);
+
+    vi.clearAllMocks();
+    mockExecuteJsx.mockResolvedValue({ success: true });
+    mockExecuteJsxHeavy.mockResolvedValue({ success: true });
+    await handler({ uuid: 'test', properties: { contents: 'new text' } });
+    calls = [...mockExecuteJsx.mock.calls, ...mockExecuteJsxHeavy.mock.calls];
+    expect(calls[0][2]?.activate).toBe(true);
   });
 
   it('crop marks still request activation', async () => {
@@ -238,7 +261,19 @@ describe('activation is confined to menu-command tools', () => {
       .filter((file) => /\bactivate\b/.test(readFileSync(file, 'utf8')))
       .map(toolPath)
       .sort();
-    expect(offenders).toEqual(['export/export-pdf.ts', 'modify/create-crop-marks.ts', 'tool-executor.ts']);
+    // 前面化するのは (1) executeMenuCommand を使うツール (2) テキストフレームを作る、
+    // または contents を代入するツール。後者は背面だと 1 API あたり 240 秒待たされる（実測）
+    expect(offenders).toEqual([
+      'export/export-pdf.ts',
+      'modify/create-crop-marks.ts',
+      'modify/create-path-text.ts',
+      'modify/create-text-frame.ts',
+      'modify/manage-datasets.ts',
+      'modify/modify-object.ts',
+      'modify/place-color-chips.ts',
+      'modify/place-style-guide.ts',
+      'tool-executor.ts',
+    ]);
   });
 
   it('export_pdf activates only when it needs the trim-mark menu command', () => {
@@ -246,11 +281,19 @@ describe('activation is confined to menu-command tools', () => {
     expect(src).toContain('activate: requiresMenuCommandActivation(params)');
   });
 
-  it('no tool description still promises foreground activation', () => {
+  it('前面化する旧文面が残っていない（前面化するツールは新しい文面で説明する）', () => {
     const offenders = collectTsFiles(SRC_TOOLS_DIR)
       .filter((file) => /Illustrator will be activated/.test(readFileSync(file, 'utf8')))
       .map(toolPath)
       .sort();
     expect(offenders).toEqual(['export/export-pdf.ts', 'modify/create-crop-marks.ts']);
+  });
+
+  // 前面化するツールは、なぜ前面化するのかを説明文に書く（利用者が驚かないため）
+  it('テキスト作成ツールは前面化することを説明文に書いている', () => {
+    for (const f of ['modify/create-text-frame.ts', 'modify/create-path-text.ts']) {
+      const src = readFileSync(join(SRC_TOOLS_DIR, f), 'utf8');
+      expect(src).toContain('brought to the foreground');
+    }
   });
 });
